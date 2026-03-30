@@ -1,0 +1,227 @@
+[
+  {
+    "id": "chunk_0000",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 1,
+    "section_heading": "Smart Attendance & Workforce Management for Modern Teams",
+    "content": "Workforce Platform\nSmart Attendance & Workforce Management for Modern Teams\n\nMANO-Attendance helps organizations track employee attendance, manage leave requests, enforce location-based compliance, and generate powerful workforce insights -- all in one intelligent platform.\n\nStart Free TrialBook a Demo\nAsk natural language questions to the AI-powered HR Assistant\nGenerate dynamic shift policies instantly with Prompts\nPrevent proxy attendance with webcam verification\nEnsure employees are present at the right location with geofencing\nAutomate leave, attendance corrections, and HR approvals"
+  },
+  {
+    "id": "chunk_0001",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 2,
+    "section_heading": "Product Highlights",
+    "content": "Product Highlights\n\nCore capabilities designed to reduce attendance errors, improve compliance, and accelerate payroll readiness.\n\nSimple Time In & Time Out\n\nEffortlessly track employee attendance with our intuitive time clock. One-click time logging designed for speed and accuracy, ensuring every work hour is accounted for without administrative friction.\n\nOne-click clock-in and clock-out from web or mobile\nAutomated shift recognition and late-mark calculation\nSecure session handling with biometric/identity verification\nInstant sync to manager dashboards for real-time visibility\nTalk to Sales\nLive Command Center\n\nMonitor your organization's heartbeat in real-time. Watch employee sessions pulse as they clock in globally, mapped against authorized geofences with sub-meter accuracy.\n\nLive Pulsing Session indicators for active workers\nReal-time GPS Coordinate mapping and movement tracking\nImmediate Geofence Breach and Exception flagging\nEmergency Broadcasts and Coordination Hub\nTalk to Sales\nDetailed Attendance & Matrix Reports\n\nGain deep visibility into workforce patterns with structured reporting. From high-level monthly summaries to granular daily logs, our matrix reports translate raw punches into actionable payroll data.\n\nDaily, Weekly, and Monthly Attendance Matrix views\nAutomated Lateness & Overtime calculation reports\nDetailed Attendance Logs (Original) with GPS/Biometric proof\nOne-click Export to Excel and PDF for payroll processing\nTalk to Sales\nHoliday & Leave Management\n\nSimplify time-off requests with a unified leave governance system. Manage holiday calendars, track accruals, and automate approval workflows to keep your workforce balanced and compliant.\n\nSelf-service Leave Applications for all employees\nMulti-level Approval Workflows with instant notifications\nPublic Holiday Calendar and regional shift mapping\nReal-time Leave Balance & Accrual tracking\nTalk to Sales\n\"Ask HR\" AI Assistant\n\nA conversational AI chatbot trained on your company's policy documents. Employees get instant, cited answers rather than generating HR tickets. It acts as a 24/7 first-response layer for all internal queries.\n\nNatural Language Processing (NLP) for complex policy queries\nLive Document Citations with direct links to Handbook sections\nPersonalized Leave Balance & Application Status checking\nAutomated FAQ handling to reduce HR administrative load\nTalk to Sales\nGenerative Policy Builder\n\nCreate complex attendance policies in seconds using natural language prompts. Our Generative AI translates your business intent into structured backend logic and geofencing rules instantly.\n\nPrompt-to-Form Auto Population for rapid policy drafting\nComplex Shift Rotation and Grace Period logic generation\nAutomated Legal Compliance & Guardrail checks\nInstant Terms & Conditions (T&C) document generation\nTalk to Sales\nSmart DAR Insights\n\nBridge the gap between raw logs and actionable productivity. While basic DAR tracks tasks and hours, our AI-driven insights synthesize team themes and detect operational bottlenecks automatically.\n\nBasic DAR: Structured daily activity logging and supervisor review\nAI DAR: Automated Weekly Theme Synthesizing and Productivity Scoring\nProactive Vague Entry Detection and auto-follow-up prompts\nSentiment Analysis for team morale and burnout indicators\nTalk to Sales\nAdvanced Geofencing\n\nEnsure employees are physically present at approved work locations using intelligent geofencing. Support for multi-site deployments with dynamic boundary enforcement.\n\nFull Google Maps API Integration for precise location drawing\nSet allowed zones and radiuses (e.g., 100 meters)\nDynamic Site Switching for field-based and roving teams\nClient-Site Authorization via biometric & location binding\nTalk to Sales"
+  },
+  {
+    "id": "chunk_0002",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 3,
+    "section_heading": "Impact Snapshot",
+    "content": "Impact Snapshot\n\nBusiness outcomes teams typically track during the first phase of rollout.\n\nApproval Turnaround\n\nUp to 40% Faster\n\nLeave and correction approvals move faster with structured workflows and role routing.\n\nOperational Visibility\n\nSingle Source View\n\nHR, managers, and leadership access one consistent attendance and policy view.\n\nPayroll Readiness\n\nSame-Day Exports\n\nAttendance summaries and compliance-ready exports reduce month-end bottlenecks.\n\nProxy Attendance\n\n99.9% Reduction\n\nFacial verification and geospatial locking effectively eliminate buddy punching.\n\nCompliance Violations\n\nZero-Penalty Goal\n\nThe autonomous policy engine ensures total adherence to complex labor laws.\n\nEmployee Satisfaction\n\n+25% Engagement\n\nTransparent leave balances and clear policies reduce workforce frustration."
+  },
+  {
+    "id": "chunk_0003",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 4,
+    "section_heading": "Approval Turnaround",
+    "content": "Approval Turnaround\n\nUp to 40% Faster\n\nLeave and correction approvals move faster with structured workflows and role routing."
+  },
+  {
+    "id": "chunk_0004",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 5,
+    "section_heading": "Operational Visibility",
+    "content": "Operational Visibility\n\nSingle Source View\n\nHR, managers, and leadership access one consistent attendance and policy view."
+  },
+  {
+    "id": "chunk_0005",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 6,
+    "section_heading": "Payroll Readiness",
+    "content": "Payroll Readiness\n\nSame-Day Exports\n\nAttendance summaries and compliance-ready exports reduce month-end bottlenecks."
+  },
+  {
+    "id": "chunk_0006",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 7,
+    "section_heading": "Proxy Attendance",
+    "content": "Proxy Attendance\n\n99.9% Reduction\n\nFacial verification and geospatial locking effectively eliminate buddy punching."
+  },
+  {
+    "id": "chunk_0007",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 8,
+    "section_heading": "Compliance Violations",
+    "content": "Compliance Violations\n\nZero-Penalty Goal\n\nThe autonomous policy engine ensures total adherence to complex labor laws."
+  },
+  {
+    "id": "chunk_0008",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 9,
+    "section_heading": "Employee Satisfaction",
+    "content": "Employee Satisfaction\n\n+25% Engagement\n\nTransparent leave balances and clear policies reduce workforce frustration."
+  },
+  {
+    "id": "chunk_0009",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 10,
+    "section_heading": "How MANO-Attendance Works",
+    "content": "How MANO-Attendance Works\n\nA practical flow from clock-in to reports and notifications.\n\n1\nOnboard & Configure\n\nSetup custom geofences, define complex shift rules, and import your entire employee hierarchy.\n\n2\nCapture Attendance\n\nEmployees clock in globally via mobile or web with facial recognition and strict GPS validation.\n\n3\nApply Policies Autonomously\n\nThe AI engine instantly calculates grace periods, overtime, and optimal shift alignments.\n\n4\nManage Exceptions\n\nManagers are immediately notified of anomalies and can process corrections with a single click.\n\n5\nGenerate Smart Insights\n\nDaily Activity Reports (DAR) and LLMs summarize weekly productivity and highlight chronic lateness.\n\n6\nExport to Payroll\n\nOne-click export of structured, compliance-ready data directly to finance teams at month-end."
+  },
+  {
+    "id": "chunk_0010",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 11,
+    "section_heading": "Onboard & Configure",
+    "content": "1\nOnboard & Configure\n\nSetup custom geofences, define complex shift rules, and import your entire employee hierarchy."
+  },
+  {
+    "id": "chunk_0011",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 12,
+    "section_heading": "Capture Attendance",
+    "content": "2\nCapture Attendance\n\nEmployees clock in globally via mobile or web with facial recognition and strict GPS validation."
+  },
+  {
+    "id": "chunk_0012",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 13,
+    "section_heading": "Apply Policies Autonomously",
+    "content": "3\nApply Policies Autonomously\n\nThe AI engine instantly calculates grace periods, overtime, and optimal shift alignments."
+  },
+  {
+    "id": "chunk_0013",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 14,
+    "section_heading": "Manage Exceptions",
+    "content": "4\nManage Exceptions\n\nManagers are immediately notified of anomalies and can process corrections with a single click."
+  },
+  {
+    "id": "chunk_0014",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 15,
+    "section_heading": "Generate Smart Insights",
+    "content": "5\nGenerate Smart Insights\n\nDaily Activity Reports (DAR) and LLMs summarize weekly productivity and highlight chronic lateness."
+  },
+  {
+    "id": "chunk_0015",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 16,
+    "section_heading": "Export to Payroll",
+    "content": "6\nExport to Payroll\n\nOne-click export of structured, compliance-ready data directly to finance teams at month-end."
+  },
+  {
+    "id": "chunk_0016",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 17,
+    "section_heading": "Plans Built For Every Stage",
+    "content": "Plans Built For Every Stage\n\nStart lean, grow confidently, and scale with policy controls tailored for your workforce model.\n\nStarter Plan\n\nBest for small teams\n\nStart with essential attendance operations and simple policy controls.\n\nAttendance Tracking\nLeave Management\nBasic Reports\nStandard onboarding support\nGrowth Plan\n\nFor growing organizations\n\nExpand into analytics, geofencing, and approval-heavy attendance workflows.\n\nAll Starter features\nAnalytics Dashboard\nGeofencing\nAttendance Corrections\nEnhanced role controls\nEnterprise Plan\n\nFor large organizations\n\nDesigned for multi-location governance, integrations, and advanced policy management.\n\nAdvanced policies\nMulti-location support\nAPI integrations\nPriority support\nEnterprise onboarding assistance"
+  },
+  {
+    "id": "chunk_0017",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 18,
+    "section_heading": "Starter Plan",
+    "content": "Starter Plan\n\nBest for small teams\n\nStart with essential attendance operations and simple policy controls.\n\nAttendance Tracking\nLeave Management\nBasic Reports\nStandard onboarding support"
+  },
+  {
+    "id": "chunk_0018",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 19,
+    "section_heading": "Growth Plan",
+    "content": "Growth Plan\n\nFor growing organizations\n\nExpand into analytics, geofencing, and approval-heavy attendance workflows.\n\nAll Starter features\nAnalytics Dashboard\nGeofencing\nAttendance Corrections\nEnhanced role controls"
+  },
+  {
+    "id": "chunk_0019",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 20,
+    "section_heading": "Enterprise Plan",
+    "content": "Enterprise Plan\n\nFor large organizations\n\nDesigned for multi-location governance, integrations, and advanced policy management.\n\nAdvanced policies\nMulti-location support\nAPI integrations\nPriority support\nEnterprise onboarding assistance"
+  },
+  {
+    "id": "chunk_0020",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 21,
+    "section_heading": "Talk To The Team",
+    "content": "Talk To The Team\n\nChoose the right channel based on your need and we will route it to the relevant team quickly.\n\nMANO\nLet's build a smarter workforce together.\n\nJoin hundreds of forward-thinking companies using AI to transform their attendance and productivity management.\n\nInstant Support Channels\n24/5 Response Window\nConnect\nContact Channels\nProduct Support: support@manoattendance.com\nSales Enquiries: sales@manoattendance.com\nImplementation and onboarding guidance available for new deployments\nPartnership conversations for consulting and channel opportunities\nAvailability\nOffice Hours LIVE\nMonday to Friday: 9:30 AM - 6:30 PM\nSaturday: 10:00 AM - 2:00 PM\nSunday: Closed\nSuccess\nSupport Journey\nShare your requirement or issue with key details\nOur team acknowledges and assigns ownership\nYou receive updates until closure\nCritical cases are escalated with priority handling"
+  },
+  {
+    "id": "chunk_0021",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 22,
+    "section_heading": "Contact Channels",
+    "content": "Connect\nContact Channels\nProduct Support: support@manoattendance.com\nSales Enquiries: sales@manoattendance.com\nImplementation and onboarding guidance available for new deployments\nPartnership conversations for consulting and channel opportunities"
+  },
+  {
+    "id": "chunk_0022",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 23,
+    "section_heading": "Office Hours LIVE",
+    "content": "Availability\nOffice Hours LIVE\nMonday to Friday: 9:30 AM - 6:30 PM\nSaturday: 10:00 AM - 2:00 PM\nSunday: Closed"
+  },
+  {
+    "id": "chunk_0023",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 24,
+    "section_heading": "Support Journey",
+    "content": "Success\nSupport Journey\nShare your requirement or issue with key details\nOur team acknowledges and assigns ownership\nYou receive updates until closure\nCritical cases are escalated with priority handling"
+  },
+  {
+    "id": "chunk_0024",
+    "page_name": "MANO-Attendance",
+    "url": "https://localhost:5173/",
+    "source_file": "landing_home.txt",
+    "section_num": 25,
+    "section_heading": "Footer & Contact Details",
+    "content": "MANO-Attendance\nEmpowering Workforces\n\nAI-Driven Attendance & Productivity Platform\n\n+91 91360 96633\n\nbusiness@mano.co.in\n\nB-11, 2nd Floor, West View, 88, L.N Road, Dadar (East), Mumbai - 400014\n\nOur Solutions\nSimple Time In & OutLive Command CenterMatrix Attendance ReportsHoliday & Leave ManagementAI \"Ask HR\" AssistantGenerative AI Policy Builder\nQuick Links\nHomeFeaturesPricingContact\n\nCopyright 2025 © MANO-Attendance All Rights Reserved."
+  }
+]

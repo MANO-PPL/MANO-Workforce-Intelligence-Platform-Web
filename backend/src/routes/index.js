@@ -19,6 +19,7 @@ import profileRoutes from './profile/profileRoutes.js';
 import orgRoutes from './organizations/orgRoutes.js';
 import systemMonitorRoutes from './admin/systemMonitorRoutes.js';
 import superAdminRoutes from './superAdmin/superAdminRoutes.js';
+import chatbotRoutes from './chatbot/chatbotRoutes.js';
 
 import { requireActiveOrg } from '../middleware/auth.js';
 
@@ -45,6 +46,7 @@ router.use('/dar/settings', darSettingsRoutes); // For DAR settings
 router.use('/feedback', feedbackRoutes); // For feedback/bug reports
 router.use('/payment', paymentRoutes); // For Razorpay payments
 router.use('/profile', profileRoutes); // For user profile management
+router.use('/website-chatbot', chatbotRoutes); // Public website chatbot endpoint
 
 router.get('/health', (req, res) => {
     res.json({ message: 'API is working' });

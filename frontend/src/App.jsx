@@ -73,6 +73,7 @@ import ShowcaseTabletFooter from "./showcase/components/TabletFooter";
 import ShowcaseHomePage from "./showcase/pages/HomePage";
 import ShowcaseMobileHomePage from "./showcase/pages/MobileHomePage";
 import ShowcaseTabletHomePage from "./showcase/pages/TabletHomePage";
+import WebsiteChatbotWidget from "./showcase/components/WebsiteChatbotWidget";
 import useDeviceType from "./showcase/hooks/useDeviceType";
 import "./showcase/showcase.css";
 
@@ -110,6 +111,7 @@ const ShowcaseShell = ({ children }) => {
       <ShowcaseScrollToTop />
       <NavComp />
       <main>{children}</main>
+      <WebsiteChatbotWidget />
       <FootComp />
     </div>
   );
@@ -165,12 +167,12 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
           </Route>
 
-            {/* Test Routes - Only available in Development */}
-            <Route element={<TestRoute />}>
-              <Route path="/word-captcha-test" element={<WordCaptchaTest />} />
-              <Route path="/test-api" element={<TestAPI />} />
-              <Route path="/visual-scripting" element={<VisualScripting />} />
-            </Route>
+          {/* Test Routes - Only available in Development */}
+          <Route element={<TestRoute />}>
+            <Route path="/word-captcha-test" element={<WordCaptchaTest />} />
+            <Route path="/test-api" element={<TestAPI />} />
+            <Route path="/visual-scripting" element={<VisualScripting />} />
+          </Route>
 
           <Route element={<ProtectedRoute />}>
             <Route path="/unauthorized" element={<Unauthorized />} />
