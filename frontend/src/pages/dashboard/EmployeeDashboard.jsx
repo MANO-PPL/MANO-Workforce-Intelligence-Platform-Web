@@ -80,66 +80,66 @@ const EmployeeDashboard = () => {
 
                 {/* Quick Stats Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow">
+                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
                                 <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
                             </div>
-                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400">This Month</span>
+                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-github-dark-subtle rounded-lg text-slate-500 dark:text-github-dark-muted">This Month</span>
                         </div>
-                        <h3 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{stats.presentDays}</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Present Days</p>
+                        <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mb-1">{stats.presentDays}</h3>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted">Present Days</p>
                     </div>
 
-                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow">
+                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl">
                                 <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
                             </div>
-                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400">This Month</span>
+                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-github-dark-subtle rounded-lg text-slate-500 dark:text-github-dark-muted">This Month</span>
                         </div>
-                        <h3 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{stats.absentDays}</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Absent Days</p>
+                        <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mb-1">{stats.absentDays}</h3>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted">Absent Days</p>
                     </div>
 
-                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow">
+                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
                                 <Clock className="w-6 h-6 text-orange-600 dark:text-orange-400" />
                             </div>
-                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400">This Month</span>
+                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-github-dark-subtle rounded-lg text-slate-500 dark:text-github-dark-muted">This Month</span>
                         </div>
-                        <h3 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{stats.lateDays}</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Late Arrivals</p>
+                        <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mb-1">{stats.lateDays}</h3>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted">Late Arrivals</p>
                     </div>
 
-                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-shadow">
+                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
                                 <Coffee className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                             </div>
-                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400">Yearly</span>
+                            <span className="text-xs font-semibold px-2 py-1 bg-slate-100 dark:bg-github-dark-subtle rounded-lg text-slate-500 dark:text-github-dark-muted">Yearly</span>
                         </div>
-                        <h3 className="text-3xl font-bold text-slate-800 dark:text-white mb-1">{stats.leaveBalance}</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Leave Balance</p>
+                        <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mb-1">{stats.leaveBalance}</h3>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted">Leave Balance</p>
                     </div>
                 </div>
 
                 {/* Recent Activity or Info Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border p-6">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-4 flex items-center gap-2">
                             <MapPin size={20} className="text-indigo-500" />
                             Your Work Location
                         </h3>
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                        <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-100 dark:border-github-dark-border">
                             <p className="text-sm text-slate-600 dark:text-slate-300">
                                 You are currently assigned to standard work locations. Please ensure you are within the geofenced area when marking attendance.
                             </p>
                         </div>
                     </div>
-                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border p-6">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-4 flex items-center gap-2">
                             <AlertCircle size={20} className="text-indigo-500" />
                             Policies & Reminders
                         </h3>

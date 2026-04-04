@@ -158,19 +158,19 @@ const AttendanceMonitoring = () => {
 
     return (
         <MobileDashboardLayout title="Live Attendance">
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors relative pb-20">
+            <div className="min-h-screen bg-slate-50 dark:bg-github-dark-subtle transition-colors relative pb-20">
 
                 {/* --- TABS --- */}
-                <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-none flex shadow-sm mb-4">
+                <div className="bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-none flex shadow-sm mb-4">
                     <button
                         onClick={() => setActiveTab('dashboard')}
                         className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
                         ${activeTab === 'dashboard'
-                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400'
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-github-dark-text shadow-sm'
+                                : 'text-slate-500 dark:text-github-dark-muted'
                             }`}
                     >
-                        <Activity size={18} className={activeTab === 'dashboard' ? 'text-slate-900 dark:text-white' : 'text-slate-400'} />
+                        <Activity size={18} className={activeTab === 'dashboard' ? 'text-slate-900 dark:text-github-dark-text' : 'text-slate-400'} />
                         Dashboard
                     </button>
                     <button
@@ -178,7 +178,7 @@ const AttendanceMonitoring = () => {
                         className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
                         ${activeTab === 'requests'
                                 ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-md transform scale-[1.02]'
-                                : 'text-slate-500 dark:text-slate-400'
+                                : 'text-slate-500 dark:text-github-dark-muted'
                             }`}
                     >
                         <FileText size={18} className={activeTab === 'requests' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
@@ -196,7 +196,7 @@ const AttendanceMonitoring = () => {
                                 <select
                                     value={selectedDept}
                                     onChange={(e) => setSelectedDept(e.target.value)}
-                                    className="w-full appearance-none pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-white outline-none shadow-sm"
+                                    className="w-full appearance-none pl-3 pr-8 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-bold text-slate-700 dark:text-github-dark-text outline-none shadow-sm"
                                 >
                                     {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
                                 </select>
@@ -208,7 +208,7 @@ const AttendanceMonitoring = () => {
                                     type="date"
                                     value={selectedDate}
                                     onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="w-full min-w-0 pl-9 pr-2 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-white outline-none shadow-sm"
+                                    className="w-full min-w-0 pl-9 pr-2 py-2.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-bold text-slate-700 dark:text-github-dark-text outline-none shadow-sm"
                                 />
                                 <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             </div>
@@ -230,7 +230,7 @@ const AttendanceMonitoring = () => {
                                 placeholder="Search..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium outline-none shadow-sm dark:text-white"
+                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-sm font-medium outline-none shadow-sm dark:text-github-dark-text"
                             />
                         </div>
 
@@ -245,11 +245,11 @@ const AttendanceMonitoring = () => {
                                         <div
                                             key={emp.id}
                                             onClick={() => setSelectedEmployee(emp)}
-                                            className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm relative group active:scale-[0.99] transition-transform cursor-pointer"
+                                            className="bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm relative group active:scale-[0.99] transition-transform cursor-pointer"
                                         >
                                             <div className="flex justify-between items-start mb-3">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-600">
+                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-github-dark-border">
                                                         {emp.avatar ? (
                                                             <img src={`${emp.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
                                                         ) : (
@@ -257,23 +257,23 @@ const AttendanceMonitoring = () => {
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{emp.name}</h4>
-                                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{emp.role}</p>
+                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-github-dark-text">{emp.name}</h4>
+                                                        <p className="text-[10px] text-slate-500 dark:text-github-dark-muted font-medium">{emp.role}</p>
                                                     </div>
                                                 </div>
                                                 <StatusBadge status={emp.status} />
                                             </div>
 
-                                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-github-dark-border/50">
                                                 <div>
                                                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Time In</p>
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                                                    <span className="text-xs font-bold text-slate-800 dark:text-github-dark-text">
                                                         {emp.sessions[emp.sessions.length - 1]?.in || '--:--'}
                                                     </span>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Time Out</p>
-                                                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                                                    <span className="text-xs font-bold text-slate-800 dark:text-github-dark-text">
                                                         {emp.sessions[emp.sessions.length - 1]?.out || <span className="text-emerald-500">Active</span>}
                                                     </span>
                                                 </div>
@@ -285,7 +285,7 @@ const AttendanceMonitoring = () => {
                                     {notTimedInEmployees.length > 0 && timedInEmployees.length > 0 && (
                                         <div className="flex items-center gap-3 py-2">
                                             <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">Not Timed In</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted whitespace-nowrap">Not Timed In</span>
                                             <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
                                         </div>
                                     )}
@@ -294,11 +294,11 @@ const AttendanceMonitoring = () => {
                                     {notTimedInEmployees.map(emp => (
                                         <div
                                             key={emp.id}
-                                            className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm opacity-60"
+                                            className="bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm opacity-60"
                                         >
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-600">
+                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-github-dark-border">
                                                         {emp.avatar ? (
                                                             <img src={`${emp.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
                                                         ) : (
@@ -306,8 +306,8 @@ const AttendanceMonitoring = () => {
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{emp.name}</h4>
-                                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{emp.role}</p>
+                                                        <h4 className="font-bold text-sm text-slate-900 dark:text-github-dark-text">{emp.name}</h4>
+                                                        <p className="text-[10px] text-slate-500 dark:text-github-dark-muted font-medium">{emp.role}</p>
                                                     </div>
                                                 </div>
                                                 <StatusBadge status={emp.status} />
@@ -350,14 +350,14 @@ const StatCard = ({ label, value, icon: Icon, color }) => {
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 h-24 flex flex-col justify-between">
+        <div className="bg-white dark:bg-github-dark-subtle p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border h-24 flex flex-col justify-between">
             <div className="flex justify-between items-start">
                 <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">{label}</span>
                 <div className={`p-1.5 rounded-lg ${colors[color]} dark:bg-opacity-20`}>
                     <Icon size={14} />
                 </div>
             </div>
-            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{value}</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-github-dark-text">{value}</span>
         </div>
     );
 };
@@ -469,7 +469,7 @@ const RequestsView = () => {
                     className={`px-6 py-2 rounded-full text-xs font-bold transition-all
                     ${subTab === 'pending'
                             ? 'bg-indigo-500 text-white shadow-md'
-                            : 'bg-transparent border border-slate-200 dark:border-slate-700 text-slate-400'}`}
+                            : 'bg-transparent border border-slate-200 dark:border-github-dark-border text-slate-400'}`}
                 >
                     Pending
                 </button>
@@ -478,7 +478,7 @@ const RequestsView = () => {
                     className={`px-6 py-2 rounded-full text-xs font-bold transition-all
                     ${subTab === 'history'
                             ? 'bg-indigo-500 text-white shadow-md'
-                            : 'bg-transparent border border-slate-200 dark:border-slate-700 text-slate-400'}`}
+                            : 'bg-transparent border border-slate-200 dark:border-github-dark-border text-slate-400'}`}
                 >
                     History
                 </button>
@@ -492,16 +492,16 @@ const RequestsView = () => {
                         <div
                             key={req.acr_id}
                             onClick={() => handleRequestClick(req)}
-                            className={`bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-white dark:bg-github-dark-subtle p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
                                     {req.user_name ? req.user_name.charAt(0) : 'U'}
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">{req.user_name}</h4>
+                                    <h4 className="font-bold text-sm text-slate-900 dark:text-github-dark-text">{req.user_name}</h4>
                                     <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{req.correction_type || 'Correction'}</span>
+                                        <span className="text-xs text-slate-500 dark:text-github-dark-muted font-medium">{req.correction_type || 'Correction'}</span>
                                         <span className="text-[10px] text-slate-300">•</span>
                                         <span className="text-xs text-slate-400">
                                             {new Date(req.request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -540,17 +540,17 @@ const RequestsView = () => {
                         </div>
 
                         {/* Modal Header */}
-                        <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-slate-800/60 shrink-0">
+                        <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-github-dark-border/60 shrink-0">
                             <div>
-                                <h3 className="font-bold text-2xl text-slate-900 dark:text-white">Request #{selectedRequest.acr_id || selectedRequest.request_id || selectedRequest.id}</h3>
+                                <h3 className="font-bold text-2xl text-slate-900 dark:text-github-dark-text">Request #{selectedRequest.acr_id || selectedRequest.request_id || selectedRequest.id}</h3>
                                 <div className="flex items-center gap-2 mt-2">
                                     <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
                                         {(selectedRequest.user_name || user?.user_name || 'U').charAt(0)}
                                     </div>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400">By {selectedRequest.user_name || user?.user_name || 'Employee'}{selectedRequest.designation ? ` (${selectedRequest.designation})` : ''}</p>
+                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted">By {selectedRequest.user_name || user?.user_name || 'Employee'}{selectedRequest.designation ? ` (${selectedRequest.designation})` : ''}</p>
                                 </div>
                             </div>
-                            <button onClick={() => setSelectedRequest(null)} className="p-2 sm:p-1 text-slate-400 hover:text-slate-600 bg-slate-50 sm:bg-transparent dark:bg-slate-800 sm:dark:bg-transparent rounded-full transition-colors active:scale-90">
+                            <button onClick={() => setSelectedRequest(null)} className="p-2 sm:p-1 text-slate-400 hover:text-slate-600 bg-slate-50 sm:bg-transparent dark:bg-github-dark-subtle sm:dark:bg-transparent rounded-full transition-colors active:scale-90">
                                 <X size={20} />
                             </button>
                         </div>
@@ -562,23 +562,23 @@ const RequestsView = () => {
                             <section>
                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Correction Details</h4>
                                 <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
-                                        <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">Request Type</span>
-                                        <span className="font-bold text-slate-800 dark:text-white text-sm uppercase">{selectedRequest.correction_type || 'CORRECTION'}</span>
+                                    <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-github-dark-border overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
+                                        <span className="text-xs text-slate-500 dark:text-github-dark-muted mb-1">Request Type</span>
+                                        <span className="font-bold text-slate-800 dark:text-github-dark-text text-sm uppercase">{selectedRequest.correction_type || 'CORRECTION'}</span>
                                     </div>
                                     <div className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
                                         <span className="text-xs text-indigo-500/70 dark:text-indigo-400/70 mb-1">Method</span>
                                         <span className="font-bold text-indigo-700 dark:text-indigo-400 text-sm uppercase">{selectedRequest.correction_method || selectedRequest.correction_data_parsed?.method || 'FIX TIMINGS'}</span>
                                     </div>
                                 </div>
-                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-                                    <span className="text-xs text-slate-500 dark:text-slate-400 mb-3 block">Requested Sessions</span>
+                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm">
+                                    <span className="text-xs text-slate-500 dark:text-github-dark-muted mb-3 block">Requested Sessions</span>
                                     <div className="space-y-2">
                                         {(() => {
                                             const sessions = selectedRequest.correction_data_parsed?.sessions || selectedRequest.details?.sessions;
                                             if (sessions && sessions.length > 0) {
                                                 return sessions.map((s, i) => (
-                                                    <div key={i} className="flex flex-col mb-1 text-sm font-bold text-slate-800 dark:text-white">
+                                                    <div key={i} className="flex flex-col mb-1 text-sm font-bold text-slate-800 dark:text-github-dark-text">
                                                         <span>In: {s.in || s.time_in || '--:--'}</span>
                                                         <span>Out: {s.out || s.time_out || '--:--'}</span>
                                                     </div>
@@ -593,7 +593,7 @@ const RequestsView = () => {
                             {/* Justification */}
                             <section>
                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Justification & Comments</h4>
-                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+                                <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-github-dark-border rounded-2xl p-4 shadow-sm flex items-start gap-3">
                                     <FileText size={16} className="text-slate-400 shrink-0 mt-0.5" />
                                     <p className="text-sm font-medium italic text-slate-600 dark:text-slate-300">
                                         "{selectedRequest.reason || selectedRequest.comments || 'No comment provided'}"
@@ -603,18 +603,18 @@ const RequestsView = () => {
 
                             {/* Audit Trail */}
                             <section>
-                                <div className="border-t border-slate-100 dark:border-slate-800/60 mb-6"></div>
+                                <div className="border-t border-slate-100 dark:border-github-dark-border/60 mb-6"></div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <History size={14} className="text-slate-400" />
                                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Trail</h4>
                                 </div>
 
-                                <div className="relative pl-3 border-l-2 border-slate-200 dark:border-slate-800 space-y-6">
+                                <div className="relative pl-3 border-l-2 border-slate-200 dark:border-github-dark-border space-y-6">
                                     {/* Submited */}
                                     <div className="relative">
                                         <div className="absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 border-indigo-500"></div>
-                                        <h5 className="font-bold text-sm text-slate-800 dark:text-white">Submitted</h5>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        <h5 className="font-bold text-sm text-slate-800 dark:text-github-dark-text">Submitted</h5>
+                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5">
                                             {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleString()} • by {selectedRequest.employee_name || selectedRequest.user_name || user?.name || 'User'}
                                         </p>
                                     </div>
@@ -625,10 +625,10 @@ const RequestsView = () => {
                                             <div className={`absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 
                                                     ${(selectedRequest.status).toUpperCase() === 'APPROVED' ? 'border-emerald-500' : 'border-rose-500'}`}>
                                             </div>
-                                            <h5 className="font-bold text-sm text-slate-800 dark:text-white drop-shadow-sm capitalize">
+                                            <h5 className="font-bold text-sm text-slate-800 dark:text-github-dark-text drop-shadow-sm capitalize">
                                                 {(selectedRequest.status).toLowerCase()}
                                             </h5>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                            <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5">
                                                 {new Date(selectedRequest.updated_at || Date.now()).toLocaleString()} • by {selectedRequest.approved_by || 'Admin/HR'}
                                             </p>
                                         </div>
@@ -639,7 +639,7 @@ const RequestsView = () => {
 
                         {/* Admin/HR Action Buttons (Bottom Fixed) */}
                         {['admin', 'hr', 'manager'].includes((user?.user_type || user?.role || '').toLowerCase()) && (selectedRequest.status || 'PENDING').toUpperCase() === 'PENDING' && (
-                            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-white dark:bg-[#111827] shrink-0 sm:rounded-b-[2rem] flex gap-3">
+                            <div className="px-6 py-4 border-t border-slate-100 dark:border-github-dark-border/60 bg-white dark:bg-[#111827] shrink-0 sm:rounded-b-[2rem] flex gap-3">
                                 <button
                                     onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest.acr_id || selectedRequest.id, 'REJECTED')}
                                     disabled={isUpdatingStatus}
@@ -668,14 +668,14 @@ const SessionDetailsModal = ({ employee, date, onClose }) => {
     return createPortal(
         <div className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center">
             <div className="absolute -inset-10 bg-black/60 backdrop-blur-md" onClick={onClose}></div>
-            <div className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-6 pb-10 shadow-2xl transform transition-transform animate-in slide-in-from-bottom-10 duration-300">
+            <div className="relative z-10 w-full max-w-md bg-white dark:bg-github-dark-subtle rounded-t-3xl sm:rounded-3xl p-6 pb-10 shadow-2xl transform transition-transform animate-in slide-in-from-bottom-10 duration-300">
 
                 {/* Drag Handle */}
                 <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-6"></div>
 
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-8">
-                    <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden border-2 border-white dark:border-slate-700 shadow-sm">
+                    <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-github-dark-subtle flex items-center justify-center overflow-hidden border-2 border-white dark:border-github-dark-border shadow-sm">
                         {employee.avatar ? (
                             <img src={employee.avatar} className="w-full h-full object-cover" />
                         ) : (
@@ -683,8 +683,8 @@ const SessionDetailsModal = ({ employee, date, onClose }) => {
                         )}
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{employee.name}</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">{employee.role}</p>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-github-dark-text leading-tight">{employee.name}</h3>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted">{employee.role}</p>
                     </div>
                 </div>
 
@@ -696,12 +696,12 @@ const SessionDetailsModal = ({ employee, date, onClose }) => {
                 {/* Timeline */}
                 <div className="space-y-0 relative pl-4">
                     {/* Vertical Line */}
-                    <div className="absolute left-[27px] top-4 bottom-4 w-0.5 bg-slate-100 dark:bg-slate-800"></div>
+                    <div className="absolute left-[27px] top-4 bottom-4 w-0.5 bg-slate-100 dark:bg-github-dark-subtle"></div>
 
                     {employee.sessions.map((session, idx) => (
                         <div key={idx} className="relative flex items-start gap-6 pb-8 last:pb-0">
                             {/* Number Badge */}
-                            <div className="relative z-10 flex-shrink-0 w-12 h-12 rounded-full bg-indigo-50 dark:bg-slate-800 border border-indigo-100 dark:border-slate-700 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm shadow-sm">
+                            <div className="relative z-10 flex-shrink-0 w-12 h-12 rounded-full bg-indigo-50 dark:bg-github-dark-subtle border border-indigo-100 dark:border-github-dark-border flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm shadow-sm">
                                 {idx + 1}
                             </div>
 
@@ -710,11 +710,11 @@ const SessionDetailsModal = ({ employee, date, onClose }) => {
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Time In</p>
-                                        <p className="text-base font-bold text-slate-900 dark:text-white">{session.in}</p>
+                                        <p className="text-base font-bold text-slate-900 dark:text-github-dark-text">{session.in}</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">Time Out</p>
-                                        <p className="text-base font-bold text-slate-900 dark:text-white">
+                                        <p className="text-base font-bold text-slate-900 dark:text-github-dark-text">
                                             {session.out || <span className="text-emerald-500">Active</span>}
                                         </p>
                                     </div>
@@ -722,7 +722,7 @@ const SessionDetailsModal = ({ employee, date, onClose }) => {
 
                                 {/* Time In Location */}
                                 {session.locationIn && (
-                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400 mt-3 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl">
+                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-github-dark-muted mt-3 bg-slate-50 dark:bg-github-dark-subtle/50 p-2.5 rounded-xl">
                                         <LogIn size={14} className="mt-0.5 text-emerald-500 flex-shrink-0" />
                                         <div>
                                             <span className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">In Location</span>
@@ -733,7 +733,7 @@ const SessionDetailsModal = ({ employee, date, onClose }) => {
 
                                 {/* Time Out Location */}
                                 {session.locationOut && (
-                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1.5 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl">
+                                    <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-github-dark-muted mt-1.5 bg-slate-50 dark:bg-github-dark-subtle/50 p-2.5 rounded-xl">
                                         <LogOut size={14} className="mt-0.5 text-red-400 flex-shrink-0" />
                                         <div>
                                             <span className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Out Location</span>

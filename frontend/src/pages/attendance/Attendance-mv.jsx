@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
@@ -58,7 +59,10 @@ const Attendance = () => {
 
     // Correction Form State
     const [isCorrectionOpen, setIsCorrectionOpen] = useState(false);
-    const [selectedRequest, setSelectedRequest] = useState(null); // Detailed view
+    const [selectedRequest, setSelectedRequest] = useState(null);
+    const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+    const [submitLoading, setSubmitLoading] = useState(false); // Detailed view
     const [isFetchingDetails, setIsFetchingDetails] = useState(false); // Loading detailed view
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false); // Admin actions
 
@@ -321,7 +325,11 @@ const Attendance = () => {
             }
         }
 
-        setIsSubmitting(true);
+        setShowConfirmSubmit(true);
+    };
+
+    const handleConfirmSubmitMobile = async () => {
+        setSubmitLoading(true);
         try {
             const payload = {
                 request_date: correctionForm.date,
@@ -334,15 +342,17 @@ const Attendance = () => {
             };
 
             await attendanceService.submitCorrectionRequest(payload);
-            toast.success("Correction Request Submitted");
+            setShowConfirmSubmit(false);
+            setShowSuccessPopup(true);
             setIsCorrectionOpen(false);
+            // Reset form
             setCorrectionForm({ ...correctionForm, sessions: [{ in: '', out: '' }], reason: '' });
             fetchCorrectionHistory();
         } catch (error) {
             console.error("Correction submit failed", error);
             toast.error(error.message || "Failed to submit correction");
         } finally {
-            setIsSubmitting(false);
+            setSubmitLoading(false);
         }
     };
 
@@ -469,16 +479,16 @@ const Attendance = () => {
             <MobileDashboardLayout title="Attendance">
 
                 {/* Main Tab Switcher - Full Width */}
-                <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-none flex shadow-sm mb-4">
+                <div className="bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-none flex shadow-sm mb-4">
                     <button
                         onClick={() => setMainTab('attendance')}
                         className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
                         ${mainTab === 'attendance'
-                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400'
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-github-dark-text shadow-sm'
+                                : 'text-slate-500 dark:text-github-dark-muted'
                             }`}
                     >
-                        <User size={18} className={mainTab === 'attendance' ? 'text-slate-900 dark:text-white' : 'text-slate-400'} />
+                        <User size={18} className={mainTab === 'attendance' ? 'text-slate-900 dark:text-github-dark-text' : 'text-slate-400'} />
                         Attendance
                     </button>
                     <button
@@ -486,7 +496,7 @@ const Attendance = () => {
                         className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2
                         ${mainTab === 'my_attendance'
                                 ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-md transform scale-[1.02]'
-                                : 'text-slate-500 dark:text-slate-400'
+                                : 'text-slate-500 dark:text-github-dark-muted'
                             }`}
                     >
                         <History size={18} className={mainTab === 'my_attendance' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
@@ -494,57 +504,79 @@ const Attendance = () => {
                     </button>
                 </div>
 
-                <div className="px-4 pb-24 space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
+                <div className="px-4 pb-24 space-y-6 bg-slate-50 dark:bg-github-dark-subtle min-h-screen">
 
                     {/* --- ATTENDANCE TAB CONTENT --- */}
                     {mainTab === 'attendance' && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-left-4 duration-300">
+                            {/* Session Logic Calculation */}
+                            {(() => {
+                                const hasActiveSession = dailySessions.some(s => !s.time_out);
+                                return (
+                                    <>
+                                        {/* Time In Card */}
+                                        <div
+                                            onClick={() => !hasActiveSession && openCamera('IN')}
+                                            className={`group relative flex items-center justify-between p-5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-sm transition-all duration-200 overflow-hidden ${hasActiveSession
+                                                ? 'opacity-50 grayscale-[0.3] pointer-events-none'
+                                                : 'active:scale-[0.98] cursor-pointer'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4 relative z-10">
+                                                <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-500 border border-emerald-100 dark:border-emerald-500/20 shadow-sm">
+                                                    <ArrowRight size={26} strokeWidth={2.5} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Time In</h3>
+                                                    <p className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted mt-0.5">
+                                                        {hasActiveSession ? 'Shift in progress' : 'Start your shift'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-github-dark-border/30 text-slate-400 dark:text-slate-600 relative z-10">
+                                                <ChevronRight size={18} />
+                                            </div>
+                                        </div>
 
-                            {/* Time In Card */}
-                            <div
-                                onClick={() => openCamera('IN')}
-                                className="bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl p-6 flex justify-between items-center cursor-pointer active:scale-[0.98] transition-transform border border-emerald-100 dark:border-emerald-900"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                                        <LogOut size={24} className="rotate-180" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">Time In</h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">Start your shift</p>
-                                    </div>
-                                </div>
-                                <ChevronRight className="text-slate-400" />
-                            </div>
-
-                            {/* Time Out Card */}
-                            <div
-                                onClick={() => openCamera('OUT')}
-                                className="bg-red-50 dark:bg-red-900/10 rounded-2xl p-6 flex justify-between items-center cursor-pointer active:scale-[0.98] transition-transform border border-red-100 dark:border-red-900"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-red-900/40 flex items-center justify-center text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800">
-                                        <LogOut size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">Time Out</h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">Not checked in</p>
-                                    </div>
-                                </div>
-                            </div>
+                                        {/* Time Out Card */}
+                                        <div
+                                            onClick={() => hasActiveSession && openCamera('OUT')}
+                                            className={`group relative flex items-center justify-between p-5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-sm transition-all duration-200 overflow-hidden ${!hasActiveSession
+                                                ? 'opacity-50 grayscale-[0.3] pointer-events-none'
+                                                : 'active:scale-[0.98] cursor-pointer'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4 relative z-10">
+                                                <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-500 border border-rose-100 dark:border-rose-500/20 shadow-sm">
+                                                    <LogOut size={26} strokeWidth={2.5} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Time Out</h3>
+                                                    <p className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted mt-0.5">
+                                                        {!hasActiveSession ? 'No active session' : 'End your shift'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-github-dark-border/30 text-slate-400 dark:text-slate-600 relative z-10">
+                                                <ChevronRight size={18} />
+                                            </div>
+                                        </div>
+                                    </>
+                                );
+                            })()}
 
                             {/* Activity Header */}
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-white pt-2">Activity</h3>
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text pt-2">Activity</h3>
 
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setIsCorrectionOpen(true)}
-                                    className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm active:scale-[0.98] transition-transform"
+                                    className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm active:scale-[0.98] transition-transform"
                                 >
                                     <FileText size={16} className="text-indigo-600" />
                                     Correction
                                 </button>
-                                <button className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm">
+                                <button className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 shadow-sm">
                                     <Calendar size={16} className="text-indigo-600" />
                                     {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
                                 </button>
@@ -582,12 +614,12 @@ const Attendance = () => {
                             {/* HISTORY CONTENT - UPDATED UI */}
                             {subTab === 'history' && (
                                 <div className="space-y-6">
-                                    <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400">My Shifts</h3>
+                                    <h3 className="text-sm font-bold text-slate-500 dark:text-github-dark-muted">My Shifts</h3>
 
                                     <div className="space-y-4">
                                         {monthlySessions.length > 0 ? (
                                             monthlySessions.map((session, idx) => (
-                                                <div key={idx} className="bg-white dark:bg-dark-card p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-3">
+                                                <div key={idx} className="bg-white dark:bg-dark-card p-4 rounded-xl border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center gap-3">
                                                     {/* Date Block */}
                                                     <div className="bg-indigo-50 dark:bg-indigo-900/20 w-12 h-12 rounded-xl flex flex-col items-center justify-center text-indigo-700 dark:text-indigo-400 font-bold shrink-0">
                                                         <span className="text-lg leading-none">{new Date(session.time_in).getDate()}</span>
@@ -595,7 +627,7 @@ const Attendance = () => {
 
                                                     {/* Details */}
                                                     <div className="flex-1 min-w-0 pr-2">
-                                                        <h4 className="font-bold text-sm text-slate-800 dark:text-white truncate">
+                                                        <h4 className="font-bold text-sm text-slate-800 dark:text-github-dark-text truncate">
                                                             {new Date(session.time_in).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                                         </h4>
                                                         <p className="text-[10px] text-slate-400 truncate">
@@ -619,7 +651,7 @@ const Attendance = () => {
                                                         </div>
                                                         <div className="flex flex-col items-end">
                                                             <span className="text-[8px] text-slate-400 font-bold uppercase mb-0.5">HRS</span>
-                                                            <span className="text-[10px] font-bold text-slate-800 dark:text-white">
+                                                            <span className="text-[10px] font-bold text-slate-800 dark:text-github-dark-text">
                                                                 {session.time_out ? calculateHours(session.time_in, session.time_out) : '0h 0m'}
                                                             </span>
                                                         </div>
@@ -637,14 +669,14 @@ const Attendance = () => {
                             {subTab === 'analytics' && (
                                 <div className="space-y-6">
                                     {/* Report Download Card */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/60 shadow-sm flex flex-col gap-4">
+                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm flex flex-col gap-4">
                                         <div className="flex items-center gap-4">
                                             <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400">
                                                 <FileText size={24} />
                                             </div>
                                             <div>
-                                                <h3 className="font-bold text-slate-800 dark:text-white text-base">Monthly Report</h3>
-                                                <p className="text-xs text-slate-500 dark:text-slate-400">Download and view your logs</p>
+                                                <h3 className="font-bold text-slate-800 dark:text-github-dark-text text-base">Monthly Report</h3>
+                                                <p className="text-xs text-slate-500 dark:text-github-dark-muted">Download and view your logs</p>
                                             </div>
                                         </div>
 
@@ -653,7 +685,7 @@ const Attendance = () => {
                                                 <select
                                                     value={reportMonth}
                                                     onChange={(e) => setReportMonth(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
+                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border/60 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
                                                 >
                                                     {Array.from({ length: 12 }, (_, i) => {
                                                         const d = new Date(new Date().getFullYear(), i, 1);
@@ -667,7 +699,7 @@ const Attendance = () => {
                                                 <select
                                                     value={reportYear}
                                                     onChange={(e) => setReportYear(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
+                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border/60 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl py-2.5 px-3 appearance-none"
                                                 >
                                                     <option value="2026">2026</option>
                                                     <option value="2025">2025</option>
@@ -688,49 +720,49 @@ const Attendance = () => {
 
                                     {/* Summary Stats Vertical List */}
                                     <div className="space-y-4">
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
-                                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Records</p>
-                                                <Calendar className="text-slate-400 dark:text-slate-500" size={20} />
+                                                <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Total Records</p>
+                                                <Calendar className="text-slate-400 dark:text-github-dark-muted" size={20} />
                                             </div>
-                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">{totalRecords}</h4>
+                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">{totalRecords}</h4>
                                         </div>
 
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
-                                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Present</p>
+                                                <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Present</p>
                                                 <div className="px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 text-xs font-bold">
                                                     {presentPercentage}%
                                                 </div>
                                             </div>
-                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">{presentCount}</h4>
+                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">{presentCount}</h4>
                                         </div>
 
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
-                                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Late</p>
+                                                <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Late</p>
                                                 <div className="px-2 py-0.5 rounded-full border border-rose-500/30 bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 text-xs font-bold">
                                                     {latePercentage}%
                                                 </div>
                                             </div>
-                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">{lateCount}</h4>
+                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">{lateCount}</h4>
                                         </div>
 
-                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/60 shadow-sm relative overflow-hidden">
+                                        <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 border border-slate-100 dark:border-github-dark-border/60 shadow-sm relative overflow-hidden">
                                             <div className="flex justify-between items-start mb-2">
-                                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Avg Hours</p>
+                                                <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Avg Hours</p>
                                                 <Clock className="text-sky-500 dark:text-sky-400" size={20} />
                                             </div>
-                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">{avgHours}</h4>
+                                            <h4 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">{avgHours}</h4>
                                         </div>
                                     </div>
 
                                     {/* Charts */}
 
                                     {/* 1. Area Chart (Total Attendance Report) */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800/60">
+                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
                                         <div className="flex justify-between items-center mb-6">
-                                            <h3 className="font-bold text-lg text-slate-800 dark:text-white">Total Attendance Report</h3>
+                                            <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text">Total Attendance Report</h3>
                                             <button className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1" /><circle cx="12" cy="5" r="1" /><circle cx="12" cy="19" r="1" /></svg>
                                             </button>
@@ -758,8 +790,8 @@ const Attendance = () => {
                                     </div>
 
                                     {/* 2. Attendance Status (Donut Chart) */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800/60">
-                                        <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-2">Attendance Status</h3>
+                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                                        <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text mb-2">Attendance Status</h3>
 
                                         <div className="flex items-center justify-between">
                                             <div className="relative w-40 h-40">
@@ -788,7 +820,7 @@ const Attendance = () => {
                                                 )}
                                                 {/* Center Text */}
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                    <span className="text-3xl font-bold text-slate-800 dark:text-white leading-none">{presentCount}</span>
+                                                    <span className="text-3xl font-bold text-slate-800 dark:text-github-dark-text leading-none">{presentCount}</span>
                                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Total</span>
                                                 </div>
                                             </div>
@@ -796,19 +828,19 @@ const Attendance = () => {
                                             <div className="space-y-4 pr-4">
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">On Time</span>
+                                                    <span className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">On Time</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Late</span>
+                                                    <span className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">Late</span>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* 3. Weekly Activity (Radar Chart) */}
-                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800/60">
-                                        <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-6">Weekly Activity</h3>
+                                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                                        <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text mb-6">Weekly Activity</h3>
                                         <div className="h-64 flex items-center justify-center">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={weeklyActivityData}>
@@ -850,15 +882,15 @@ const Attendance = () => {
                                             <div
                                                 key={idx}
                                                 onClick={() => handleRequestClick(item)}
-                                                className={`bg-white dark:bg-[#1a2332] p-4 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
+                                                className={`bg-white dark:bg-[#1a2332] p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/60 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all ${isFetchingDetails ? 'opacity-50 pointer-events-none' : ''}`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm">
                                                         {item.user_name ? item.user_name.charAt(0) : (user?.user_name ? user.user_name.charAt(0) : 'U')}
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-bold text-sm text-slate-800 dark:text-white truncate max-w-[150px]">{item.user_name || user?.user_name || 'You'}</h4>
-                                                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[150px]">{item.correction_type} • {new Date(item.request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                                                        <h4 className="font-bold text-sm text-slate-800 dark:text-github-dark-text truncate max-w-[150px]">{item.user_name || user?.user_name || 'You'}</h4>
+                                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted truncate max-w-[150px]">{item.correction_type} • {new Date(item.request_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
@@ -883,7 +915,7 @@ const Attendance = () => {
                 {/* --- CORRECTION POPUP MODAL --- */}
                 {isCorrectionOpen && createPortal(
                     <div className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-                        <div className="bg-white dark:bg-slate-900 w-11/12 max-w-[320px] rounded-3xl p-5 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="bg-white dark:bg-github-dark-subtle w-11/12 max-w-[320px] rounded-3xl p-5 shadow-2xl animate-in zoom-in-95 duration-200">
                             {/* Header */}
                             <div className="flex justify-between items-center mb-4">
                                 <div className="flex items-center gap-2 text-indigo-600 font-bold text-base">
@@ -904,7 +936,7 @@ const Attendance = () => {
                                         type="date"
                                         value={correctionForm.date}
                                         onChange={(e) => setCorrectionForm({ ...correctionForm, date: e.target.value })}
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition-colors dark:text-white"
+                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition-colors dark:text-github-dark-text"
                                     />
                                 </div>
 
@@ -915,7 +947,7 @@ const Attendance = () => {
                                         <select
                                             value={correctionForm.type}
                                             onChange={(e) => setCorrectionForm({ ...correctionForm, type: e.target.value })}
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition-colors appearance-none dark:text-white"
+                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 transition-colors appearance-none dark:text-github-dark-text"
                                         >
                                             <option value="Missed Punch">Missed Punch</option>
                                             <option value="Late Arrival">Late Arrival</option>
@@ -929,7 +961,7 @@ const Attendance = () => {
                                 {/* Method */}
                                 <div>
                                     <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Method</label>
-                                    <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-xl">
+                                    <div className="flex bg-slate-50 dark:bg-github-dark-subtle p-1 rounded-xl">
                                         <button
                                             onClick={() => setCorrectionForm({ ...correctionForm, method: 'manual' })}
                                             className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${correctionForm.method === 'manual' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
@@ -958,14 +990,14 @@ const Attendance = () => {
                                                             type="time"
                                                             value={session.in}
                                                             onChange={(e) => updateSession(idx, 'in', e.target.value)}
-                                                            className="flex-1 w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold dark:text-white outline-none focus:border-indigo-500 transition-colors"
+                                                            className="flex-1 w-0 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl p-3 text-sm font-bold dark:text-github-dark-text outline-none focus:border-indigo-500 transition-colors"
                                                         />
                                                         <input
                                                             placeholder="OUT"
                                                             type="time"
                                                             value={session.out}
                                                             onChange={(e) => updateSession(idx, 'out', e.target.value)}
-                                                            className="flex-1 w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm font-bold dark:text-white outline-none focus:border-indigo-500 transition-colors"
+                                                            className="flex-1 w-0 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl p-3 text-sm font-bold dark:text-github-dark-text outline-none focus:border-indigo-500 transition-colors"
                                                         />
                                                     </div>
                                                     {correctionForm.sessions.length > 1 && (
@@ -982,7 +1014,7 @@ const Attendance = () => {
                                             <div className="col-span-2 mt-1">
                                                 <button
                                                     onClick={addSession}
-                                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-500 dark:text-slate-400 text-[13px] font-bold flex items-center justify-center gap-2 hover:border-indigo-400 dark:hover:border-indigo-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all active:scale-[0.98]"
+                                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-github-dark-border/60 rounded-xl text-slate-500 dark:text-github-dark-muted text-[13px] font-bold flex items-center justify-center gap-2 hover:border-indigo-400 dark:hover:border-indigo-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all active:scale-[0.98]"
                                                 >
                                                     <Plus size={16} strokeWidth={2.5} /> Add Another Session
                                                 </button>
@@ -998,12 +1030,12 @@ const Attendance = () => {
                                         placeholder="Why is this correction needed?"
                                         value={correctionForm.reason}
                                         onChange={(e) => setCorrectionForm({ ...correctionForm, reason: e.target.value })}
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-indigo-500 transition-colors min-h-[60px] dark:text-white"
+                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl p-2.5 text-xs font-medium outline-none focus:border-indigo-500 transition-colors min-h-[60px] dark:text-github-dark-text"
                                     ></textarea>
                                 </div>
 
                                 {/* Attachments */}
-                                <div className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-400 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center gap-3 p-3 border border-slate-200 dark:border-github-dark-border rounded-xl text-slate-400 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                     <Paperclip size={18} />
                                     <span className="text-xs font-medium flex-1">Attach Documents (PDF, Images)</span>
                                     <Plus size={18} className="text-indigo-600 bg-indigo-50 rounded-full p-0.5" />
@@ -1068,133 +1100,206 @@ const Attendance = () => {
                     document.body
                 )}
 
-                {/* --- CORRECTION DETAILS VIEW MODAL --- */}
-                {selectedRequest && createPortal(
-                    <div className="fixed inset-0 z-[600] bg-black/60 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4">
-                        <div className="bg-white dark:bg-[#111827] w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-[2rem] rounded-t-[2rem] flex flex-col shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
-                            {/* Header Pull Bar (Mobile) */}
-                            <div className="sm:hidden w-full flex justify-center pt-3 pb-1">
-                                <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></div>
-                            </div>
-
-                            {/* Modal Header */}
-                            <div className="px-6 py-4 flex justify-between items-start border-b border-slate-100 dark:border-slate-800/60 shrink-0">
-                                <div>
-                                    <h3 className="font-bold text-2xl text-slate-900 dark:text-white">Request #{selectedRequest.request_id || selectedRequest.id || Math.floor(Math.random() * 100) + 1}</h3>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-xs font-bold">
-                                            {(selectedRequest.user_name || user?.user_name || 'U').charAt(0)}
-                                        </div>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">By {selectedRequest.user_name || user?.user_name || 'Employee'}</p>
-                                    </div>
+                {/* --- CORRECTION DETAILS SIDEBAR (MOBILE DRAWER) --- */}
+                <AnimatePresence>
+                    {selectedRequest && (
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setSelectedRequest(null)}
+                                className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm"
+                            />
+                            <motion.div
+                                initial={{ y: '100%' }}
+                                animate={{ y: 0 }}
+                                exit={{ y: '100%' }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className="fixed inset-x-0 bottom-0 z-[1001] h-[85vh] bg-white dark:bg-dark-card rounded-t-[2.5rem] shadow-2xl flex flex-col overflow-hidden border-t border-white/10"
+                            >
+                                {/* Drawer Handle */}
+                                <div className="flex justify-center p-3">
+                                    <div className="w-12 h-1.5 bg-slate-200 dark:bg-github-dark-border rounded-full opacity-50" />
                                 </div>
-                                <button onClick={() => setSelectedRequest(null)} className="p-2 sm:p-1 text-slate-400 hover:text-slate-600 bg-slate-50 sm:bg-transparent dark:bg-slate-800 sm:dark:bg-transparent rounded-full transition-colors active:scale-90">
-                                    <X size={20} />
-                                </button>
-                            </div>
 
-                            {/* Modal Content Scrollable Area */}
-                            <div className="px-6 py-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
+                                {/* Header */}
+                                <div className="px-6 py-4 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-xl font-black text-slate-900 dark:text-github-dark-text uppercase tracking-tight">Request Details</h3>
+                                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: #{selectedRequest.request_id || selectedRequest.id || '---'}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setSelectedRequest(null)}
+                                        className="p-2.5 bg-slate-100 dark:bg-github-dark-subtle text-slate-500 rounded-full transition-colors"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
 
-                                {/* Correction Details */}
-                                <section>
-                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Correction Details</h4>
-                                    <div className="grid grid-cols-2 gap-3 mb-3">
-                                        <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
-                                            <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">Request Type</span>
-                                            <span className="font-bold text-slate-800 dark:text-white text-sm uppercase">{selectedRequest.correction_type || selectedRequest.type}</span>
+                                {/* Body */}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar pb-10">
+                                    {/* Status Card */}
+                                    <div className={`p-6 rounded-[2rem] border-2 flex flex-col items-center gap-4 text-center ${selectedRequest.status?.toLowerCase() === 'approved'
+                                        ? 'bg-emerald-50/50 border-emerald-100/50 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400'
+                                        : selectedRequest.status?.toLowerCase() === 'rejected'
+                                            ? 'bg-red-50/50 border-red-100/50 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
+                                            : 'bg-amber-50/50 border-amber-100/50 text-amber-600 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400'
+                                        }`}>
+                                        <div className="w-20 h-20 rounded-full bg-white dark:bg-black flex items-center justify-center shadow-inner">
+                                            {selectedRequest.status?.toLowerCase() === 'approved' ? <CheckCircle size={40} /> :
+                                                selectedRequest.status?.toLowerCase() === 'rejected' ? <XCircle size={40} /> : <Clock size={40} />}
                                         </div>
-                                        <div className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-800/30 overflow-hidden rounded-2xl p-4 shadow-sm flex flex-col justify-center">
-                                            <span className="text-xs text-indigo-500/70 dark:text-indigo-400/70 mb-1">Method</span>
-                                            <span className="font-bold text-indigo-700 dark:text-indigo-400 text-sm uppercase">{selectedRequest.details?.method || 'MANUAL'}</span>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-                                        <span className="text-xs text-slate-500 dark:text-slate-400 mb-3 block">Requested Sessions</span>
-                                        <div className="space-y-2">
-                                            {selectedRequest.details?.sessions?.map((s, i) => (
-                                                <div key={i} className="flex flex-col mb-1 text-sm font-bold text-slate-800 dark:text-white">
-                                                    <span>In: {s.in || s.time_in || '--:--'}</span>
-                                                    <span>Out: {s.out || s.time_out || '--:--'}</span>
-                                                </div>
-                                            )) || (
-                                                    <div className="flex flex-col text-sm font-bold text-slate-800 dark:text-white">
-                                                        <span>In: {selectedRequest.time_in || '--:--'}</span>
-                                                        <span>Out: {selectedRequest.time_out || '--:--'}</span>
-                                                    </div>
-                                                )}
-                                        </div>
-                                    </div>
-                                </section>
-
-                                {/* Justification */}
-                                <section>
-                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Justification & Comments</h4>
-                                    <div className="bg-white dark:bg-[#1a2332] border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex items-start gap-3">
-                                        <FileText size={16} className="text-slate-400 shrink-0 mt-0.5" />
-                                        <p className="text-sm font-medium italic text-slate-600 dark:text-slate-300">
-                                            "{selectedRequest.reason || selectedRequest.comments || 'No comment provided'}"
-                                        </p>
-                                    </div>
-                                </section>
-
-                                {/* Audit Trail */}
-                                <section>
-                                    <div className="border-t border-slate-100 dark:border-slate-800/60 mb-6"></div>
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <History size={14} className="text-slate-400" />
-                                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Audit Trail</h4>
-                                    </div>
-
-                                    <div className="relative pl-3 border-l-2 border-slate-200 dark:border-slate-800 space-y-6">
-                                        {/* Submited */}
-                                        <div className="relative">
-                                            <div className="absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 border-indigo-500"></div>
-                                            <h5 className="font-bold text-sm text-slate-800 dark:text-white">Submitted</h5>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                                {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleString()} • by {selectedRequest.user_name || user?.user_name || 'User'}
+                                        <div>
+                                            <h4 className="text-2xl font-black uppercase tracking-widest">{selectedRequest.status || 'PENDING'}</h4>
+                                            <p className="text-xs font-bold opacity-60 mt-1">
+                                                Submitted on {new Date(selectedRequest.created_at || selectedRequest.request_date).toLocaleDateString()}
                                             </p>
                                         </div>
-
-                                        {/* Final Status (if processed) */}
-                                        {(selectedRequest.status || 'PENDING').toUpperCase() !== 'PENDING' && (
-                                            <div className="relative">
-                                                <div className={`absolute -left-[18px] top-1 w-3 h-3 rounded-full bg-white dark:bg-[#111827] border-2 
-                                                ${(selectedRequest.status).toUpperCase() === 'APPROVED' ? 'border-emerald-500' : 'border-rose-500'}`}>
-                                                </div>
-                                                <h5 className="font-bold text-sm text-slate-800 dark:text-white drop-shadow-sm capitalize">
-                                                    {(selectedRequest.status).toLowerCase()}
-                                                </h5>
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                                    {new Date(selectedRequest.updated_at || Date.now()).toLocaleString()} • by {selectedRequest.approved_by || 'Admin/HR'}
-                                                </p>
-                                            </div>
-                                        )}
                                     </div>
-                                </section>
-                            </div>
 
-                            {/* Admin/HR Action Buttons (Bottom Fixed) */}
-                            {/* Only show if user is Admin/HR and request is PENDING */}
-                            {['admin', 'hr', 'manager'].includes((user?.role || '').toLowerCase()) && (selectedRequest.status || 'PENDING').toUpperCase() === 'PENDING' && (
-                                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-white dark:bg-[#111827] shrink-0 sm:rounded-b-[2rem] flex gap-3">
+                                    {/* Info Grid */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</span>
+                                            <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text leading-tight">
+                                                {new Date(selectedRequest.request_date || selectedRequest.date).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Type</span>
+                                            <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text truncate">
+                                                {selectedRequest.correction_type || selectedRequest.type}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Reason */}
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Reason</span>
+                                        <p className="text-sm text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                                            "{selectedRequest.reason || selectedRequest.comments || 'No reason provided'}"
+                                        </p>
+                                    </div>
+
+                                    {/* Sessions */}
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Proposed Sessions</span>
+                                        <div className="space-y-3">
+                                            {(selectedRequest.details?.sessions || (selectedRequest.time_in ? [{ in: selectedRequest.time_in, out: selectedRequest.time_out }] : [])).map((s, idx) => (
+                                                <div key={idx} className="flex justify-between items-center p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-xl shadow-sm">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Time In</span>
+                                                        <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">{s.in || s.time_in || '--:--'}</span>
+                                                    </div>
+                                                    <div className="h-8 w-px bg-slate-100 dark:bg-github-dark-border/50"></div>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Time Out</span>
+                                                        <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">{s.out || s.time_out || '--:--'}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Admin Feedback Section */}
+                                    {selectedRequest.status?.toLowerCase() !== 'pending' && (
+                                        <div className="bg-indigo-50/50 dark:bg-indigo-900/10 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-900/30">
+                                            <span className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3">Reviewer Decision</span>
+                                            <p className="text-sm text-slate-800 dark:text-slate-300 font-bold leading-relaxed">
+                                                {selectedRequest.review_comments || "No comments provided."}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Footer Action */}
+                                <div className="p-6 bg-slate-50 dark:bg-github-dark-subtle/20 border-t border-slate-100 dark:border-github-dark-border">
                                     <button
-                                        onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest._id || selectedRequest.id, 'REJECTED')}
-                                        disabled={isUpdatingStatus}
-                                        className="flex-1 py-3.5 bg-white dark:bg-[#1a2332] border border-rose-200 dark:border-rose-900 shadow-sm text-rose-600 dark:text-rose-500 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
+                                        onClick={() => setSelectedRequest(null)}
+                                        className="w-full py-4 text-xs font-black uppercase tracking-widest text-slate-500 bg-white dark:bg-github-dark-subtle dark:text-github-dark-muted rounded-2xl border border-slate-200 dark:border-github-dark-border"
                                     >
-                                        Reject
-                                    </button>
-                                    <button
-                                        onClick={() => handleUpdateStatus(selectedRequest.request_id || selectedRequest._id || selectedRequest.id, 'APPROVED')}
-                                        disabled={isUpdatingStatus}
-                                        className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-bold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-50"
-                                    >
-                                        {isUpdatingStatus ? <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span> : 'Accept'}
+                                        Close Details
                                     </button>
                                 </div>
-                            )}
-                        </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                {/* --- CONFIRMATION DIALOG (MOBILE) --- */}
+                {showConfirmSubmit && createPortal(
+                    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowConfirmSubmit(false)}
+                            className="absolute inset-0 bg-black/70 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="relative w-full max-w-sm bg-white dark:bg-dark-card rounded-[2.5rem] shadow-2xl p-8 text-center border border-white/10"
+                        >
+                            <div className="w-20 h-20 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <AlertCircle size={40} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 dark:text-github-dark-text mb-2 tracking-tight">Confirm Send</h3>
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-8 leading-relaxed">
+                                Are you sure you want to submit this correction request for review?
+                            </p>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={handleConfirmSubmitMobile}
+                                    disabled={submitLoading}
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {submitLoading ? <RefreshCw className="animate-spin" size={16} /> : "Submit Request"}
+                                </button>
+                                <button
+                                    onClick={() => setShowConfirmSubmit(false)}
+                                    className="w-full py-4 text-xs font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-all"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>,
+                    document.body
+                )}
+
+                {/* --- SUCCESS DIALOG (MOBILE) --- */}
+                {showSuccessPopup && createPortal(
+                    <div className="fixed inset-0 z-[2001] flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowSuccessPopup(false)}
+                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="relative w-full max-w-sm bg-white dark:bg-dark-card rounded-[3rem] shadow-3xl p-10 text-center border-t border-white/20"
+                        >
+                            <div className="w-24 h-24 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner ring-[12px] ring-emerald-500/5">
+                                <CheckCircle size={48} />
+                            </div>
+                            <h3 className="text-3xl font-black text-slate-900 dark:text-github-dark-text mb-3 tracking-tighter">Submitted!</h3>
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-10 font-medium">
+                                Your request has been successfully queued for administrator approval.
+                            </p>
+                            <button
+                                onClick={() => setShowSuccessPopup(false)}
+                                className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-[0.2em] rounded-[1.5rem] shadow-xl shadow-emerald-500/20 active:scale-[0.97] transition-all"
+                            >
+                                Done
+                            </button>
+                        </motion.div>
                     </div>,
                     document.body
                 )}

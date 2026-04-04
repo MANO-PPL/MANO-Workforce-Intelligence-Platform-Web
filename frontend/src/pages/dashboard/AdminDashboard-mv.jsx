@@ -162,7 +162,7 @@ const AdminDashboard = () => {
 
                 {/* Quick Actions */}
                 <div>
-                    <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-3 px-1">Quick Actions</h3>
+                    <h3 className="text-base font-semibold text-slate-800 dark:text-github-dark-text mb-3 px-1">Quick Actions</h3>
                     <div className="space-y-3">
                         <QuickLinkCard
                             onClick={() => navigate('/mobile-view/employees')}
@@ -187,15 +187,15 @@ const AdminDashboard = () => {
 
                 {/* Analytics Segment */}
                 <div>
-                    <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-3 px-1">Analytics</h3>
+                    <h3 className="text-base font-semibold text-slate-800 dark:text-github-dark-text mb-3 px-1">Analytics</h3>
 
-                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800/60">
-                        <h4 className="text-lg font-bold text-slate-800 dark:text-white">Attendance Trends</h4>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 mt-1">Weekly Insight</p>
+                    <div className="bg-white dark:bg-[#1a2332] rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                        <h4 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Attendance Trends</h4>
+                        <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-6 mt-1">Weekly Insight</p>
 
                         <div className="h-64 mt-4">
                             {isLoading ? (
-                                <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-slate-800/50 rounded-lg"></div>
+                                <div className="w-full h-full animate-pulse bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg"></div>
                             ) : (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
@@ -222,9 +222,9 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Live Activity Segment */}
-                <div className="bg-white dark:bg-[#1a2332] rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60">
-                    <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60">
-                        <h3 className="font-bold text-lg text-slate-800 dark:text-white">Live Activity</h3>
+                <div className="bg-white dark:bg-[#1a2332] rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border/60">
+                    <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-github-dark-border/60">
+                        <h3 className="font-bold text-lg text-slate-800 dark:text-github-dark-text">Live Activity</h3>
                         <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
                     </div>
 
@@ -254,8 +254,8 @@ const AdminDashboard = () => {
                                         </div>
 
                                         <div className="flex-1 min-w-0 pr-2">
-                                            <p className="text-[15px] font-bold text-slate-800 dark:text-white truncate">{activity.user || 'Unknown User'}</p>
-                                            <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{activity.role || 'Employee'} • {activity.action}</p>
+                                            <p className="text-[15px] font-bold text-slate-800 dark:text-github-dark-text truncate">{activity.user || 'Unknown User'}</p>
+                                            <p className="text-[13px] text-slate-500 dark:text-github-dark-muted mt-0.5 leading-snug">{activity.role || 'Employee'} • {activity.action}</p>
                                         </div>
 
                                         <div className="shrink-0 bg-slate-100 dark:bg-[#151b28] px-2.5 py-1.5 rounded text-[11px] font-bold text-slate-600 dark:text-slate-300 mt-1">
@@ -277,7 +277,7 @@ const AdminDashboard = () => {
 };
 
 const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, iconBg }) => (
-    <div className="bg-white dark:bg-[#1a2332] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60 relative overflow-hidden">
+    <div className="bg-white dark:bg-[#1a2332] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border/60 relative overflow-hidden">
         {loading ? (
             <div className="animate-pulse space-y-4">
                 <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/3"></div>
@@ -293,9 +293,9 @@ const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, 
                     </div>
                 </div>
 
-                <h4 className="text-[28px] font-bold text-slate-800 dark:text-white tracking-tight flex items-baseline gap-1">
+                <h4 className="text-[28px] font-bold text-slate-800 dark:text-github-dark-text tracking-tight flex items-baseline gap-1">
                     {value.split(' ')[0]}
-                    {value.split(' ')[1] && <span className="text-sm font-normal text-slate-800 dark:text-white"> {value.split(' ').slice(1).join(' ')}</span>}
+                    {value.split(' ')[1] && <span className="text-sm font-normal text-slate-800 dark:text-github-dark-text"> {value.split(' ').slice(1).join(' ')}</span>}
                     {total && <span className="text-sm font-normal text-slate-400">{total}</span>}
                 </h4>
 
@@ -304,7 +304,7 @@ const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, 
                         <span className={`${trendUp ? 'text-emerald-500' : 'text-rose-500'}`}>
                             {trendUp && !trend.startsWith('+') && !trend.startsWith('-') ? '+' : ''}{trend}
                         </span>
-                        <span className="text-slate-400 dark:text-slate-400 font-normal ml-1">vs yesterday</span>
+                        <span className="text-slate-400 dark:text-github-dark-muted font-normal ml-1">vs yesterday</span>
                     </div>
                 )}
             </>
@@ -315,13 +315,13 @@ const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, 
 const QuickLinkCard = ({ icon, title, onClick, iconBg }) => (
     <div
         onClick={onClick}
-        className="bg-white dark:bg-[#1a2332] p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800/60 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
+        className="bg-white dark:bg-[#1a2332] p-4 rounded-xl shadow-sm border border-slate-100 dark:border-github-dark-border/60 flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
     >
         <div className="flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
                 {icon}
             </div>
-            <h4 className="text-[15px] font-semibold text-slate-800 dark:text-slate-200 tracking-wide">{title}</h4>
+            <h4 className="text-[15px] font-semibold text-slate-800 dark:text-github-dark-text tracking-wide">{title}</h4>
         </div>
         <div className="text-slate-400 dark:text-slate-300">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>

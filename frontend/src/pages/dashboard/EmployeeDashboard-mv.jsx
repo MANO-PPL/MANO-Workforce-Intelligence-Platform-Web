@@ -110,21 +110,21 @@ const EmployeeDashboard = () => {
                 </div>
 
                 {/* 2. Today's Status Card */}
-                <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
-                    <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border">
+                    <h3 className="text-sm font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider mb-4 flex items-center gap-2">
                         <Clock size={16} /> Today's Status
                     </h3>
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col gap-1">
                             <span className="text-xs text-slate-400 font-medium uppercase">Check In</span>
-                            <span className={`text-xl font-bold font-mono ${todayStatus?.time_in ? 'text-slate-800 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
+                            <span className={`text-xl font-bold font-mono ${todayStatus?.time_in ? 'text-slate-800 dark:text-github-dark-text' : 'text-slate-300 dark:text-slate-600'}`}>
                                 {todayStatus?.time_in || '--:--'}
                             </span>
                         </div>
                         <div className="h-8 w-px bg-slate-200 dark:bg-slate-700"></div>
                         <div className="flex flex-col gap-1">
                             <span className="text-xs text-slate-400 font-medium uppercase">Check Out</span>
-                            <span className={`text-xl font-bold font-mono ${todayStatus?.time_out ? 'text-slate-800 dark:text-white' : 'text-slate-300 dark:text-slate-600'}`}>
+                            <span className={`text-xl font-bold font-mono ${todayStatus?.time_out ? 'text-slate-800 dark:text-github-dark-text' : 'text-slate-300 dark:text-slate-600'}`}>
                                 {todayStatus?.time_out || '--:--'}
                             </span>
                         </div>
@@ -140,43 +140,43 @@ const EmployeeDashboard = () => {
 
                 {/* 3. Monthly Stats Grid */}
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center">
+                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border flex flex-col items-center justify-center text-center">
                         <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2">
                             <CheckCircle size={20} />
                         </div>
-                        <span className="text-2xl font-bold text-slate-800 dark:text-white">{stats.daysPresent}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Present Days</span>
+                        <span className="text-2xl font-bold text-slate-800 dark:text-github-dark-text">{stats.daysPresent}</span>
+                        <span className="text-xs text-slate-500 dark:text-github-dark-muted font-medium">Present Days</span>
                     </div>
 
-                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center">
+                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border flex flex-col items-center justify-center text-center">
                         <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2">
                             <AlertCircle size={20} />
                         </div>
-                        <span className="text-2xl font-bold text-slate-800 dark:text-white">{stats.lateDays}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Late Check-ins</span>
+                        <span className="text-2xl font-bold text-slate-800 dark:text-github-dark-text">{stats.lateDays}</span>
+                        <span className="text-xs text-slate-500 dark:text-github-dark-muted font-medium">Late Check-ins</span>
                     </div>
 
-                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center">
+                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border flex flex-col items-center justify-center text-center">
                         <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center justify-center mb-2">
                             <XCircle size={20} />
                         </div>
-                        <span className="text-2xl font-bold text-slate-800 dark:text-white">{stats.daysAbsent}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Absents</span>
+                        <span className="text-2xl font-bold text-slate-800 dark:text-github-dark-text">{stats.daysAbsent}</span>
+                        <span className="text-xs text-slate-500 dark:text-github-dark-muted font-medium">Absents</span>
                     </div>
 
-                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center">
+                    <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border flex flex-col items-center justify-center text-center">
                         <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-2">
                             <TrendingUp size={20} />
                         </div>
-                        <span className="text-2xl font-bold text-slate-800 dark:text-white">{stats.avgHours}h</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Avg Hours</span>
+                        <span className="text-2xl font-bold text-slate-800 dark:text-github-dark-text">{stats.avgHours}h</span>
+                        <span className="text-xs text-slate-500 dark:text-github-dark-muted font-medium">Avg Hours</span>
                     </div>
                 </div>
 
                 {/* 4. Upcoming Holidays */}
-                <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-github-dark-border">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
                             <Calendar size={16} className="text-indigo-500" /> Upcoming Holidays
                         </h3>
                         <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium cursor-pointer hover:underline" onClick={() => navigate('/mobile-view/holidays')}>View All</span>
@@ -185,14 +185,14 @@ const EmployeeDashboard = () => {
                     <div className="space-y-3">
                         {upcomingHolidays.length > 0 ? (
                             upcomingHolidays.slice(0, 3).map((holiday, index) => (
-                                <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                    <div className="flex flex-col items-center justify-center w-10 h-10 bg-white dark:bg-slate-700 rounded-lg shadow-sm text-center border border-slate-200 dark:border-slate-600">
+                                <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
+                                    <div className="flex flex-col items-center justify-center w-10 h-10 bg-white dark:bg-slate-700 rounded-lg shadow-sm text-center border border-slate-200 dark:border-github-dark-border">
                                         <span className="text-[10px] text-slate-500 font-bold uppercase">{new Date(holiday.date).toLocaleString('default', { month: 'short' })}</span>
-                                        <span className="text-sm font-bold text-slate-800 dark:text-white">{new Date(holiday.date).getDate()}</span>
+                                        <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text">{new Date(holiday.date).getDate()}</span>
                                     </div>
                                     <div className="flex-1">
-                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-white">{holiday.name}</h4>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">{new Date(holiday.date).toLocaleDateString(undefined, { weekday: 'long' })}</p>
+                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text">{holiday.name}</h4>
+                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted">{new Date(holiday.date).toLocaleDateString(undefined, { weekday: 'long' })}</p>
                                     </div>
                                 </div>
                             ))
