@@ -55,25 +55,18 @@ const SystemLogs = () => {
 
     return (
         <DashboardLayout title="System Logs">
-            <div className="flex flex-col h-[calc(100vh-120px)] space-y-4">
-                {/* Header */}
-                <div className="flex justify-between items-center shrink-0">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                            <Code size={28} className="text-slate-500" />
-                            System & Activity Logs
-                        </h1>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Audit trail for user actions and application crashes.</p>
-                    </div>
+            <div className="flex flex-col flex-1 space-y-4 min-h-0">
+                {/* Action Bar (Search & Tabs) */}
+                <div className="flex justify-end items-center shrink-0">
                     <div className="flex items-center gap-4">
                         {/* Tabs */}
-                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                        <div className="flex bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-lg">
                             <button
                                 onClick={() => setActiveTab('activity')}
                                 className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
                                     activeTab === 'activity' 
                                     ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' 
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
                                 }`}
                             >
                                 <Activity size={16} /> User Activity
@@ -83,7 +76,7 @@ const SystemLogs = () => {
                                 className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
                                     activeTab === 'errors' 
                                     ? 'bg-white dark:bg-slate-700 shadow-sm text-red-600 dark:text-red-400' 
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
                                 }`}
                             >
                                 <AlertTriangle size={16} /> Application Errors
@@ -96,17 +89,17 @@ const SystemLogs = () => {
                                 placeholder="Search logs..." 
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-64 pl-9 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-64 pl-9 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                             />
                         </div>
                     </div>
                 </div>
 
                 {/* List Content */}
-                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
                     <div className="flex-1 overflow-x-auto custom-scrollbar">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm">
+                            <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted sticky top-0 z-10 shadow-sm">
                                 {activeTab === 'activity' ? (
                                     <tr>
                                         <th className="px-6 py-4 font-semibold">Time</th>
@@ -135,8 +128,8 @@ const SystemLogs = () => {
                                             <td className="px-6 py-4 text-xs font-mono text-slate-500">{new Date(log.occurred_at).toLocaleString()}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
-                                                    <span className="font-semibold text-slate-800 dark:text-slate-200">{log.user_name || 'System Auto'}</span>
-                                                    {log.org_name && <span className="text-xs text-slate-500 border border-slate-200 dark:border-slate-700 rounded px-1 mt-1 w-max">ORG: {log.org_name}</span>}
+                                                    <span className="font-semibold text-slate-800 dark:text-github-dark-text">{log.user_name || 'System Auto'}</span>
+                                                    {log.org_name && <span className="text-xs text-slate-500 border border-slate-200 dark:border-github-dark-border rounded px-1 mt-1 w-max">ORG: {log.org_name}</span>}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -161,7 +154,7 @@ const SystemLogs = () => {
                                                     <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 font-mono">
                                                         {err.request_method || 'SYS'}
                                                     </span>
-                                                    <span className="text-xs text-slate-600 dark:text-slate-400 font-mono truncate max-w-[200px]" title={err.request_path}>
+                                                    <span className="text-xs text-slate-600 dark:text-github-dark-muted font-mono truncate max-w-[200px]" title={err.request_path}>
                                                         {err.request_path || 'Background Job'}
                                                     </span>
                                                 </div>
@@ -175,7 +168,7 @@ const SystemLogs = () => {
                                                     </details>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400">
+                                            <td className="px-6 py-4 text-xs text-slate-600 dark:text-github-dark-muted">
                                                 {err.user_name ? `${err.user_name} (ORG: ${err.org_name || 'Global'})` : 'Anonymous Request'}
                                             </td>
                                         </tr>

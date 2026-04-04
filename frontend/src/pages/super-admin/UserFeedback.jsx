@@ -46,23 +46,16 @@ const UserFeedback = () => {
         switch (type?.toLowerCase()) {
             case 'bug': return <span className="px-2 py-1 text-[10px] font-bold rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 uppercase tracking-wider">BUG REPORT</span>;
             case 'feature': return <span className="px-2 py-1 text-[10px] font-bold rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400 uppercase tracking-wider">FEATURE REQ</span>;
-            case 'general': return <span className="px-2 py-1 text-[10px] font-bold rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-wider">GENERAL</span>;
-            default: return <span className="px-2 py-1 text-[10px] font-bold rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-wider">{type}</span>;
+            case 'general': return <span className="px-2 py-1 text-[10px] font-bold rounded bg-slate-100 text-slate-700 dark:bg-github-dark-subtle dark:text-github-dark-muted uppercase tracking-wider">GENERAL</span>;
+            default: return <span className="px-2 py-1 text-[10px] font-bold rounded bg-slate-100 text-slate-700 dark:bg-github-dark-subtle dark:text-github-dark-muted uppercase tracking-wider">{type}</span>;
         }
     };
 
     return (
         <DashboardLayout title="User Feedback">
-            <div className="flex flex-col h-[calc(100vh-120px)] space-y-4">
-                {/* Header */}
-                <div className="flex justify-between items-center shrink-0">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                            <MessageSquare size={28} className="text-indigo-500" />
-                            User Feedback & Bug Reports
-                        </h1>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Review feedback, feature requests, and issues reported by your tenants.</p>
-                    </div>
+            <div className="flex flex-col flex-1 space-y-4 min-h-0">
+                {/* Action Bar */}
+                <div className="flex justify-end items-center shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -71,7 +64,7 @@ const UserFeedback = () => {
                                 placeholder="Search queries..." 
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-64 pl-9 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                className="w-64 pl-9 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                             />
                         </div>
                     </div>
@@ -80,18 +73,18 @@ const UserFeedback = () => {
                 {/* List Content */}
                 <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">
                     {loading ? (
-                        <div className="flex justify-center py-12 bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-slate-700"><Loader2 className="animate-spin text-slate-400" /></div>
+                        <div className="flex justify-center py-12 bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-github-dark-border"><Loader2 className="animate-spin text-slate-400" /></div>
                     ) : filteredFeedback.length === 0 ? (
-                        <div className="text-center py-12 bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500">No feedback entries found.</div>
+                        <div className="text-center py-12 bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-github-dark-border text-slate-500">No feedback entries found.</div>
                     ) : (
                         filteredFeedback.map(item => (
-                            <div key={item.feedback_id} className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-all hover:shadow-md">
+                            <div key={item.feedback_id} className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-6 transition-all hover:shadow-md">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex gap-4">
                                         <div className="mt-1">{getTypeBadge(item.type)}</div>
                                         <div>
-                                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{item.title}</h3>
-                                            <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
+                                            <h3 className="text-lg font-bold text-slate-900 dark:text-github-dark-text">{item.title}</h3>
+                                            <div className="text-sm text-slate-500 dark:text-github-dark-muted mt-1 flex items-center gap-2">
                                                 <span className="font-semibold text-slate-700 dark:text-slate-300">{item.user_name || 'Anonymous User'}</span>
                                                 {item.org_name && <span>• {item.org_name}</span>}
                                                 <span>• {new Date(item.created_at).toLocaleString()}</span>
@@ -116,11 +109,11 @@ const UserFeedback = () => {
                                         )}
                                     </div>
                                 </div>
-                                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap border border-slate-100 dark:border-slate-800/60">
+                                <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-lg text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap border border-slate-100 dark:border-github-dark-border/60">
                                     {item.description}
                                 </div>
                                 {item.attachments && item.attachments.length > 0 && (
-                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-3">
+                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-github-dark-border flex flex-wrap gap-3">
                                         <div className="text-xs font-semibold text-slate-500 w-full flex items-center gap-1"><Paperclip size={12}/> Attachments ({item.attachments.length})</div>
                                         {item.attachments.map(att => (
                                             <a 
@@ -128,7 +121,7 @@ const UserFeedback = () => {
                                                 href={att.url} 
                                                 target="_blank" 
                                                 rel="noopener noreferrer"
-                                                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                                             >
                                                 {att.file_name} <ExternalLink size={12} />
                                             </a>
