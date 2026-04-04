@@ -94,23 +94,23 @@ const CustomCalendar = ({ selectedDate, onChange, onClose, events = {} }) => {
 
     return (
         <div
-            className="absolute top-full right-0 mt-2 z-50 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 w-[320px] animate-in fade-in zoom-in-95 duration-200"
+            className="absolute top-full right-0 mt-2 z-50 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border p-4 w-[320px] animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
         >
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <button
                     onClick={prevMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-github-dark-muted transition-colors"
                 >
                     <ChevronLeft size={20} />
                 </button>
-                <div className="font-bold text-slate-800 dark:text-white">
+                <div className="font-bold text-slate-800 dark:text-github-dark-text">
                     {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </div>
                 <button
                     onClick={nextMonth}
-                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-github-dark-muted transition-colors"
                 >
                     <ChevronRight size={20} />
                 </button>
@@ -119,7 +119,7 @@ const CustomCalendar = ({ selectedDate, onChange, onClose, events = {} }) => {
             {/* Days Header */}
             <div className="grid grid-cols-7 mb-2">
                 {daysOfWeek.map((d) => (
-                    <div key={d} className="text-center text-xs font-semibold text-slate-400 dark:text-slate-500 py-1">
+                    <div key={d} className="text-center text-xs font-semibold text-slate-400 dark:text-github-dark-muted py-1">
                         {d}
                     </div>
                 ))}
@@ -136,7 +136,7 @@ const CustomCalendar = ({ selectedDate, onChange, onClose, events = {} }) => {
                     const selected = isSelected(dayObj);
                     const today = isToday(dayObj);
 
-                    let bgClass = "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700";
+                    let bgClass = "text-slate-700 dark:text-github-dark-text hover:bg-slate-100 dark:hover:bg-slate-700";
 
                     if (!isCurrentMonth) {
                         bgClass = "text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800";
@@ -166,7 +166,7 @@ const CustomCalendar = ({ selectedDate, onChange, onClose, events = {} }) => {
             </div>
 
             {/* Legend */}
-            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between text-[10px] text-slate-500">
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-github-dark-border flex justify-between text-[10px] text-slate-500">
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Today</div>
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-400"></div>Absent</div>
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400"></div>Holiday</div>

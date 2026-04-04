@@ -16,7 +16,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
         setShowRedirect(true);
         return;
       }
-      console.log('ProtectedRoute Check:', { user, allowedRoles, type: user?.user_type });
+
       // Check user roles 
       const hasPermission = allowedRoles.length === 0 || (user?.user_type && allowedRoles.includes(user.user_type));
 

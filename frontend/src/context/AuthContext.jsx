@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import api, { setAccessToken } from "../services/api";
 
 const AuthContext = createContext();
@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         // Refresh failed (no cookie or invalid), just stay logged out
-        console.log("Silent refresh failed:", error);
+
         setUser(null);
       } finally {
         setAuthChecked(true);

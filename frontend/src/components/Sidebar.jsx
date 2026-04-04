@@ -31,7 +31,7 @@ const SidebarItem = ({ icon, text, to }) => {
 
     const content = (
         <>
-            <span className={`mr-3 transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`}>
+            <span className={`mr-3 transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-github-dark-muted group-hover:text-slate-600 dark:group-hover:text-slate-300'}`}>
                 {icon}
             </span>
             {text}
@@ -39,8 +39,8 @@ const SidebarItem = ({ icon, text, to }) => {
     );
 
     const className = `flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group ${isActive
-        ? 'bg-indigo-50 dark:bg-dark-card text-indigo-600 dark:text-indigo-400 shadow-sm border border-transparent dark:border-slate-700'
-        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-dark-card hover:text-slate-900 dark:hover:text-slate-200'
+        ? 'bg-indigo-50 dark:bg-github-dark-border text-indigo-600 dark:text-github-dark-accent shadow-sm border border-transparent dark:border-github-dark-border/50'
+        : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-github-dark-border/50 hover:text-slate-900 dark:hover:text-github-dark-text'
         }`;
 
     if (to) {
@@ -71,8 +71,8 @@ const getNavItems = (userType) => {
         { icon: <TrendingUp size={20} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
 
         { icon: <ClipboardList size={20} />, text: "Daily Activity Report", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
-        { icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
-        { icon: <Settings size={20} />, text: "Policy Engine", to: "/policy-builder", roles: ['admin', 'hr'] },
+        {icon: <MapPin size={20} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
+        { icon: <Settings size={20} />, text: "Shift Management", to: "/shift-management", roles: ['admin', 'hr'] },
         { icon: <Calendar size={20} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
         // { icon: <CreditCard size={20} />, text: "Subscription", to: "/subscription", roles: ['admin'] },
     ];
@@ -97,11 +97,11 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
             )}
 
             <aside className={`
-                fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-dark-bg border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 ease-in-out md:translate-x-0 md:sticky md:top-0 md:h-screen md:flex md:flex-col shadow-xl md:shadow-sm shrink-0
+                fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-github-dark-subtle border-r border-slate-200 dark:border-github-dark-border transform transition-transform duration-300 ease-in-out md:translate-x-0 md:fixed md:top-0 md:h-screen md:flex md:flex-col shadow-xl md:shadow-sm shrink-0
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
             `}>
-                <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-3 font-bold text-xl text-indigo-600 dark:text-indigo-400">
+                <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-github-dark-border">
+                    <div className="flex items-center gap-3 font-bold text-xl text-indigo-600 dark:text-github-dark-accent">
                         <img src="/mano-logo.svg" alt="MANO" className="w-8 h-8" />
                         <span>MANO</span>
                     </div>
@@ -119,10 +119,10 @@ const Sidebar = ({ isMobileMenuOpen, setIsMobileMenuOpen }) => {
                     ))}
                 </nav>
 
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="p-4 border-t border-slate-100 dark:border-github-dark-border space-y-2">
                     <button
                         onClick={() => setIsFeedbackOpen(true)}
-                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-all"
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-github-dark-muted bg-slate-50 dark:bg-github-dark-border/30 hover:bg-slate-100 dark:hover:bg-github-dark-border hover:text-indigo-600 dark:hover:text-github-dark-accent rounded-lg transition-all"
                     >
                         <Bug size={18} />
                         Bugs & Feedback
