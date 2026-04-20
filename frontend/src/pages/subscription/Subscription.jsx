@@ -140,33 +140,33 @@ const Subscription = () => {
 
                 {/* Header Section */}
                 <div className="text-center space-y-4 max-w-2xl mx-auto">
-                    <h1 className="text-4xl font-semibold text-slate-800 dark:text-white font-poppins">
+                    <h1 className="text-4xl font-semibold text-slate-800 dark:text-github-dark-text font-poppins">
                         Choose Your Plan
                     </h1>
-                    <p className="text-lg text-slate-500 dark:text-slate-400 font-poppins">
+                    <p className="text-lg text-slate-500 dark:text-github-dark-muted font-poppins">
                         Simple, transparent pricing that scales with your business. No hidden fees.
                     </p>
 
                     {/* Billing Toggle */}
                     <div className="flex items-center justify-center gap-4 mt-8">
-                        <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>Monthly</span>
+                        <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-slate-900 dark:text-github-dark-text' : 'text-slate-500'}`}>Monthly</span>
                         <button
                             onClick={() => setBillingCycle(prev => prev === 'monthly' ? 'yearly' : 'monthly')}
                             className={`relative w-14 h-7 rounded-full transition-colors duration-300 ${billingCycle === 'yearly' ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}
                         >
                             <div className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform duration-300 ${billingCycle === 'yearly' ? 'translate-x-7' : 'translate-x-0'}`}></div>
                         </button>
-                        <span className={`text-sm font-medium ${billingCycle === 'yearly' ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>
+                        <span className={`text-sm font-medium ${billingCycle === 'yearly' ? 'text-slate-900 dark:text-github-dark-text' : 'text-slate-500'}`}>
                             Yearly <span className="text-xs text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full ml-1 font-semibold">Save 20%</span>
                         </span>
                     </div>
                 </div>
 
                 {/* User Count Selector */}
-                <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-slate-700 w-full">
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-github-dark-border w-full">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                         <div className="w-full md:w-2/3 space-y-4">
-                            <label className="text-lg font-medium text-slate-800 dark:text-white flex items-center gap-2">
+                            <label className="text-lg font-medium text-slate-800 dark:text-github-dark-text flex items-center gap-2">
                                 <Users size={20} className="text-indigo-600" />
                                 Number of Employees
                             </label>
@@ -187,14 +187,14 @@ const Subscription = () => {
                             </div>
                         </div>
                         <div className="w-full md:w-1/3 flex items-center justify-center md:justify-end">
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-center w-full max-w-[150px]">
+                            <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-xl border border-slate-200 dark:border-github-dark-border text-center w-full max-w-[150px]">
                                 <input
                                     type="number"
                                     value={userCount}
                                     onChange={(e) => setUserCount(Math.max(1, parseInt(e.target.value) || 0))}
                                     className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 bg-transparent text-center w-full focus:outline-none"
                                 />
-                                <span className="text-xs text-slate-500 dark:text-slate-400 block mt-1">Users</span>
+                                <span className="text-xs text-slate-500 dark:text-github-dark-muted block mt-1">Users</span>
                             </div>
                         </div>
                     </div>
@@ -203,16 +203,16 @@ const Subscription = () => {
                 {/* Pricing Plans */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {/* Basic Plan */}
-                    <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col hover:border-indigo-200 dark:hover:border-indigo-900 transition-all duration-300 relative group">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col hover:border-indigo-200 dark:hover:border-indigo-900 transition-all duration-300 relative group">
                         <div className="mb-6">
-                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Basic</h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Essential features for small teams.</p>
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text mb-2">Basic</h3>
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted">Essential features for small teams.</p>
                         </div>
                         <div className="mb-8">
-                            <div className={`text-4xl font-bold text-slate-900 dark:text-white font-poppins transition-all duration-300 ${animatePrice ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
+                            <div className={`text-4xl font-bold text-slate-900 dark:text-github-dark-text font-poppins transition-all duration-300 ${animatePrice ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
                                 {formatCurrency(calculatePrice(tiers.basic))}
                             </div>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-1">
                                 per month / billed {billingCycle}
                             </p>
                         </div>
@@ -247,16 +247,16 @@ const Subscription = () => {
                             <span className="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</span>
                         </div>
                         <div className="mb-6 mt-2">
-                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text mb-2 flex items-center gap-2">
                                 Professional <Zap size={18} className="text-yellow-500 fill-yellow-500" />
                             </h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Everything you need to scale.</p>
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted">Everything you need to scale.</p>
                         </div>
                         <div className="mb-8">
-                            <div className={`text-4xl font-bold text-slate-900 dark:text-white font-poppins transition-all duration-300 ${animatePrice ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
+                            <div className={`text-4xl font-bold text-slate-900 dark:text-github-dark-text font-poppins transition-all duration-300 ${animatePrice ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
                                 {formatCurrency(calculatePrice(tiers.professional))}
                             </div>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-1">
                                 per month / billed {billingCycle}
                             </p>
                         </div>
@@ -290,16 +290,16 @@ const Subscription = () => {
                     </div>
 
                     {/* Enterprise Plan */}
-                    <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col hover:border-indigo-200 dark:hover:border-indigo-900 transition-all duration-300">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl p-8 shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col hover:border-indigo-200 dark:hover:border-indigo-900 transition-all duration-300">
                         <div className="mb-6">
-                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Enterprise</h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Advanced control & support.</p>
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text mb-2">Enterprise</h3>
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted">Advanced control & support.</p>
                         </div>
                         <div className="mb-8">
-                            <div className={`text-4xl font-bold text-slate-900 dark:text-white font-poppins transition-all duration-300 ${animatePrice ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
+                            <div className={`text-4xl font-bold text-slate-900 dark:text-github-dark-text font-poppins transition-all duration-300 ${animatePrice ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
                                 {formatCurrency(calculatePrice(tiers.enterprise))}
                             </div>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                            <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-1">
                                 per month / billed {billingCycle}
                             </p>
                         </div>
@@ -326,14 +326,14 @@ const Subscription = () => {
                 </div>
 
                 {/* Feature Comparison Table */}
-                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                        <h3 className="text-xl font-bold text-slate-800 dark:text-white">Feature Comparison</h3>
+                <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden">
+                    <div className="p-6 border-b border-slate-200 dark:border-github-dark-border">
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text">Feature Comparison</h3>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
-                                <tr className="bg-slate-50 dark:bg-slate-800/50">
+                                <tr className="bg-slate-50 dark:bg-github-dark-subtle/50">
                                     <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600 dark:text-slate-300">Feature</th>
                                     <th className="px-6 py-4 text-center text-sm font-semibold text-slate-600 dark:text-slate-300">Basic</th>
                                     <th className="px-6 py-4 text-center text-sm font-semibold text-indigo-600 dark:text-indigo-400">Professional</th>
@@ -342,25 +342,25 @@ const Subscription = () => {
                             </thead>
                             <tbody>
                                 {features.map((feature, index) => (
-                                    <tr key={index} className="border-t border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                        <td className="px-6 py-4 text-sm font-medium text-slate-800 dark:text-slate-200">{feature.name}</td>
+                                    <tr key={index} className="border-t border-slate-200 dark:border-github-dark-border hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                        <td className="px-6 py-4 text-sm font-medium text-slate-800 dark:text-github-dark-text">{feature.name}</td>
 
                                         <td className="px-6 py-4 text-center">
                                             {feature.basic === true ? <Check size={18} className="text-green-500 mx-auto" /> :
                                                 feature.basic === false ? <span className="text-slate-300">-</span> :
-                                                    <span className="text-sm text-slate-600 dark:text-slate-400">{feature.basic}</span>}
+                                                    <span className="text-sm text-slate-600 dark:text-github-dark-muted">{feature.basic}</span>}
                                         </td>
 
                                         <td className="px-6 py-4 text-center bg-indigo-50/10 dark:bg-indigo-900/10">
                                             {feature.pro === true ? <Check size={18} className="text-green-500 mx-auto" /> :
                                                 feature.pro === false ? <span className="text-slate-300">-</span> :
-                                                    <span className="text-sm font-medium text-slate-800 dark:text-white">{feature.pro}</span>}
+                                                    <span className="text-sm font-medium text-slate-800 dark:text-github-dark-text">{feature.pro}</span>}
                                         </td>
 
                                         <td className="px-6 py-4 text-center">
                                             {feature.enterprise === true ? <Check size={18} className="text-green-500 mx-auto" /> :
                                                 feature.enterprise === false ? <span className="text-slate-300">-</span> :
-                                                    <span className="text-sm text-slate-600 dark:text-slate-400">{feature.enterprise}</span>}
+                                                    <span className="text-sm text-slate-600 dark:text-github-dark-muted">{feature.enterprise}</span>}
                                         </td>
                                     </tr>
                                 ))}
@@ -371,7 +371,7 @@ const Subscription = () => {
 
                 {/* FAQ / Support Note */}
                 <div className="text-center pt-8">
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    <p className="text-slate-500 dark:text-github-dark-muted text-sm">
                         Need help choosing? <button className="text-indigo-600 font-medium hover:underline">Contact our sales team</button>
                     </p>
                 </div>

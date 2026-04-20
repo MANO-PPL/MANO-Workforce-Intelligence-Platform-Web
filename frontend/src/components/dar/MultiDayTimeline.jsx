@@ -38,9 +38,8 @@ const MultiDayTimeline = ({
     const START_HOUR = startHour;
     const END_HOUR = endHour;
     const TOTAL_HOURS = END_HOUR - START_HOUR;
-    const PIXELS_PER_HOUR = 100; // Width of one hour block
-    // We increase row height slightly to accommodate stacking "2 row thingy" beautifully
-    const ROW_MIN_HEIGHT = 110;
+    const PIXELS_PER_HOUR = 96; // Reduced width for 80% scale (120 * 0.8)
+    const ROW_MIN_HEIGHT = 96; // Reduced row height for 80% scale (120 * 0.8)
 
     const scrollContainerRef = useRef(null);
 
@@ -168,35 +167,30 @@ const MultiDayTimeline = ({
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-dark-card rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex flex-col h-full bg-white dark:bg-dark-card rounded-lg shadow-sm border border-gray-200 dark:border-github-dark-border overflow-hidden">
 
-            {/* Header (Hours) */}
-            <div className="flex border-b border-gray-200 dark:border-slate-700 bg-gray-50/80 dark:bg-dark-card/80 backdrop-blur z-10">
-                <div className="flex overflow-hidden relative" style={{ width: `${TOTAL_HOURS * PIXELS_PER_HOUR}px` }}>
-                    {/* Header logic handled inside main scroll for alignment */}
-                </div>
-            </div>
+
 
             {/* Main Scroll Area */}
             <div className="flex-1 overflow-auto custom-scrollbar relative" ref={scrollContainerRef}>
 
                 {/* Dimensions Wrapper */}
-                <div style={{ width: `${TOTAL_HOURS * PIXELS_PER_HOUR + 96}px`, minWidth: '100%' }}>
+                <div style={{ width: `${TOTAL_HOURS * PIXELS_PER_HOUR + 76}px`, minWidth: '100%' }}>
 
                     {/* STICKY HEADER ROW (Time Labels) */}
-                    <div className="flex sticky top-0 z-30 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-slate-700 shadow-sm h-10">
+                    <div className="flex sticky top-0 z-30 bg-white/95 dark:bg-dark-card/95 backdrop-blur-md border-b border-gray-200 dark:border-github-dark-border shadow-sm h-12">
                         {/* Corner Box */}
-                        <div className="w-24 shrink-0 bg-white dark:bg-dark-card border-r border-gray-200 dark:border-slate-700 sticky left-0 z-40 shadow-[1px_0_5px_rgba(0,0,0,0.05)]"></div>
+                        <div className="w-[76px] shrink-0 bg-gray-50/50 dark:bg-github-dark-subtle/50 border-r border-gray-200 dark:border-github-dark-border sticky left-0 z-40"></div>
 
                         {/* Hours */}
                         <div className="flex relative h-full items-center">
                             {hourMarkers.map((hour) => (
                                 <div
                                     key={hour}
-                                    className="absolute text-[10px] text-gray-400 dark:text-gray-500 font-medium pl-1 border-l border-gray-100 dark:border-slate-700 h-full flex items-end pb-2"
+                                    className="absolute text-[11px] text-slate-400 dark:text-github-dark-muted font-black pl-3 border-l border-slate-200 dark:border-github-dark-border/50 h-6 flex items-center"
                                     style={{ left: `${(hour - START_HOUR) * PIXELS_PER_HOUR}px`, width: `${PIXELS_PER_HOUR}px` }}
                                 >
-                                    {hour > 12 ? hour - 12 + ' PM' : hour + ' AM'}
+                                    {hour > 12 ? (hour - 12) + ' PM' : hour === 12 ? '12 PM' : hour + ' AM'}
                                 </div>
                             ))}
                         </div>
@@ -228,16 +222,16 @@ const MultiDayTimeline = ({
 
                             return (
                                 <div key={dateStr}
-                                    className={`flex relative border-b border-gray-100 dark:border-slate-700/50 transition-colors group/row ${rowBgClass}`}
+                                    className={`flex relative border-b border-gray-100 dark:border-github-dark-border/50 transition-colors group/row ${rowBgClass}`}
                                     style={{ height: `${ROW_MIN_HEIGHT}px` }}
                                 >
 
                                     {/* Sticky Date Label */}
-                                    <div className={`w-24 shrink-0 border-r border-gray-200 dark:border-slate-700 sticky left-0 z-20 flex flex-col justify-center items-center p-2 group shadow-[1px_0_5px_rgba(0,0,0,0.05)] ${isHoliday ? 'bg-emerald-50 dark:bg-emerald-900/20' : isAbsent ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-dark-card'}`}>
-                                        <span className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                                    <div className={`w-[76px] shrink-0 border-r border-gray-200 dark:border-github-dark-border sticky left-0 z-20 flex flex-col justify-center items-center p-1.5 group shadow-[1px_0_5px_rgba(0,0,0,0.05)] ${isHoliday ? 'bg-emerald-50 dark:bg-emerald-900/20' : isAbsent ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-dark-card'}`}>
+                                        <span className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-github-dark-muted'}`}>
                                             {dateObj.toLocaleDateString('en-US', { weekday: 'short' })}
                                         </span>
-                                        <div className={`w-9 h-9 flex items-center justify-center rounded-full text-lg ${isToday ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-md shadow-indigo-200 dark:shadow-none hover:scale-105 transition-transform' : 'text-gray-700 dark:text-slate-300 font-light'}`}>
+                                        <div className={`w-8 h-8 flex items-center justify-center rounded-full text-base ${isToday ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-md shadow-indigo-200 dark:shadow-none hover:scale-105 transition-transform' : 'text-gray-700 dark:text-slate-300 font-light'}`}>
                                             {dateObj.getDate()}
                                         </div>
                                     </div>
@@ -253,7 +247,7 @@ const MultiDayTimeline = ({
                                             {hourMarkers.map((hour) => (
                                                 <div
                                                     key={`grid-${hour}`}
-                                                    className="absolute top-0 bottom-0 border-r border-gray-100 dark:border-slate-700/50"
+                                                    className="absolute top-0 bottom-0 border-r border-slate-100/50 dark:border-github-dark-border/30"
                                                     style={{ left: `${(hour - START_HOUR) * PIXELS_PER_HOUR}px` }}
                                                 />
                                             ))}
@@ -288,13 +282,23 @@ const MultiDayTimeline = ({
                                             </div>
                                         )}
 
-                                        {/* Current Time Line */}
+                                        {/* Current Time Line with Glow & Pulse */}
                                         {isToday && nowIndicator && (
                                             <div
-                                                className="absolute top-0 bottom-0 border-l-2 border-red-500 z-20 pointer-events-none shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                                                className="absolute top-0 bottom-0 z-20 pointer-events-none"
                                                 style={{ left: `${nowIndicator.pos}px` }}
                                             >
-                                                <div className="w-2.5 h-2.5 bg-red-500 rounded-full absolute -top-1.5 -left-[5px] ring-2 ring-white" />
+                                                {/* Pulsing Glow Line */}
+                                                <div className="absolute inset-y-0 -left-[1px] w-[2px] bg-red-500/50 blur-[2px] animate-pulse" />
+                                                <div className="absolute inset-y-0 w-[2px] bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]" />
+                                                
+                                                {/* Floating Indicator with Time */}
+                                                <div className="absolute -top-1 -left-[5px] flex flex-col items-center">
+                                                    <div className="w-2.5 h-2.5 bg-red-600 rounded-full ring-2 ring-white dark:ring-slate-900 shadow-md" />
+                                                    <div className="mt-1 px-1.5 py-0.5 bg-red-600 text-white text-[8px] font-black rounded shadow-sm whitespace-nowrap">
+                                                        NOW
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
 
@@ -308,11 +312,11 @@ const MultiDayTimeline = ({
                                             const itemHeight = totalHeight / maxLanes;
                                             const topPos = 4 + (task.laneIndex * itemHeight);
 
-                                            let bgClass = "bg-emerald-100/90 border-emerald-200 text-emerald-700 hover:bg-emerald-100";
+                                            let bgClass = "bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 backdrop-blur-md hover:bg-emerald-500/25";
                                             // let bgClass = "bg-blue-100/90 border-blue-200 text-blue-700 hover:bg-blue-100";
-                                            if (task.type === 'meeting') bgClass = "bg-purple-100/90 border-purple-200 text-purple-700 hover:bg-purple-100";
-                                            if (task.type === 'event') bgClass = "bg-blue-100/90 border-blue-200 text-blue-700 hover:bg-blue-100";
-                                            if (task.type === 'break') bgClass = "bg-amber-100/90 border-amber-200 text-amber-700 hover:bg-amber-100";
+                                            if (task.type === 'meeting') bgClass = "bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30 text-purple-700 dark:text-purple-400 backdrop-blur-md hover:bg-purple-500/25";
+                                            if (task.type === 'event') bgClass = "bg-blue-500/10 dark:bg-blue-500/20 border-blue-500/30 text-blue-700 dark:text-blue-400 backdrop-blur-md hover:bg-blue-500/25";
+                                            if (task.type === 'break') bgClass = "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/30 text-amber-700 dark:text-amber-400 backdrop-blur-md hover:bg-amber-500/25";
 
                                             // Planned Status Overlay (Stripes)
                                             let extraStyle = {};

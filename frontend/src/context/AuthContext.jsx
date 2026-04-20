@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import api, { setAccessToken } from "../services/api";
 
 const AuthContext = createContext();
@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         // Refresh failed (no cookie or invalid), just stay logged out
-        console.log("Silent refresh failed:", error);
+
         setUser(null);
       } finally {
         setAuthChecked(true);
@@ -91,13 +91,28 @@ export const AuthProvider = ({ children }) => {
     return res.data; // Return data for redirect logic in Login.jsx
   };
 
+  const superAdminLogin = async (email, password) => {
+    const loginData = { email, password };
+    const res = await api.post("/auth/super-admin/login", loginData);
+    if (res.data.accessToken) setAccessToken(res.data.accessToken);
+    if (res.data.user) {
+      const normalizedUser = { ...res.data.user, user_type: res.data.user.user_type?.toLowerCase() };
+      setUser(normalizedUser);
+      setAvatarTimestamp(Date.now());
+      res.data.user = normalizedUser;
+    } else {
+      await fetchUser();
+    }
+    return res.data;
+  };
+
   const logout = async () => {
     await api.post("/auth/logout");
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, authChecked, fetchUser, avatarTimestamp }}>
+    <AuthContext.Provider value={{ user, login, superAdminLogin, logout, authChecked, fetchUser, avatarTimestamp }}>
       {children}
     </AuthContext.Provider>
   );

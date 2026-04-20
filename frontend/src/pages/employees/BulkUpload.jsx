@@ -53,12 +53,13 @@ const BulkUpload = () => {
                 const processed = data.map(row => {
                     const name = row['Name'] || row['name'] || row['user_name'];
                     const email = row['Email'] || row['email'];
+                    const phone = row['Phone'] || row['phone'] || row['phone_no'];
                     const dept = row['Department'] || row['department'] || row['dept_name'];
                     const desg = row['Designation'] || row['designation'] || row['desg_name'] || row['Role'] || row['role'];
 
                     // Basic validation check for preview
-                    let status = (name && email) ? 'Valid' : 'Error';
-                    let errorMsg = !status === 'Valid' ? 'Missing Data' : '';
+                    let status = (name && (email || phone)) ? 'Valid' : 'Error';
+                    let errorMsg = status === 'Error' ? 'Missing (Name & Contact)' : '';
 
                     // Role Restrictions
                     const roleLower = desg ? desg.toString().toLowerCase() : '';
@@ -75,6 +76,7 @@ const BulkUpload = () => {
                         ...row,
                         name,
                         email,
+                        phone,
                         dept: dept || '-',
                         desg: desg || '-',
                         status,
@@ -94,15 +96,16 @@ const BulkUpload = () => {
     const handleUpload = async () => {
         setIsUploading(true);
         try {
-            // 1. Check current subscription limit and existing users
-            const SUBSCRIPTION_LIMIT = 10;
+            // 1. Check existing users to calculate available slots based on subscription limit
             const usersData = await adminService.getAllUsers();
             const currentUsers = usersData.users || [];
             const currentCount = currentUsers.length;
-            const availableSlots = Math.max(0, SUBSCRIPTION_LIMIT - currentCount);
+            const maxUsersLimit = currentUser?.org_max_users || Infinity; // Fallback to Infinity if not yet in state
+            const availableSlots = Math.max(0, maxUsersLimit - currentCount);
 
-            // Create a Set of existing emails for quick lookup
-            const existingEmails = new Set(currentUsers.map(u => u.email.toLowerCase()));
+            // Create Sets of existing identifiers for quick lookup
+            const existingEmails = new Set(currentUsers.filter(u => u.email).map(u => u.email.toLowerCase()));
+            const existingPhones = new Set(currentUsers.filter(u => u.phone_no).map(u => u.phone_no.toString()));
 
             const validRows = previewData.filter(r => r.status === 'Valid');
 
@@ -116,17 +119,35 @@ const BulkUpload = () => {
             const newCandidates = [];
             const duplicates = [];
             const newEmailsSeen = new Set();
+            const newPhonesSeen = new Set();
 
             validRows.forEach(row => {
-                const emailLower = row.email.toLowerCase();
-                if (existingEmails.has(emailLower)) {
-                    duplicates.push({ ...row, skipReason: 'User already exists' });
-                } else if (newEmailsSeen.has(emailLower)) {
-                    // Duplicate within the CSV itself
-                    duplicates.push({ ...row, skipReason: 'Duplicate in file' });
+                const emailLower = row.email?.toString().toLowerCase();
+                const phoneStr = row.phone?.toString();
+
+                let isDuplicate = false;
+                let skipReason = '';
+
+                if (emailLower && existingEmails.has(emailLower)) {
+                    isDuplicate = true;
+                    skipReason = 'User already exists (Email)';
+                } else if (phoneStr && existingPhones.has(phoneStr)) {
+                    isDuplicate = true;
+                    skipReason = 'User already exists (Phone)';
+                } else if (emailLower && newEmailsSeen.has(emailLower)) {
+                    isDuplicate = true;
+                    skipReason = 'Duplicate Email in file';
+                } else if (phoneStr && newPhonesSeen.has(phoneStr)) {
+                    isDuplicate = true;
+                    skipReason = 'Duplicate Phone in file';
+                }
+
+                if (isDuplicate) {
+                    duplicates.push({ ...row, skipReason });
                 } else {
                     newCandidates.push(row);
-                    newEmailsSeen.add(emailLower);
+                    if (emailLower) newEmailsSeen.add(emailLower);
+                    if (phoneStr) newPhonesSeen.add(phoneStr);
                 }
             });
 
@@ -200,7 +221,7 @@ const BulkUpload = () => {
                 {/* Back Button */}
                 <button
                     onClick={() => navigate('/employees')}
-                    className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-colors mb-4"
+                    className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 dark:text-github-dark-muted dark:hover:text-indigo-400 transition-colors mb-4"
                 >
                     <ArrowLeft size={20} />
                     <span>Back to Employees</span>
@@ -226,9 +247,9 @@ const BulkUpload = () => {
 
                 {/* Step 1: Upload Area */}
                 {step === 1 && (
-                    <div className="bg-white dark:bg-dark-card rounded-2xl p-8 sm:p-12 shadow-sm border border-slate-200 dark:border-slate-700 text-center transition-colors duration-300">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl p-8 sm:p-12 shadow-sm border border-slate-200 dark:border-github-dark-border text-center transition-colors duration-300">
                         <div
-                            className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-10 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer group"
+                            className="border-2 border-dashed border-slate-300 dark:border-github-dark-border rounded-xl p-10 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer group"
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={handleFileDrop}
                             onClick={() => document.getElementById('fileInput').click()}
@@ -243,8 +264,8 @@ const BulkUpload = () => {
                             <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                                 <UploadCloud size={32} />
                             </div>
-                            <h3 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">Click to upload or drag and drop</h3>
-                            <p className="text-slate-500 dark:text-slate-400 mb-6">CSV files only (Max 5MB)</p>
+                            <h3 className="text-xl font-semibold text-slate-800 dark:text-github-dark-text mb-2">Click to upload or drag and drop</h3>
+                            <p className="text-slate-500 dark:text-github-dark-muted mb-6">CSV files only (Max 5MB)</p>
                             <button className="px-6 py-2 bg-slate-900 dark:bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition-colors">
                                 Select File
                             </button>
@@ -261,15 +282,15 @@ const BulkUpload = () => {
 
                 {/* Step 2: Preview */}
                 {step === 2 && (
-                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors duration-300">
-                        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden transition-colors duration-300">
+                        <div className="p-6 border-b border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
                                     <FileText className="text-indigo-600 dark:text-indigo-400" size={20} />
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900 dark:text-white">{file?.name}</h3>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">{(file?.size / 1024).toFixed(2)} KB</p>
+                                    <h3 className="font-semibold text-slate-900 dark:text-github-dark-text">{file?.name}</h3>
+                                    <p className="text-xs text-slate-500 dark:text-github-dark-muted">{(file?.size / 1024).toFixed(2)} KB</p>
                                 </div>
                             </div>
                             <button
@@ -282,7 +303,7 @@ const BulkUpload = () => {
 
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold">
+                                <thead className="bg-slate-50 dark:bg-github-dark-subtle/50 text-xs uppercase text-slate-500 dark:text-github-dark-muted font-semibold">
                                     <tr>
                                         <th className="px-6 py-4">Name</th>
                                         <th className="px-6 py-4">Email</th>
@@ -294,10 +315,10 @@ const BulkUpload = () => {
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                     {previewData.slice(0, 50).map((row, idx) => (
                                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                                            <td className="px-6 py-4 text-sm text-slate-800 dark:text-slate-200">{row.name || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{row.email || '-'}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{row.desg}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{row.dept}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-800 dark:text-github-dark-text">{row.name || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-github-dark-muted">{row.email || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-github-dark-muted">{row.desg}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-github-dark-muted">{row.dept}</td>
                                             <td className="px-6 py-4">
                                                 {row.status === 'Valid' ? (
                                                     <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-full">
@@ -323,24 +344,24 @@ const BulkUpload = () => {
                         </div>
 
                         {/* Import Summary Section */}
-                        <div className="p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-200 dark:border-slate-700">
-                            <h4 className="text-sm font-semibold text-slate-800 dark:text-white mb-4">Import Data Summary</h4>
+                        <div className="p-6 bg-slate-50 dark:bg-github-dark-subtle/30 border-t border-slate-200 dark:border-github-dark-border">
+                            <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text mb-4">Import Data Summary</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <h5 className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Departments Found ({uniqueDepts.length})</h5>
+                                    <h5 className="text-xs text-slate-500 dark:text-github-dark-muted uppercase tracking-wider mb-2">Departments Found ({uniqueDepts.length})</h5>
                                     <div className="flex flex-wrap gap-2">
                                         {uniqueDepts.map((d, i) => (
-                                            <span key={i} className="px-2 py-1 text-xs font-medium bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md text-slate-700 dark:text-slate-300">
+                                            <span key={i} className="px-2 py-1 text-xs font-medium bg-white dark:bg-slate-700 border border-slate-200 dark:border-github-dark-border rounded-md text-slate-700 dark:text-slate-300">
                                                 {d}
                                             </span>
                                         ))}
                                     </div>
                                 </div>
                                 <div>
-                                    <h5 className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Designations Found ({uniqueDesgs.length})</h5>
+                                    <h5 className="text-xs text-slate-500 dark:text-github-dark-muted uppercase tracking-wider mb-2">Designations Found ({uniqueDesgs.length})</h5>
                                     <div className="flex flex-wrap gap-2">
                                         {uniqueDesgs.map((d, i) => (
-                                            <span key={i} className="px-2 py-1 text-xs font-medium bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md text-slate-700 dark:text-slate-300">
+                                            <span key={i} className="px-2 py-1 text-xs font-medium bg-white dark:bg-slate-700 border border-slate-200 dark:border-github-dark-border rounded-md text-slate-700 dark:text-slate-300">
                                                 {d}
                                             </span>
                                         ))}
@@ -349,7 +370,7 @@ const BulkUpload = () => {
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3 rounded-b-2xl bg-white dark:bg-dark-card">
+                        <div className="p-6 border-t border-slate-200 dark:border-github-dark-border flex justify-end gap-3 rounded-b-2xl bg-white dark:bg-dark-card">
                             <button
                                 onClick={() => setStep(1)}
                                 className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -378,8 +399,8 @@ const BulkUpload = () => {
                         <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
                             <CheckCircle size={40} />
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Upload Processed!</h2>
-                        <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-sm mx-auto">
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-github-dark-text mb-2">Upload Processed!</h2>
+                        <p className="text-slate-500 dark:text-github-dark-muted mb-8 max-w-sm mx-auto">
                             Processed: {uploadReport?.total_processed || 0} <br />
                             Success: {uploadReport?.success_count || 0} <br />
                             Skipped: {(uploadReport?.failure_count || 0) + (uploadReport?.skipped_rows?.length || 0) - (uploadReport?.failure_count || 0)}
@@ -389,11 +410,11 @@ const BulkUpload = () => {
                         {/* Skipped Items Table */}
                         {uploadReport?.skipped_rows?.length > 0 && (
                             <div className="mb-8 mx-auto max-w-2xl text-left px-6">
-                                <h4 className="text-sm font-semibold text-slate-800 dark:text-white mb-4">Skipped Items</h4>
-                                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                                <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text mb-4">Skipped Items</h4>
+                                <div className="border border-slate-200 dark:border-github-dark-border rounded-lg overflow-hidden">
                                     <div className="overflow-x-auto max-h-64">
                                         <table className="w-full text-left text-sm">
-                                            <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 dark:text-slate-400 sticky top-0">
+                                            <thead className="bg-slate-50 dark:bg-github-dark-subtle/50 text-xs uppercase text-slate-500 dark:text-github-dark-muted sticky top-0">
                                                 <tr>
                                                     <th className="px-4 py-3">Name</th>
                                                     <th className="px-4 py-3">Email</th>
@@ -403,8 +424,8 @@ const BulkUpload = () => {
                                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                                 {uploadReport.skipped_rows.map((row, i) => (
                                                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                                                        <td className="px-4 py-3 text-slate-800 dark:text-slate-200">{row.name}</td>
-                                                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{row.email}</td>
+                                                        <td className="px-4 py-3 text-slate-800 dark:text-github-dark-text">{row.name}</td>
+                                                        <td className="px-4 py-3 text-slate-600 dark:text-github-dark-muted">{row.email}</td>
                                                         <td className="px-4 py-3">
                                                             {row.skipReason === 'Subscription limit reached' ? (
                                                                 <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full whitespace-nowrap">
@@ -440,7 +461,7 @@ const BulkUpload = () => {
                         <div className="flex justify-center gap-4">
                             <button
                                 onClick={() => navigate('/employees')}
-                                className="px-6 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                className="px-6 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border text-slate-700 dark:text-github-dark-text font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                             >
                                 View Employee List
                             </button>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
 import Webcam from 'react-webcam';
 import {
@@ -43,6 +44,7 @@ import {
 import { Bar, Doughnut, Radar } from 'react-chartjs-2';
 
 import CustomCalendar from '../../components/CustomCalendar';
+import DatePicker from '../../components/DatePicker';
 
 // Register ChartJS
 ChartJS.register(
@@ -112,9 +114,21 @@ const Attendance = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
 
+    // Late Reason Context
+    const [requireLateReason, setRequireLateReason] = useState(false);
+    const [lateReasonMessage, setLateReasonMessage] = useState("");
+    const [lateReasonText, setLateReasonText] = useState("");
+
     // Correction Request State
     const [correctionHistory, setCorrectionHistory] = useState([]);
-    const [corrDate, setCorrDate] = useState('');
+
+    // Default corrDate to today
+    const [corrDate, setCorrDate] = useState(() => {
+        const d = new Date();
+        const yOffset = d.getTimezoneOffset() * 60000;
+        return new Date(d.getTime() - yOffset).toISOString().split('T')[0];
+    });
+
     const [corrType, setCorrType] = useState('Correction'); // 'Correction' | 'Missed Punch' | 'Overtime' | 'Other'
     const [corrOtherType, setCorrOtherType] = useState(''); // Custom type input
     const [corrMethod, setCorrMethod] = useState('add_session'); // 'add_session' | 'reset'
@@ -124,12 +138,16 @@ const Attendance = () => {
     const [corrOut, setCorrOut] = useState('');
 
     // Inputs for 'add_session'
-    const [corrSessions, setCorrSessions] = useState([{ time_in: '', time_out: '' }]);
+    const [corrSessions, setCorrSessions] = useState([{ id: Date.now(), time_in: '', time_out: '' }]);
 
     const [corrReason, setCorrReason] = useState('');
-    const [existingRecord, setExistingRecord] = useState(null); // Data for selected date
+    const [existingRecord, setExistingRecord] = useState(null);
+    const [originalSessions, setOriginalSessions] = useState([]); // Immutable snapshot of DB records at date-load time
     const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
-    const [selectedRequest, setSelectedRequest] = useState(null); // For details modal
+    const [selectedRequest, setSelectedRequest] = useState(null); // For details sidebar
+    const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+    const [submitLoading, setSubmitLoading] = useState(false);
 
     // --- DATA FETCHING ---
 
@@ -193,17 +211,40 @@ const Attendance = () => {
 
         const fetchRecord = async () => {
             try {
-                // Reuse getMyRecords to find data for this specific day
                 const res = await attendanceService.getMyRecords(corrDate, corrDate);
-                // API returns { data: [...] }. Access data property.
                 if (res?.data && res.data.length > 0) {
                     setExistingRecord(res.data[0]);
+
+                    // Parse out all sessions and auto-populate the add_session array
+                    const userSessions = res.data;
+                    const loadedSessions = userSessions.map((s, i) => {
+                        let time_in_str = '';
+                        let time_out_str = '';
+                        if (s.time_in) {
+                            time_in_str = new Date(s.time_in).toTimeString().slice(0, 5);
+                        }
+                        if (s.time_out) {
+                            time_out_str = new Date(s.time_out).toTimeString().slice(0, 5);
+                        }
+                        return { id: Date.now() + i, time_in: time_in_str, time_out: time_out_str, isExisting: true };
+                    });
+
+                    // Save a frozen snapshot for original_data — never modified by form edits
+                    setOriginalSessions(loadedSessions.map(s => ({ time_in: s.time_in, time_out: s.time_out })));
+
+                    // Pre-fill form with existing sessions (user will edit these)
+                    setCorrSessions(loadedSessions);
+
                 } else {
                     setExistingRecord(null);
+                    setOriginalSessions([]);
+                    setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
                 }
             } catch (error) {
                 console.error("Failed to fetch existing record", error);
                 setExistingRecord(null);
+                setOriginalSessions([]);
+                setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
             }
         };
 
@@ -228,6 +269,9 @@ const Attendance = () => {
     const openCamera = (mode) => {
         setCameraMode(mode);
         setImgSrc(null);
+        setRequireLateReason(false);
+        setLateReasonMessage("");
+        setLateReasonText("");
         setShowCamera(true);
     };
 
@@ -235,6 +279,9 @@ const Attendance = () => {
         setShowCamera(false);
         setImgSrc(null);
         setCameraMode(null);
+        setRequireLateReason(false);
+        setLateReasonMessage("");
+        setLateReasonText("");
     };
 
     const capture = useCallback(() => {
@@ -272,7 +319,11 @@ const Attendance = () => {
                 // if (accuracy > MAX_ALLOWED_ACCURACY) ... (Strict check disabled for dev flexibility if needed, but keeping generally)
 
                 const imageBlob = dataURLtoBlob(imgSrc);
-                const payload = { latitude, longitude, accuracy, imageFile: imageBlob };
+                let payload = { latitude, longitude, accuracy, imageFile: imageBlob };
+
+                if (requireLateReason && lateReasonText.trim()) {
+                    payload.late_reason = lateReasonText;
+                }
 
                 let res;
                 if (cameraMode === 'IN') {
@@ -287,7 +338,18 @@ const Attendance = () => {
                 fetchDailyRecords();
             } catch (error) {
                 console.error(error);
-                toast.error(error.message || "Attendance failed");
+
+                // Intercept Late Reason missing error
+                const errorMsg = error.message || "Attendance failed";
+                const errorLower = errorMsg.toLowerCase();
+
+                if (cameraMode === 'IN' && errorLower.includes("late") && errorLower.includes("reason")) {
+                    setRequireLateReason(true);
+                    setLateReasonMessage(errorMsg);
+                    toast.warning(errorMsg);
+                } else {
+                    toast.error(errorMsg);
+                }
             } finally {
                 setIsSubmitting(false);
             }
@@ -322,45 +384,82 @@ const Attendance = () => {
             return;
         }
 
-        setIsSubmittingCorrection(true);
+        // Validation for sessions if manual correction
+        if (corrMethod === 'add_session') {
+            const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
+            if (validSessions.length === 0) {
+                toast.error("Please add at least one valid session (Time In & Time Out)");
+                return;
+            }
+
+            for (let i = 0; i < validSessions.length; i++) {
+                const sessionA = validSessions[i];
+                if (sessionA.time_in >= sessionA.time_out) {
+                    toast.error(`Invalid range: In (${sessionA.time_in}) must be before Out (${sessionA.time_out})`);
+                    return;
+                }
+                for (let j = i + 1; j < validSessions.length; j++) {
+                    const sessionB = validSessions[j];
+                    if (sessionA.time_in < sessionB.time_out && sessionA.time_out > sessionB.time_in) {
+                        toast.error(`Sessions cannot overlap: ${sessionA.time_in}-${sessionA.time_out} with ${sessionB.time_in}-${sessionB.time_out}`);
+                        return;
+                    }
+                }
+            }
+        } else if (corrMethod === 'reset') {
+            if (!corrIn || !corrOut) {
+                toast.error("New Time In and Time Out are required for Reset.");
+                return;
+            }
+            if (corrIn >= corrOut) {
+                toast.error("Time In must be before Time Out.");
+                return;
+            }
+        }
+
+        setShowConfirmSubmit(true);
+    };
+
+    const handleConfirmSubmit = async () => {
+        setSubmitLoading(true);
         try {
+            const original_data = originalSessions;
+            let proposed_data = [];
+
+            if (corrMethod === 'add_session') {
+                const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
+                proposed_data = validSessions.map(s => ({ time_in: s.time_in, time_out: s.time_out }));
+            } else if (corrMethod === 'reset') {
+                proposed_data = [{ time_in: corrIn, time_out: corrOut }];
+            }
+
             const payload = {
                 correction_type: corrType === 'Other' ? corrOtherType : corrType,
                 request_date: corrDate,
                 reason: corrReason,
-                correction_method: corrMethod
+                original_data,
+                proposed_data
             };
-
-            // 2. ADD SESSION MODE (Manual Correction)
-            if (corrMethod === 'add_session') {
-                // Filter out empty sessions
-                const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
-                if (validSessions.length === 0) {
-                    throw new Error("Please add at least one valid session (Time In & Time Out)");
-                }
-                payload.sessions = validSessions;
-            }
-            // 3. RESET MODE
-            else if (corrMethod === 'reset') {
-                if (!corrIn || !corrOut) {
-                    throw new Error("New Time In and Time Out are required for Reset.");
-                }
-                payload.requested_time_in = corrIn;
-                payload.requested_time_out = corrOut;
-            }
 
             await attendanceService.submitCorrectionRequest(payload);
 
-            toast.success("Correction request submitted!");
-            // Reset Form
-            setCorrDate('');
+            setShowConfirmSubmit(false);
+            setShowSuccessPopup(true);
+
+            // Reset Form after delay or on success popup close
+            // (We'll do it here)
+            const d = new Date();
+            const yOffset = d.getTimezoneOffset() * 60000;
+            const todayLocal = new Date(d.getTime() - yOffset).toISOString().split('T')[0];
+
+            setCorrDate(todayLocal);
             setCorrIn('');
             setCorrOut('');
             setCorrReason('');
             setCorrType('Correction');
             setCorrOtherType('');
             setCorrMethod('add_session');
-            setCorrSessions([{ time_in: '', time_out: '' }]);
+            setCorrSessions([{ id: Date.now(), time_in: '', time_out: '' }]);
             setExistingRecord(null);
 
             fetchCorrectionHistory();
@@ -368,7 +467,7 @@ const Attendance = () => {
             console.error(error);
             toast.error(error.message || "Failed to submit request");
         } finally {
-            setIsSubmittingCorrection(false);
+            setSubmitLoading(false);
         }
     };
 
@@ -485,21 +584,21 @@ const Attendance = () => {
             <div className="space-y-6 w-full">
 
                 {/* --- TOP LEVEL TABS --- */}
-                <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full sm:w-fit">
+                <div className="flex p-1 bg-slate-100 dark:bg-github-dark-subtle rounded-xl w-full sm:w-fit">
                     <button
                         onClick={() => { setActiveTab('mark_attendance'); setSubTab('list'); }}
-                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'mark_attendance'
+                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'mark_attendance'
                             ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
                             }`}
                     >
                         Mark Attendance
                     </button>
                     <button
                         onClick={() => { setActiveTab('my_attendance'); setSubTab('history'); }}
-                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'my_attendance'
+                        className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'my_attendance'
                             ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                            : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
                             }`}
                     >
                         My Attendance
@@ -514,40 +613,77 @@ const Attendance = () => {
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         {/* Action Buttons & Correction Toggle */}
                         <div className="flex flex-col gap-6">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                <button
-                                    onClick={() => openCamera('IN')}
-                                    className="flex items-center justify-center gap-3 bg-indigo-600 text-white h-24 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 hover:bg-indigo-700 hover:shadow-xl transition-all active:scale-95 group">
-                                    <div className="p-2 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors">
-                                        <ArrowRight size={24} />
-                                    </div>
-                                    <span className="text-2xl font-bold">Time In</span>
-                                </button>
+                            {/* Session Logic Calculation */}
+                            {(() => {
+                                const hasActiveSession = dailySessions.some(s => !s.time_out);
+                                return (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                        {/* Time In Card */}
+                                        <button
+                                            onClick={() => openCamera('IN')}
+                                            disabled={hasActiveSession}
+                                            className={`group relative flex items-center justify-between p-6 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-sm transition-all duration-300 text-left overflow-hidden active:scale-[0.98] ${hasActiveSession
+                                                ? 'opacity-50 cursor-not-allowed pointer-events-none grayscale-[0.3]'
+                                                : 'hover:shadow-md hover:border-emerald-500/50 dark:hover:border-emerald-500/30 cursor-pointer'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-5 relative z-10">
+                                                <div className="w-14 h-14 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-500 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                                                    <ArrowRight size={28} strokeWidth={2.5} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text group-hover:text-emerald-600 dark:group-hover:text-emerald-500 transition-colors">Time In</h3>
+                                                    <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">
+                                                        {hasActiveSession ? 'Shift in progress' : 'Start shift for today'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-github-dark-border/20 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-500/10 transition-all duration-300 relative z-10">
+                                                <ChevronRight size={20} />
+                                            </div>
+                                        </button>
 
-                                <button
-                                    onClick={() => openCamera('OUT')}
-                                    className="flex items-center justify-center gap-3 bg-slate-800 dark:bg-slate-700 text-white h-24 rounded-2xl shadow-lg shadow-slate-200 dark:shadow-slate-900/30 hover:bg-slate-900 dark:hover:bg-slate-600 hover:shadow-xl transition-all active:scale-95 group">
-                                    <div className="p-2 bg-white/10 rounded-lg group-hover:bg-white/20 transition-colors">
-                                        <LogOut size={24} />
+                                        {/* Time Out Card */}
+                                        <button
+                                            onClick={() => openCamera('OUT')}
+                                            disabled={!hasActiveSession}
+                                            className={`group relative flex items-center justify-between p-6 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-sm transition-all duration-300 text-left overflow-hidden active:scale-[0.98] ${!hasActiveSession
+                                                ? 'opacity-50 cursor-not-allowed pointer-events-none grayscale-[0.3]'
+                                                : 'hover:shadow-md hover:border-rose-500/50 dark:hover:border-rose-500/30 cursor-pointer'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-5 relative z-10">
+                                                <div className="w-14 h-14 rounded-xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-500 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+                                                    <LogOut size={28} strokeWidth={2.5} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-slate-800 dark:text-github-dark-text group-hover:text-rose-600 dark:group-hover:text-rose-500 transition-colors">Time Out</h3>
+                                                    <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">
+                                                        {!hasActiveSession ? 'No active session' : 'End shift for today'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-github-dark-border/20 text-slate-300 dark:text-slate-600 group-hover:text-rose-500 group-hover:bg-rose-50 dark:group-hover:bg-rose-500/10 transition-all duration-300 relative z-10">
+                                                <ChevronRight size={20} />
+                                            </div>
+                                        </button>
                                     </div>
-                                    <span className="text-2xl font-bold">Time Out</span>
-                                </button>
-                            </div>
-
+                                );
+                            })()}
                         </div>
 
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-end items-center gap-4 relative" ref={calendarRef}>
                                 <button
                                     onClick={handlePrevDay}
-                                    className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+                                    className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
                                 >
                                     <ChevronLeft size={20} />
                                 </button>
 
                                 <div
                                     onClick={() => setShowCalendar(!showCalendar)}
-                                    className="flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 font-medium bg-white dark:bg-dark-card py-2.5 px-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 min-w-[200px] cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none"
+                                    className="flex items-center justify-center gap-2 text-slate-600 dark:text-slate-300 font-medium bg-white dark:bg-dark-card py-2.5 px-6 rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border min-w-[200px] cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors select-none"
                                 >
                                     <CalendarIcon size={18} />
                                     <span>{formatDateDisplay(selectedDate)}</span>
@@ -567,7 +703,7 @@ const Attendance = () => {
 
                                 <button
                                     onClick={handleNextDay}
-                                    className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
+                                    className="p-2 rounded-xl bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border text-slate-500 hover:text-indigo-600 transition-all shadow-sm"
                                 >
                                     <ChevronRight size={20} />
                                 </button>
@@ -581,13 +717,13 @@ const Attendance = () => {
                                     <p className="text-center text-slate-400 py-10">No attendance records for this date.</p>
                                 ) : (
                                     dailySessions.map((session) => (
-                                        <div key={session.attendance_id} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between gap-4">
+                                        <div key={session.attendance_id} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col sm:flex-row justify-between gap-4">
                                             <div className="flex gap-4">
                                                 <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
                                                     {new Date(session.time_in).getDate()}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-slate-800 dark:text-white">
+                                                    <p className="font-bold text-slate-800 dark:text-github-dark-text">
                                                         {formatTime(session.time_in)} - {session.time_out ? formatTime(session.time_out) : 'Active'}
                                                     </p>
                                                     <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
@@ -616,21 +752,21 @@ const Attendance = () => {
                 {activeTab === 'my_attendance' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         {/* Report Header */}
-                        <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4">
+                        <div className="bg-white dark:bg-dark-card p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-wrap items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
                                     <FileText size={20} />
                                 </div>
                                 <div>
-                                    <h4 className="text-sm font-bold text-slate-800 dark:text-white leading-none">Monthly Report</h4>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Download and view your logs</p>
+                                    <h4 className="text-sm font-bold text-slate-800 dark:text-github-dark-text leading-none">Monthly Report</h4>
+                                    <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-1">Download and view your logs</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 <select
                                     value={reportMonthIdx}
                                     onChange={(e) => setReportMonthIdx(parseInt(e.target.value))}
-                                    className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                                    className="px-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                                 >
                                     {Array.from({ length: 12 }, (_, i) => (
                                         <option key={i} value={i}>
@@ -641,7 +777,7 @@ const Attendance = () => {
                                 <select
                                     value={reportYear}
                                     onChange={(e) => setReportYear(parseInt(e.target.value))}
-                                    className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                                    className="px-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                                 >
                                     {Array.from({ length: 5 }, (_, i) => today.getFullYear() - 2 + i).map(year => (
                                         <option key={year} value={year}>{year}</option>
@@ -658,12 +794,12 @@ const Attendance = () => {
                         </div>
 
                         {/* Sub Tabs */}
-                        <div className="border-b border-slate-200 dark:border-slate-700 flex gap-6">
+                        <div className="border-b border-slate-200 dark:border-github-dark-border flex gap-6">
                             <button
                                 onClick={() => setSubTab('history')}
                                 className={`pb-3 text-sm font-medium transition-all relative ${subTab === 'history'
                                     ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
@@ -678,7 +814,7 @@ const Attendance = () => {
                                 onClick={() => setSubTab('analytics')}
                                 className={`pb-3 text-sm font-medium transition-all relative ${subTab === 'analytics'
                                     ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
@@ -693,7 +829,7 @@ const Attendance = () => {
                                 onClick={() => setSubTab('correction')}
                                 className={`pb-3 text-sm font-medium transition-all relative ${subTab === 'correction'
                                     ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
@@ -710,7 +846,7 @@ const Attendance = () => {
                         {subTab === 'history' && (
                             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 {monthlySessions.length === 0 ? (
-                                    <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 border-dashed">
+                                    <div className="text-center py-12 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl border border-slate-200 dark:border-github-dark-border border-dashed">
                                         <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                                         <p className="text-slate-500 font-medium">No records found for this month</p>
                                     </div>
@@ -732,7 +868,7 @@ const Attendance = () => {
                                             </h3>
                                             <div className="grid gap-4">
                                                 {weekSessions.map((session, index) => (
-                                                    <div key={session.attendance_id || index} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors">
+                                                    <div key={session.attendance_id || index} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors">
                                                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                             <div className="flex items-center gap-4">
                                                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold ${session.late_minutes > 0
@@ -742,7 +878,7 @@ const Attendance = () => {
                                                                     {new Date(session.time_in).getDate()}
                                                                 </div>
                                                                 <div>
-                                                                    <p className="font-bold text-slate-800 dark:text-white">
+                                                                    <p className="font-bold text-slate-800 dark:text-github-dark-text">
                                                                         {new Date(session.time_in).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                                                     </p>
                                                                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
@@ -790,10 +926,10 @@ const Attendance = () => {
                                 {/* 1. KPI Cards Row */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     {/* Card 1: Total Days */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                                         <div>
                                             <p className="text-sm text-slate-500 font-medium">Total Days</p>
-                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">{monthlySessions.length}</h3>
+                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">{monthlySessions.length}</h3>
                                         </div>
                                         <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                                             <CalendarIcon size={24} />
@@ -801,11 +937,11 @@ const Attendance = () => {
                                     </div>
 
                                     {/* Card 2: Present % */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden">
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border relative overflow-hidden">
                                         <div className="flex justify-between items-start z-10 relative">
                                             <div>
                                                 <p className="text-sm text-slate-500 font-medium">Present</p>
-                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">
+                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
                                                     {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT').length / monthlySessions.length) * 100) : 0}%
                                                 </h3>
                                             </div>
@@ -818,11 +954,11 @@ const Attendance = () => {
                                     </div>
 
                                     {/* Card 3: Late % */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden">
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border relative overflow-hidden">
                                         <div className="flex justify-between items-start z-10 relative">
                                             <div>
                                                 <p className="text-sm text-slate-500 font-medium">Late</p>
-                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">
+                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
                                                     {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.late_minutes > 0).length / monthlySessions.length) * 100) : 0}%
                                                 </h3>
                                             </div>
@@ -835,10 +971,10 @@ const Attendance = () => {
                                     </div>
 
                                     {/* Card 4: Avg Hours */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                                         <div>
                                             <p className="text-sm text-slate-500 font-medium">Avg Hours</p>
-                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-white mt-1">
+                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
                                                 {monthlySessions.length > 0
                                                     ? (monthlySessions.reduce((acc, s) => acc + parseFloat(s.total_hours || 0), 0) / monthlySessions.length).toFixed(1)
                                                     : '0'}
@@ -851,9 +987,9 @@ const Attendance = () => {
                                 </div>
 
                                 {/* 2. Attendance Trends (Full Width) */}
-                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
                                     <div className="flex justify-between items-center mb-6">
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">Total Attendance Report</h3>
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Total Attendance Report</h3>
                                         <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400">
                                             <MoreVertical size={18} />
                                         </button>
@@ -888,8 +1024,8 @@ const Attendance = () => {
                                 {/* 3. Bottom Row: Status & Weekly Pattern */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Status Breakdown */}
-                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Attendance Status</h3>
+                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Attendance Status</h3>
                                         <div className="h-64 flex justify-center relative">
                                             <Doughnut
                                                 data={pieData}
@@ -906,15 +1042,15 @@ const Attendance = () => {
                                                 }}
                                             />
                                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                <span className="text-3xl font-bold text-slate-800 dark:text-white">{monthlySessions.length}</span>
+                                                <span className="text-3xl font-bold text-slate-800 dark:text-github-dark-text">{monthlySessions.length}</span>
                                                 <span className="text-xs text-slate-500 uppercase font-bold">Total</span>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Weekly Radar Chart */}
-                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Weekly Activity</h3>
+                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
+                                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Weekly Activity</h3>
                                         <div className="h-64 flex justify-center">
                                             <Radar
                                                 data={{
@@ -962,43 +1098,30 @@ const Attendance = () => {
                             <div className="animate-in fade-in slide-in-from-top-4 duration-300">
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                     {/* Application Form */}
-                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 h-fit">
+                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border h-fit">
                                         <div className="flex items-center gap-3 mb-6">
                                             <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
                                                 <AlertCircle size={24} />
                                             </div>
-                                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Apply Correction</h3>
+                                            <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Apply Correction</h3>
                                         </div>
 
                                         <form onSubmit={handleSubmitCorrection} className="space-y-4">
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date</label>
-                                                <input
-                                                    type="date"
+                                            <div className="z-20 relative">
+                                                <DatePicker
+                                                    label="Date"
                                                     value={corrDate}
-                                                    max={new Date().toISOString().split('T')[0]}
-                                                    onChange={(e) => setCorrDate(e.target.value)}
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
-                                                    required
+                                                    onChange={(val) => setCorrDate(val)}
+                                                    maxDate={new Date().toISOString().split('T')[0]}
                                                 />
                                             </div>
-
-                                            {existingRecord && (
-                                                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-sm">
-                                                    <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Existing Record Found:</p>
-                                                    <div className="flex justify-between text-xs text-slate-500">
-                                                        <span>In: {existingRecord.time_in ? formatTime(existingRecord.time_in) : '--'}</span>
-                                                        <span>Out: {existingRecord.time_out ? formatTime(existingRecord.time_out) : '--'}</span>
-                                                    </div>
-                                                </div>
-                                            )}
 
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
                                                 <select
                                                     value={corrType}
                                                     onChange={(e) => setCorrType(e.target.value)}
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white appearance-none"
+                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text appearance-none"
                                                 >
                                                     <option value="Correction">Correction</option>
                                                     <option value="Missed Punch">Missed Punch</option>
@@ -1011,7 +1134,7 @@ const Attendance = () => {
                                                         placeholder="Specify Type"
                                                         value={corrOtherType}
                                                         onChange={(e) => setCorrOtherType(e.target.value)}
-                                                        className="w-full mt-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+                                                        className="w-full mt-2 px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
                                                         required
                                                     />
                                                 )}
@@ -1019,18 +1142,18 @@ const Attendance = () => {
 
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Method</label>
-                                                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 dark:bg-github-dark-subtle rounded-lg">
                                                     <button
                                                         type="button"
                                                         onClick={() => setCorrMethod('add_session')}
-                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'add_session' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'add_session' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted'}`}
                                                     >
                                                         Manual Correction
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => setCorrMethod('reset')}
-                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'reset' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'reset' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted'}`}
                                                     >
                                                         Reset Day
                                                     </button>
@@ -1045,7 +1168,7 @@ const Attendance = () => {
                                                             type="time"
                                                             value={corrIn}
                                                             onChange={(e) => setCorrIn(e.target.value)}
-                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
                                                             required
                                                         />
                                                     </div>
@@ -1055,7 +1178,7 @@ const Attendance = () => {
                                                             type="time"
                                                             value={corrOut}
                                                             onChange={(e) => setCorrOut(e.target.value)}
-                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white"
+                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
                                                             required
                                                         />
                                                     </div>
@@ -1063,38 +1186,39 @@ const Attendance = () => {
                                             ) : (
                                                 <div className="space-y-3">
                                                     <label className="block text-xs font-bold text-slate-500 uppercase">Sessions</label>
-                                                    {corrSessions.map((session, index) => (
-                                                        <div key={index} className="flex gap-2">
+                                                    {[...corrSessions].sort((a, b) => {
+                                                        if (!a.time_in) return 1;
+                                                        if (!b.time_in) return -1;
+                                                        return a.time_in.localeCompare(b.time_in);
+                                                    }).map((session, index, arr) => (
+                                                        <div key={session.id} className="flex gap-2 animate-in fade-in zoom-in-95 duration-200">
                                                             <input
                                                                 type="time"
                                                                 value={session.time_in}
+                                                                readOnly={session.isExisting}
                                                                 onChange={(e) => {
-                                                                    const newSessions = [...corrSessions];
-                                                                    newSessions[index].time_in = e.target.value;
-                                                                    setCorrSessions(newSessions);
+                                                                    setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm"
+                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                                 placeholder="In"
                                                             />
                                                             <input
                                                                 type="time"
                                                                 value={session.time_out}
+                                                                readOnly={session.isExisting}
                                                                 onChange={(e) => {
-                                                                    const newSessions = [...corrSessions];
-                                                                    newSessions[index].time_out = e.target.value;
-                                                                    setCorrSessions(newSessions);
+                                                                    setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s));
                                                                 }}
-                                                                className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white text-sm"
+                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
                                                                 placeholder="Out"
                                                             />
-                                                            {index > 0 && (
+                                                            {arr.length > 1 && !session.isExisting && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        const newSessions = corrSessions.filter((_, i) => i !== index);
-                                                                        setCorrSessions(newSessions);
+                                                                        setCorrSessions(prev => prev.filter(s => s.id !== session.id));
                                                                     }}
-                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
                                                                 >
                                                                     <X size={16} />
                                                                 </button>
@@ -1103,8 +1227,8 @@ const Attendance = () => {
                                                     ))}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setCorrSessions([...corrSessions, { time_in: '', time_out: '' }])}
-                                                        className="w-full py-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-colors"
+                                                        onClick={() => setCorrSessions([...corrSessions, { id: Date.now(), time_in: '', time_out: '' }])}
+                                                        className="w-full py-2.5 mt-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-colors"
                                                     >
                                                         + Add Another Session
                                                     </button>
@@ -1117,7 +1241,7 @@ const Attendance = () => {
                                                     value={corrReason}
                                                     onChange={(e) => setCorrReason(e.target.value)}
                                                     placeholder="Why is this correction needed?"
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white h-24 resize-none"
+                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text h-24 resize-none"
                                                     required
                                                 ></textarea>
                                             </div>
@@ -1134,16 +1258,16 @@ const Attendance = () => {
 
                                     {/* History View (Simplified) */}
                                     <div className="space-y-4">
-                                        <h3 className="font-bold text-slate-800 dark:text-white px-2">Request History</h3>
+                                        <h3 className="font-bold text-slate-800 dark:text-github-dark-text px-2">Request History</h3>
                                         <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
                                             {correctionHistory.length === 0 ? (
-                                                <p className="text-sm text-slate-500 dark:text-slate-400 italic px-2">No history found.</p>
+                                                <p className="text-sm text-slate-500 dark:text-github-dark-muted italic px-2">No history found.</p>
                                             ) : (
                                                 correctionHistory.map((req) => (
                                                     <div
                                                         key={req.acr_id}
                                                         onClick={() => setSelectedRequest(req)}
-                                                        className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group"
+                                                        className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group"
                                                     >
                                                         <div>
                                                             <div className="flex items-center gap-3 mb-1">
@@ -1157,7 +1281,7 @@ const Attendance = () => {
                                                                     {req.submitted_at ? new Date(req.submitted_at).toLocaleDateString() : ''}
                                                                 </span>
                                                             </div>
-                                                            <h4 className="font-bold text-slate-700 dark:text-white text-sm">
+                                                            <h4 className="font-bold text-slate-700 dark:text-github-dark-text text-sm">
                                                                 {req.correction_type} for {req.request_date ? new Date(req.request_date).toLocaleDateString() : 'Unknown Date'}
                                                             </h4>
                                                             <p className="text-xs text-slate-500 mt-1 line-clamp-1 italic">"{req.reason}"</p>
@@ -1192,117 +1316,228 @@ const Attendance = () => {
 
 
 
-                {/* --- CORRECTION DETAILS MODAL --- */}
-                {selectedRequest && createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                        <div className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-200">
-                            {/* Header */}
-                            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">Request Details</h3>
-                                    <p className="text-xs text-slate-500 font-mono mt-0.5">ID: #{selectedRequest.acr_id}</p>
-                                </div>
-                                <button
-                                    onClick={() => setSelectedRequest(null)}
-                                    className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
+                {/* --- CORRECTION DETAILS SIDEBAR --- */}
+                <AnimatePresence>
+                    {selectedRequest && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setSelectedRequest(null)}
+                                className="fixed inset-0 z-[8000] bg-slate-900/40 backdrop-blur-[2px]"
+                            />
 
-                            {/* Body */}
-                            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-                                {/* Status Banner */}
-                                <div className={`flex items-center gap-3 p-3 rounded-xl border ${selectedRequest.status === 'approved'
-                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400'
-                                    : selectedRequest.status === 'rejected'
-                                        ? 'bg-red-50 border-red-100 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400'
-                                        : 'bg-amber-50 border-amber-100 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400'
-                                    }`}>
-                                    {selectedRequest.status === 'approved' && <CheckCircle size={20} />}
-                                    {selectedRequest.status === 'rejected' && <XCircle size={20} />}
-                                    {selectedRequest.status === 'pending' && <Clock size={20} />}
-                                    <span className="font-bold uppercase tracking-wide text-sm">{selectedRequest.status}</span>
-                                </div>
-
-                                {/* Key Info Grid */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Date</label>
-                                        <p className="font-medium text-slate-700 dark:text-slate-200">
-                                            {selectedRequest.request_date ? formatDateDisplay(selectedRequest.request_date) : 'Invalid Date'}
-                                        </p>
+                            {/* Sidebar Drawer */}
+                            <motion.div
+                                initial={{ x: '100%', opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: '100%', opacity: 0 }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className="fixed right-0 top-0 h-full w-full max-w-[480px] z-[8001] bg-white dark:bg-dark-card border-l border-slate-200 dark:border-github-dark-border shadow-2xl flex flex-col overflow-hidden"
+                            >
+                                {/* Header */}
+                                <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                                            <FileClock size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-800 dark:text-github-dark-text leading-none">Request Details</h3>
+                                            <p className="text-[10px] text-slate-400 font-mono mt-1">ID: #{selectedRequest.acr_id}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Type</label>
-                                        <p className="font-medium text-slate-700 dark:text-slate-200">{selectedRequest.correction_type}</p>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Method</label>
-                                        <p className="font-medium text-slate-700 dark:text-slate-200 capitalize">
-                                            {selectedRequest.correction_method === 'add_session' ? 'Manual Correction' : selectedRequest.correction_method || 'Fix'}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Submitted</label>
-                                        <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">
-                                            {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleString() : '-'}
-                                        </p>
-                                    </div>
+                                    <button
+                                        onClick={() => setSelectedRequest(null)}
+                                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                    >
+                                        <X size={20} />
+                                    </button>
                                 </div>
 
-                                {/* Reason */}
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Reason</label>
-                                    <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm text-slate-600 dark:text-slate-300 italic border border-slate-100 dark:border-slate-700">
-                                        "{selectedRequest.reason}"
+                                {/* Body */}
+                                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-8">
+                                    {/* Status Section */}
+                                    <div className="flex flex-col items-center gap-4 text-center">
+                                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border-2 ${selectedRequest.status === 'approved'
+                                            ? 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400'
+                                            : selectedRequest.status === 'rejected'
+                                                ? 'bg-red-50 border-red-100 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
+                                                : 'bg-amber-50 border-amber-100 text-amber-600 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400'
+                                            }`}>
+                                            {selectedRequest.status === 'approved' && <CheckCircle size={32} />}
+                                            {selectedRequest.status === 'rejected' && <XCircle size={32} />}
+                                            {selectedRequest.status === 'pending' && <Clock size={32} />}
+                                        </div>
+                                        <div>
+                                            <h4 className="text-lg font-black text-slate-900 dark:text-github-dark-text uppercase tracking-widest">{selectedRequest.status}</h4>
+                                            <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted mt-1">
+                                                Submitted on {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleDateString() : '-'}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
 
-                                {/* Sessions (if Manual Correction) */}
-                                {selectedRequest.correction_data && (
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase block mb-2">Requested Sessions</label>
-                                        <div className="space-y-2">
-                                            {(typeof selectedRequest.correction_data === 'string'
-                                                ? JSON.parse(selectedRequest.correction_data).sessions
-                                                : selectedRequest.correction_data.sessions || []
-                                            ).map((s, i) => (
-                                                <div key={i} className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm border border-slate-100 dark:border-slate-700">
-                                                    <span className="font-mono text-slate-600 dark:text-slate-400">In: <span className="text-slate-800 dark:text-white font-bold">{s.time_in}</span></span>
-                                                    <span className="font-mono text-slate-600 dark:text-slate-400">Out: <span className="text-slate-800 dark:text-white font-bold">{s.time_out}</span></span>
-                                                </div>
-                                            ))}
-                                            {/* Handle Reset Mode Data display if needed */}
-                                            {(typeof selectedRequest.correction_data === 'string'
-                                                ? JSON.parse(selectedRequest.correction_data)
-                                                : selectedRequest.correction_data
-                                            ).time_in && (
-                                                    <div className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm border border-slate-100 dark:border-slate-700">
-                                                        <span className="font-mono text-slate-600 dark:text-slate-400">In: <span className="text-slate-800 dark:text-white font-bold">
-                                                            {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in}
-                                                        </span></span>
-                                                        <span className="font-mono text-slate-600 dark:text-slate-400">Out: <span className="text-slate-800 dark:text-white font-bold">
-                                                            {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_out}
-                                                        </span></span>
+                                    {/* Action Details Grid */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Request Date</span>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
+                                                {selectedRequest.request_date ? formatDateDisplay(selectedRequest.request_date) : 'Invalid Date'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Correction Type</span>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">{selectedRequest.correction_type}</span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Method</span>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text capitalize">
+                                                {selectedRequest.correction_method === 'add_session' ? 'Manual Correction' : selectedRequest.correction_method || 'Fix'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Submitted At</span>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
+                                                {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Reason Section */}
+                                    <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                        <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 opacity-60">Reason for Request</span>
+                                        <div className="text-sm text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                                            "{selectedRequest.reason}"
+                                        </div>
+                                    </div>
+
+                                    {/* Proposed Data Section */}
+                                    {selectedRequest.correction_data && (
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
+                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 opacity-60">Proposed Attendance</span>
+                                            <div className="space-y-3">
+                                                {(typeof selectedRequest.correction_data === 'string'
+                                                    ? JSON.parse(selectedRequest.correction_data).sessions
+                                                    : selectedRequest.correction_data.sessions || []
+                                                ).sort((a, b) => (a.time_in || "").localeCompare(b.time_in || "")).map((s, i) => (
+                                                    <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-xl shadow-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">In</span>
+                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">{s.time_in}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">Out</span>
+                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">{s.time_out}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {/* Single Session Check */}
+                                                {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in && (
+                                                    <div className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-xl shadow-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">In</span>
+                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">
+                                                                {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">Out</span>
+                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">
+                                                                {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_out}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {/* Admin Review */}
-                                {selectedRequest.status !== 'pending' && (
-                                    <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
-                                        <h4 className="font-bold text-slate-800 dark:text-white text-sm mb-2">Reviewer Comments</h4>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                                            {selectedRequest.review_comments || "No comments provided."}
-                                        </p>
-                                        <div className="mt-2 text-xs text-slate-400">
-                                            Reviewed by Admin on {selectedRequest.reviewed_at ? new Date(selectedRequest.reviewed_at).toLocaleDateString() : '-'}
+                                    {/* Admin Feedback Section */}
+                                    {selectedRequest.status !== 'pending' && (
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50 border-t-4 border-t-indigo-500/20">
+                                            <span className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3">Reviewer Decision</span>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
+                                                {selectedRequest.review_comments || "No reviewer comments provided."}
+                                            </p>
+                                            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-github-dark-border/50 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                                Reviewed on {selectedRequest.reviewed_at ? new Date(selectedRequest.reviewed_at).toLocaleDateString() : '-'}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
+
+                                {/* Footer */}
+                                <div className="p-5 border-t border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20">
+                                    <button
+                                        onClick={() => setSelectedRequest(null)}
+                                        className="w-full px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all"
+                                    >
+                                        Close Details
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                {/* --- CONFIRM SUBMISSION MODAL --- */}
+                {showConfirmSubmit && createPortal(
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setShowConfirmSubmit(false)} />
+                        <div className="relative bg-white dark:bg-dark-card w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="p-6 text-center">
+                                <div className="w-16 h-16 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <AlertCircle size={32} />
+                                </div>
+                                <h3 className="text-xl font-black text-slate-900 dark:text-github-dark-text tracking-tight mb-2">Confirm Submission</h3>
+                                <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-6">
+                                    Are you sure you want to submit this correction request for <span className="font-bold text-slate-800 dark:text-github-dark-text">{formatDateDisplay(corrDate)}</span>?
+                                </p>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowConfirmSubmit(false)}
+                                        className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleConfirmSubmit}
+                                        disabled={submitLoading}
+                                        className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {submitLoading ? <RefreshCw className="animate-spin" size={16} /> : "Confirm & Send"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
+
+                {/* --- SUCCESS POPUP --- */}
+                {showSuccessPopup && createPortal(
+                    <div className="fixed inset-0 z-[9001] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setShowSuccessPopup(false)} />
+                        <div className="relative bg-white dark:bg-dark-card w-full max-w-sm rounded-3xl shadow-3xl border border-emerald-100 dark:border-emerald-500/20 overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="p-8 text-center">
+                                <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm ring-8 ring-emerald-50 dark:ring-emerald-500/5">
+                                    <CheckCircle size={40} />
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-900 dark:text-github-dark-text tracking-tight mb-2">Request Sent!</h3>
+                                <p className="text-sm text-slate-500 dark:text-github-dark-muted mb-8 leading-relaxed">
+                                    Your attendance correction request has been successfully submitted and is now pending review by the administrator.
+                                </p>
+                                <button
+                                    onClick={() => setShowSuccessPopup(false)}
+                                    className="w-full px-6 py-4 text-sm font-black uppercase tracking-[0.2em] text-white bg-emerald-500 hover:bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]"
+                                >
+                                    Got it
+                                </button>
                             </div>
                         </div>
                     </div>,
@@ -1311,8 +1546,9 @@ const Attendance = () => {
 
                 {/* --- CAMERA PORTAL --- */}
                 {showCamera && createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl p-4 transition-all duration-200">
-                        <div className="w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 transition-all duration-200">
+                        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onClick={closeCamera} />
+                        <div className="relative w-full max-w-4xl space-y-8 animate-in fade-in zoom-in-95 duration-200">
                             <div className="flex justify-between items-center px-4">
                                 <h3 className="text-2xl font-bold text-white tracking-tight">
                                     {cameraMode === 'IN' ? 'Check In' : 'Check Out'}
@@ -1338,6 +1574,25 @@ const Attendance = () => {
                                     />
                                 )}
                             </div>
+
+                            {requireLateReason && imgSrc && (
+                                <div className="space-y-3 px-2 w-full max-w-lg mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <div className="flex items-center gap-2 text-amber-300 bg-amber-900/40 border border-amber-500/30 p-3 rounded-xl mb-4 text-sm font-medium">
+                                        <AlertCircle size={18} className="shrink-0" />
+                                        <p>{lateReasonMessage}</p>
+                                    </div>
+                                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                                        Please provide a reason
+                                    </label>
+                                    <textarea
+                                        value={lateReasonText}
+                                        onChange={(e) => setLateReasonText(e.target.value)}
+                                        placeholder="I got held up in traffic..."
+                                        className="w-full px-4 py-3 bg-slate-800/80 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-white placeholder-slate-400 h-24 resize-none backdrop-blur-md"
+                                        required
+                                    ></textarea>
+                                </div>
+                            )}
 
                             <div className="flex justify-center gap-6 pt-2">
                                 {!imgSrc ? (

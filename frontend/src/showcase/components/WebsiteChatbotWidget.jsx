@@ -1,0 +1,130 @@
+import { useMemo, useState } from 'react';
+import { MessageCircle, Send, Loader2, X } from 'lucide-react';
+import { websiteChatbotService } from '../../services/websiteChatbotService';
+
+function dedupeSources(items) {
+    const seen = new Set();
+    const unique = [];
+
+    for (const item of items || []) {
+        const key = `${item?.url || ''}|${item?.section_heading || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(item);
+    }
+
+    return unique;
+}
+
+function cleanAssistantText(rawText) {
+    let text = String(rawText || '').replace(/\r\n?/g, '\n').trim();
+    text = text.replace(/^User question:\s*.*$/gim, '').trim();
+    text = text.replace(/^Answer:\s*/i, '').trim();
+    text = text.replace(/^Answer\s+from\s+Source\s+\d+\s*:\s*/i, '').trim();
+    text = text.replace(/^Source\s+\d+\s*:\s*/gim, '').trim();
+    text = text.replace(/^According to the provided context,?\s*the answer is:?\s*/i, '').trim();
+    text = text.replace(/^To answer your question:\s*/i, '').trim();
+    text = text.replace(/^Here(?:'s| is) (?:the )?answer:\s*/i, '').trim();
+    text = text.replace(/^\s*[A-Za-z0-9\-\s]+works as follows:\s*\n?/i, '').trim();
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    return text;
+}
+
+export default function WebsiteChatbotWidget() {
+    const [isOpen, setIsOpen] = useState(false);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [messages, setMessages] = useState([
+        {
+            role: 'assistant',
+            text: 'Hi. Ask me anything about MANO-Attendance features, pricing, security, or documentation.',
+            sources: [],
+        },
+    ]);
+
+    const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
+
+    const sendMessage = async () => {
+        const question = input.trim();
+        if (!question || loading) return;
+
+        setInput('');
+        setLoading(true);
+        setMessages((prev) => [...prev, { role: 'user', text: question }, { role: 'assistant', text: 'Thinking...', pending: true }]);
+
+        try {
+            const response = await websiteChatbotService.ask(question);
+            const rawAnswer = response?.data?.answer || 'I do not have that information on the website right now.';
+            const answer = cleanAssistantText(rawAnswer) || 'I do not have that information on the website right now.';
+            const sources = dedupeSources(response?.data?.sources || []);
+
+            setMessages((prev) => {
+                const withoutPending = prev.filter((m) => !m.pending);
+                return [...withoutPending, { role: 'assistant', text: answer, sources }];
+            });
+        } catch (error) {
+            setMessages((prev) => {
+                const withoutPending = prev.filter((m) => !m.pending);
+                return [...withoutPending, { role: 'assistant', text: error.message || 'Something went wrong while asking the assistant.', sources: [] }];
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const onKeyDown = (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendMessage();
+        }
+    };
+
+    return (
+        <div className="website-chatbot-root" aria-live="polite">
+            {isOpen && (
+                <div className="website-chatbot-panel">
+                    <div className="website-chatbot-header">
+                        <div>
+                            <h4>Ask HR Assistant</h4>
+                            <p>Website knowledge only</p>
+                        </div>
+                        <button type="button" className="website-chatbot-close" onClick={() => setIsOpen(false)} aria-label="Close chatbot">
+                            <X size={16} />
+                        </button>
+                    </div>
+
+                    <div className="website-chatbot-messages">
+                        {messages.map((message, idx) => (
+                            <div key={`${message.role}-${idx}`} className={`website-chatbot-bubble ${message.role === 'user' ? 'is-user' : 'is-assistant'}`}>
+                                <p>{message.text}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="website-chatbot-input-wrap">
+                        <textarea
+                            value={input}
+                            onChange={(event) => setInput(event.target.value)}
+                            onKeyDown={onKeyDown}
+                            placeholder="Ask about features, plans, security..."
+                            rows={2}
+                        />
+                        <button type="button" onClick={sendMessage} disabled={!canSend}>
+                            {loading ? <Loader2 className="spin" size={16} /> : <Send size={16} />}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <button
+                type="button"
+                className="website-chatbot-toggle"
+                onClick={() => setIsOpen((value) => !value)}
+                aria-label="Open website chatbot"
+            >
+                <MessageCircle size={20} />
+                <span>Ask HR</span>
+            </button>
+        </div>
+    );
+}

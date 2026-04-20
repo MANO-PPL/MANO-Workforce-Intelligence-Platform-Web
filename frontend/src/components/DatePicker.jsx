@@ -107,7 +107,7 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
                             ? 'bg-indigo-600 text-white shadow-md'
                             : isToday(i)
                                 ? 'bg-indigo-50 text-indigo-600 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800'
-                                : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+                                : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-github-dark-text'
                         }
                     `}
                     type="button"
@@ -124,15 +124,15 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
 
     return (
         <div className="relative" ref={containerRef}>
-            {label && <label className="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">{label}</label>}
+            {label && <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">{label}</label>}
 
             <div
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border ${isOpen ? 'border-indigo-500 ring-1 ring-indigo-500/20' : 'border-slate-200 dark:border-slate-700'} rounded-lg flex items-center justify-between cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-900 group`}
+                className={`w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border ${isOpen ? 'border-indigo-500 ring-1 ring-indigo-500/20' : 'border-slate-200 dark:border-github-dark-border'} rounded-lg flex items-center justify-between cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-900 group`}
             >
                 <div className="flex items-center gap-2 overflow-hidden">
                     <Calendar size={16} className={`${value ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
-                    <span className={`text-sm ${value ? 'text-slate-800 dark:text-white font-medium' : 'text-slate-400'}`}>
+                    <span className={`text-sm ${value ? 'text-slate-800 dark:text-github-dark-text font-medium' : 'text-slate-400'}`}>
                         {value ? formatDateDisplay(value) : placeholder}
                     </span>
                 </div>
@@ -150,13 +150,13 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
             </div>
 
             {isOpen && (
-                <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-github-dark-subtle rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
                     {/* Header */}
-                    <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+                    <div className="p-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-github-dark-subtle/50">
                         <button onClick={handlePrevMonth} type="button" className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-500 transition-colors">
                             <ChevronLeft size={16} />
                         </button>
-                        <div className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                        <div className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
                             {monthNames[currentMonth]} {currentYear}
                         </div>
                         <button onClick={handleNextMonth} type="button" className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-500 transition-colors">
@@ -179,7 +179,7 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
                     </div>
 
                     {/* Footer */}
-                    <div className="p-2 border-t border-slate-100 dark:border-slate-700 flex justify-between">
+                    <div className="p-2 border-t border-slate-100 dark:border-github-dark-border flex justify-between">
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();

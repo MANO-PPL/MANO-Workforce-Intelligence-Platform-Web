@@ -25,9 +25,23 @@ export const adminService = {
     },
 
     // Create user
-    async createUser(userData) {
+    async createUser(userData, profileImageFile = null) {
         try {
-            const res = await api.post(`${ADMIN_API_URL}/user`, userData);
+            let res;
+            if (profileImageFile) {
+                const formData = new FormData();
+                Object.entries(userData).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined && value !== '') {
+                        formData.append(key, value);
+                    }
+                });
+                formData.append('profile_image', profileImageFile);
+                res = await api.post(`${ADMIN_API_URL}/user`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            } else {
+                res = await api.post(`${ADMIN_API_URL}/user`, userData);
+            }
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create user");
@@ -35,12 +49,40 @@ export const adminService = {
     },
 
     // Update user
-    async updateUser(userId, userData) {
+    async updateUser(userId, userData, profileImageFile = null) {
         try {
-            const res = await api.put(`${ADMIN_API_URL}/user/${userId}`, userData);
+            let res;
+            if (profileImageFile) {
+                const formData = new FormData();
+                Object.entries(userData).forEach(([key, value]) => {
+                    if (value !== null && value !== undefined && value !== '') {
+                        formData.append(key, value);
+                    }
+                });
+                formData.append('profile_image', profileImageFile);
+                res = await api.put(`${ADMIN_API_URL}/user/${userId}`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            } else {
+                res = await api.put(`${ADMIN_API_URL}/user/${userId}`, userData);
+            }
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to update user");
+        }
+    },
+
+    // Update user avatar
+    async updateUserAvatar(userId, formData) {
+        try {
+            const res = await api.post(`${ADMIN_API_URL}/user/${userId}/avatar`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to update avatar");
         }
     },
 
@@ -54,13 +96,42 @@ export const adminService = {
         }
     },
 
+    // Toggle Status
+    async toggleUserStatus(userId, isActive) {
+        try {
+            const res = await api.put(`${ADMIN_API_URL}/user/${userId}/status`, { is_active: isActive });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to update status");
+        }
+    },
+
+    // Restore User
+    async restoreUser(userId) {
+        try {
+            const res = await api.post(`${ADMIN_API_URL}/user/${userId}/restore`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to restore user");
+        }
+    },
+
+    // Force Delete User
+    async forceDeleteUser(userId) {
+        try {
+            const res = await api.delete(`${ADMIN_API_URL}/user/${userId}/force`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to permanently delete user");
+        }
+    },
+
     // Helpers
     async getDepartments() {
         try {
             const res = await api.get(`${ADMIN_API_URL}/departments`);
             return res.data;
         } catch (error) {
-            console.error("Failed to fetch departments", error);
             throw error;
         }
     },
@@ -105,7 +176,6 @@ export const adminService = {
             const res = await api.get(`${ADMIN_API_URL}/designations`);
             return res.data;
         } catch (error) {
-            console.error("Failed to fetch designations", error);
             throw error;
         }
     },
@@ -114,7 +184,6 @@ export const adminService = {
             const res = await api.get(`${ADMIN_API_URL}/shifts`);
             return res.data;
         } catch (error) {
-            console.error("Failed to fetch shifts", error);
             throw error;
         }
     },
@@ -143,12 +212,27 @@ export const adminService = {
             throw new Error(error.response?.data?.message || "Failed to delete shift");
         }
     },
+    async getShiftUsers() {
+        try {
+            const res = await api.get(`${POLICY_API_URL}/shift-users`);
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to fetch shift users");
+        }
+    },
+    async assignUserShift(userId, shiftId) {
+        try {
+            const res = await api.put(`${POLICY_API_URL}/users/${userId}/shift`, { shift_id: shiftId });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to assign shift");
+        }
+    },
     async getWorkLocations() {
         try {
             const res = await api.get(`/locations`); // Route in original was /api/locations, so since baseURL is /api, we use /locations
             return res.data;
         } catch (error) {
-            console.error("Failed to fetch work locations", error);
             throw error;
         }
     },

@@ -91,7 +91,7 @@ const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = fals
 
     return (
         <div
-            className="p-4 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full max-w-[300px] select-none"
+            className="p-3.5 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border w-full max-w-[240px] select-none transition-all duration-300"
             onMouseLeave={() => {
                 if (isDragging) handleMouseUp(); // Auto-finalize if leaving calendar
             }}
@@ -99,23 +99,23 @@ const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = fals
                 if (isDragging) handleMouseUp(); // Catch-all mouseup
             }}
         >
-            <div className="flex justify-between items-center mb-4">
-                <h4 className="font-semibold text-gray-700 dark:text-gray-200 text-sm">
+            <div className="flex justify-between items-center mb-4 px-1">
+                <h4 className="font-bold text-slate-800 dark:text-github-dark-text text-xs tracking-tight">
                     {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                 </h4>
-                <div className="flex gap-1">
-                    <button onClick={prevMonth} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-500 dark:text-slate-400">
-                        <ChevronLeft size={16} />
+                 <div className="flex gap-2">
+                    <button onClick={prevMonth} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-github-dark-muted transition-colors">
+                        <ChevronLeft size={18} />
                     </button>
-                    <button onClick={nextMonth} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-500 dark:text-slate-400">
-                        <ChevronRight size={16} />
+                    <button onClick={nextMonth} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-github-dark-muted transition-colors">
+                        <ChevronRight size={18} />
                     </button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+            <div className="grid grid-cols-7 gap-1 text-center mb-3">
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                    <div key={`${day}-${i}`} className="text-[10px] font-bold text-gray-400 dark:text-slate-500">{day}</div>
+                    <div key={`${day}-${i}`} className="text-[11px] font-black text-slate-400 dark:text-slate-600 uppercase">{day}</div>
                 ))}
             </div>
 
@@ -169,7 +169,7 @@ const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = fals
                     return (
                         <div
                             key={dateStr}
-                            className={`relative w-8 h-8 flex items-center justify-center`}
+                            className={`relative w-6 h-6 flex items-center justify-center`}
                             onMouseDown={() => !isDisabled && handleMouseDown(dateStr)}
                             onMouseEnter={() => !isDisabled && handleMouseEnter(dateStr)}
                         >
@@ -184,16 +184,16 @@ const MiniCalendar = ({ selectedDate, endDate, onDateSelect, disableRange = fals
                                 <div className="absolute inset-0 bg-indigo-50 dark:bg-indigo-900/50 rounded-full z-0 opacity-50" />
                             )}
 
-                            {/* Date Circle */}
+                             {/* Date Circle */}
                             <button
                                 disabled={isDisabled}
                                 className={`
-                                    relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all
-                                    ${isDisabled ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed' :
+                                    relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-all duration-200 font-medium
+                                    ${isDisabled ? 'text-slate-200 dark:text-slate-800 cursor-not-allowed' :
                                         isSelected
-                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none scale-105'
-                                            : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}
-                                    ${!isSelected && isToday && !isDisabled ? 'bg-indigo-50 dark:bg-transparent text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-800' : ''}
+                                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none scale-110 font-bold'
+                                            : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'}
+                                    ${!isSelected && isToday && !isDisabled ? 'text-indigo-600 dark:text-indigo-400 font-black ring-1 ring-indigo-200 dark:ring-indigo-800' : ''}
                                 `}
                             >
                                 {date.getDate()}

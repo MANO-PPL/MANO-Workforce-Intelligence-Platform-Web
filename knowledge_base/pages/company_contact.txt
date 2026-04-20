@@ -1,0 +1,2 @@
+PAGE: MANO-Attendance
+URL: https://localhost:5173/company/contact

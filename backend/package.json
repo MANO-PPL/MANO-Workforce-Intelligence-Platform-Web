@@ -15,8 +15,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.955.0",
     "@aws-sdk/s3-request-presigner": "^3.955.0",
+    "@xenova/transformers": "^2.17.2",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
+    "chromadb": "^3.4.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -24,6 +26,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "fuse.js": "^7.0.0",
+    "groq-sdk": "^1.1.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "knex": "^3.1.0",
@@ -35,7 +38,7 @@
     "razorpay": "^2.9.6",
     "request-ip": "^3.3.0",
     "sharp": "^0.34.5",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
