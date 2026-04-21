@@ -165,19 +165,19 @@ const AdminDashboard = () => {
                     <h3 className="text-base font-semibold text-slate-800 dark:text-github-dark-text mb-3 px-1">Quick Actions</h3>
                     <div className="space-y-3">
                         <QuickLinkCard
-                            onClick={() => navigate('/mobile-view/employees')}
+                            onClick={() => navigate('/employees')}
                             icon={<UserPlus size={20} className="text-indigo-400" />}
                             iconBg="bg-indigo-500/10"
                             title="Add Employee"
                         />
                         <QuickLinkCard
-                            onClick={() => navigate('/mobile-view/attendance-monitoring')}
+                            onClick={() => navigate('/attendance-monitoring')}
                             icon={<AlertTriangle size={20} className="text-rose-400" />}
                             iconBg="bg-rose-500/10"
                             title="Live Monitor"
                         />
                         <QuickLinkCard
-                            onClick={() => navigate('/mobile-view/shifts')}
+                            onClick={() => navigate('/shifts')}
                             icon={<Briefcase size={20} className="text-purple-400" />}
                             iconBg="bg-purple-500/10"
                             title="Manage Shifts"

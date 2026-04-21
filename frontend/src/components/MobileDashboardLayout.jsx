@@ -56,7 +56,7 @@ const MobileDashboardLayout = ({ children, title = "Dashboard", hideHeader = fal
                         </button>
                         <div className="relative">
                             <button
-                                onClick={() => navigate('/mobile-view/notifications')}
+                                onClick={() => navigate('/notifications')}
                                 className="relative text-slate-500 dark:text-slate-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                             >
                                 <Bell size={22} />

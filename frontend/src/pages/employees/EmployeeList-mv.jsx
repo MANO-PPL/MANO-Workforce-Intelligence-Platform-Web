@@ -121,7 +121,7 @@ const EmployeeList = () => {
 
     const handleEdit = (e, id) => {
         e.stopPropagation();
-        navigate(`/mobile-view/employees/edit/${id}`);
+        navigate('/employees/edit/${id}');
     };
 
     const filteredEmployees = employees
@@ -201,7 +201,7 @@ const EmployeeList = () => {
 
                 {/* FAB */}
                 <Link
-                    to="/mobile-view/employees/add"
+                    to="/employees/add"
                     className="fixed bottom-24 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg shadow-indigo-500/30 flex items-center justify-center active:scale-90 transition-all z-20"
                 >
                     <Plus size={28} />

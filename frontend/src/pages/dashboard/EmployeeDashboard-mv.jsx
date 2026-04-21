@@ -95,13 +95,13 @@ const EmployeeDashboard = () => {
                     {/* Quick Action Buttons */}
                     <div className="mt-6 flex gap-3 relative z-10">
                         <button
-                            onClick={() => navigate('/mobile-view/attendance')}
+                            onClick={() => navigate('/attendance')}
                             className="flex-1 bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/10 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-sm"
                         >
                             <Clock size={16} /> My Attendance
                         </button>
                         <button
-                            onClick={() => navigate('/mobile-view/apply-leave')}
+                            onClick={() => navigate('/apply-leave')}
                             className="flex-1 bg-white text-indigo-600 hover:bg-indigo-50 py-2.5 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
                         >
                             <Coffee size={16} /> Apply Leave
@@ -179,7 +179,7 @@ const EmployeeDashboard = () => {
                         <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
                             <Calendar size={16} className="text-indigo-500" /> Upcoming Holidays
                         </h3>
-                        <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium cursor-pointer hover:underline" onClick={() => navigate('/mobile-view/holidays')}>View All</span>
+                        <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium cursor-pointer hover:underline" onClick={() => navigate('/holidays')}>View All</span>
                     </div>
 
                     <div className="space-y-3">
