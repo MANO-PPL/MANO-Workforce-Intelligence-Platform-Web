@@ -158,10 +158,27 @@ const AttendanceMonitoring = () => {
                     // Check if *currently* active
                     const isCurrentlyActive = sessions.some(s => s.isActive);
 
+                    let allStatuses = [];
+                    
                     if (isCurrentlyActive) {
+                        allStatuses.push('Active');
+                        if (userRecords.some(r => r.late_minutes > 0)) allStatuses.push('Late');
                         status = (latest.late_minutes > 0) ? 'Late Active' : 'Active';
                     } else {
-                        status = userRecords.some(r => r.late_minutes > 0) ? 'Late' : 'Present';
+                        if (latest.status === 'Absent' || latest.status === 'ABSENT') {
+                            allStatuses.push('Absent');
+                            status = 'Absent';
+                        } else {
+                            if (latest.status === 'MISSED_PUNCH' || latest.status === 'Missed Punch') allStatuses.push('Missed Punch');
+                            if (userRecords.some(r => r.late_minutes > 0)) allStatuses.push('Late');
+                            if ((latest.overtime_hours || 0) > 0 || latest.status === 'OVERTIME' || latest.status === 'Overtime') allStatuses.push('Overtime');
+                            
+                            if (allStatuses.length === 0) allStatuses.push('Present');
+                            
+                            status = allStatuses.includes('Missed Punch') ? 'Missed Punch' :
+                                     allStatuses.includes('Overtime') ? 'Overtime' :
+                                     allStatuses.includes('Late') ? 'Late' : 'Present';
+                        }
                     }
 
                     return {
@@ -172,6 +189,7 @@ const AttendanceMonitoring = () => {
                         department: user.dept_name || user.department_title || 'General',
                         sessions,
                         status,
+                        allStatuses,
                         totalHours: totalMin > 0 ? `${(totalMin / 60).toFixed(1)} hrs` : '-', // totalMin calculation usually happens in backend or needs simple diff sum here
                         location: lastLocation,
                         lateReason // Add to object
@@ -205,9 +223,9 @@ const AttendanceMonitoring = () => {
             // 4. Calculate Stats precisely from merged data for consistency
             setStats({
                 present: mergedData.filter(d => d.status !== 'Absent').length,
-                late: mergedData.filter(d => d.status.includes('Late')).length,
+                late: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Late') : d.status.includes('Late')).length,
                 absent: mergedData.filter(d => d.status === 'Absent').length,
-                active: mergedData.filter(d => d.status.includes('Active')).length
+                active: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length
             });
 
         } catch (error) {
@@ -307,6 +325,8 @@ const AttendanceMonitoring = () => {
             case 'Active': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 animate-pulse';
             case 'Absent': return 'bg-slate-100 text-slate-500 dark:bg-github-dark-subtle dark:text-github-dark-muted';
             case 'Half Day': return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400';
+            case 'Overtime': return 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400';
+            case 'Missed Punch': return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
             default: return 'bg-slate-100 text-slate-700 dark:bg-github-dark-subtle dark:text-slate-300';
         }
     };
@@ -371,14 +391,18 @@ const AttendanceMonitoring = () => {
 
     const getStatusData = () => {
         // Create disjoint sets that sum to total headcount for a valid Pie Chart
-        const active = attendanceData.filter(d => d.status === 'Active').length;
+        const active = attendanceData.filter(d => d.status === 'Active' || d.status === 'Late Active').length;
+        const missedPunch = attendanceData.filter(d => d.status === 'Missed Punch').length;
+        const overtime = attendanceData.filter(d => d.status === 'Overtime').length;
+        const late = attendanceData.filter(d => d.status === 'Late').length;
         const present = attendanceData.filter(d => d.status === 'Present').length;
-        const late = attendanceData.filter(d => d.status.includes('Late')).length;
         const absent = attendanceData.filter(d => d.status === 'Absent').length;
 
         return [
             { name: 'Present', value: present, color: '#10b981' },
             { name: 'Late', value: late, color: '#f59e0b' },
+            { name: 'Overtime', value: overtime, color: '#8b5cf6' },
+            { name: 'Missed Punch', value: missedPunch, color: '#f43f5e' },
             { name: 'Absent', value: absent, color: '#ef4444' },
             { name: 'Active', value: active, color: '#3b82f6' },
         ].filter(item => item.value > 0);
@@ -391,7 +415,7 @@ const AttendanceMonitoring = () => {
             if (!deptStats[dept]) deptStats[dept] = { name: dept, Present: 0, Absent: 0, Late: 0 };
 
             if (item.status === 'Absent') deptStats[dept].Absent++;
-            else if (item.status.includes('Late')) deptStats[dept].Late++;
+            else if (item.allStatuses ? item.allStatuses.includes('Late') : item.status.includes('Late')) deptStats[dept].Late++;
             else deptStats[dept].Present++;
         });
         return Object.values(deptStats);
@@ -632,10 +656,14 @@ const AttendanceMonitoring = () => {
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-6 py-4">
-                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(item.status).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
-                                                                        <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${item.status === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
-                                                                        {item.status}
-                                                                    </span>
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {item.allStatuses && item.allStatuses.map(statusBadge => (
+                                                                            <span key={statusBadge} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(statusBadge).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
+                                                                                <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${statusBadge === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
+                                                                                {statusBadge}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
                                                                 </td>
                                                                 <td className="px-6 py-4">
                                                                     {item.sessions.length > 0 ? (
@@ -742,12 +770,14 @@ const AttendanceMonitoring = () => {
                                                             </div>
 
                                                             {/* Status Badge Line */}
-                                                            <div className="px-5 pb-4 flex items-center gap-2">
-                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border shadow-sm ${getStatusStyle(item.status).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
-                                                                    <div className={`w-1.5 h-1.5 rounded-full mr-2 ${item.status === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
-                                                                    {item.status}
-                                                                </span>
-                                                                {item.status.includes('Late') && item.lateReason && (
+                                                            <div className="px-5 pb-4 flex flex-wrap items-center gap-2">
+                                                                {item.allStatuses && item.allStatuses.map(statusBadge => (
+                                                                    <span key={statusBadge} className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border shadow-sm ${getStatusStyle(statusBadge).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
+                                                                        <div className={`w-1.5 h-1.5 rounded-full mr-2 ${statusBadge === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
+                                                                        {statusBadge}
+                                                                    </span>
+                                                                ))}
+                                                                {item.allStatuses && item.allStatuses.includes('Late') && item.lateReason && (
                                                                     <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium truncate max-w-[120px]" title={item.lateReason}>
                                                                         — {item.lateReason}
                                                                     </span>

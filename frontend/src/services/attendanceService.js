@@ -174,7 +174,7 @@ export const attendanceService = {
 
             records.forEach(record => {
                 if (record.time_in) daysPresent++;
-                if (record.status === 'Late' || record.late_minutes > 0) lateDays++;
+                if (record.status === 'LATE' || record.late_minutes > 0) lateDays++;
                 if (record.duration) {
                     const [hours, minutes] = record.duration.split(':').map(Number);
                     totalHours += hours + (minutes / 60);

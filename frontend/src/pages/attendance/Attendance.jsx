@@ -45,6 +45,7 @@ import { Bar, Doughnut, Radar } from 'react-chartjs-2';
 
 import CustomCalendar from '../../components/CustomCalendar';
 import DatePicker from '../../components/DatePicker';
+import { getStatusStyle, ATTENDANCE_STATUS } from '../../utils/attendanceStatus';
 
 // Register ChartJS
 ChartJS.register(
@@ -151,6 +152,8 @@ const Attendance = () => {
 
     // --- DATA FETCHING ---
 
+    const [globalActiveSession, setGlobalActiveSession] = useState(false);
+
     // 1. Fetch Daily Records (for "Mark Attendance" tab)
     const fetchDailyRecords = useCallback(async () => {
         if (activeTab !== 'mark_attendance') return;
@@ -158,6 +161,16 @@ const Attendance = () => {
         try {
             const res = await attendanceService.getMyRecords(selectedDate, selectedDate);
             if (res.ok) setDailySessions(res.data);
+
+            // Also fetch recent 1 record to determine global active session status
+            // This prevents the "Time Out" button from being disabled if the session started yesterday
+            const recentRes = await attendanceService.getMyRecords();
+            if (recentRes && recentRes.data && recentRes.data.length > 0) {
+                // If the most recent record has no time_out, they are globally active
+                setGlobalActiveSession(!recentRes.data[0].time_out);
+            } else {
+                setGlobalActiveSession(false);
+            }
         } catch (error) {
             console.error(error);
             toast.error("Failed to fetch daily records");
@@ -527,8 +540,8 @@ const Attendance = () => {
     };
 
     const statusCounts = monthlySessions.reduce((acc, s) => {
-        const status = s.late_minutes > 0 ? "Late" : "On Time"; // Simple derived status
-        acc[status] = (acc[status] || 0) + 1;
+        const label = getStatusStyle(s.status).label;
+        acc[label] = (acc[label] || 0) + 1;
         return acc;
     }, {});
 
@@ -536,10 +549,19 @@ const Attendance = () => {
         labels: Object.keys(statusCounts),
         datasets: [{
             data: Object.values(statusCounts),
-            backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+            backgroundColor: Object.keys(statusCounts).map(label => {
+                if (label === 'PRESENT') return '#10b981'; // emerald-500
+                if (label === 'LATE') return '#f59e0b';    // amber-500
+                if (label === 'OVERTIME') return '#8b5cf6'; // violet-500
+                if (label === 'ABSENT') return '#ef4444';   // red-500
+                if (label === 'MISSED PUNCH') return '#f43f5e'; // rose-500
+                if (label === 'HALF DAY') return '#f97316'; // orange-500
+                return '#94a3b8'; // slate-400
+            }),
             borderWidth: 0
         }]
     };
+
 
     // --- COMPUTE CALENDAR EVENTS ---
     const calendarEvents = {};
@@ -615,7 +637,7 @@ const Attendance = () => {
                         <div className="flex flex-col gap-6">
                             {/* Session Logic Calculation */}
                             {(() => {
-                                const hasActiveSession = dailySessions.some(s => !s.time_out);
+                                const hasActiveSession = globalActiveSession;
                                 return (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                         {/* Time In Card */}
@@ -724,7 +746,7 @@ const Attendance = () => {
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-slate-800 dark:text-github-dark-text">
-                                                        {formatTime(session.time_in)} - {session.time_out ? formatTime(session.time_out) : 'Active'}
+                                                        {formatTime(session.time_in)} - {session.time_out ? formatTime(session.time_out) : 'ACTIVE'}
                                                     </p>
                                                     <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
                                                         <MapPin size={12} /> {session.time_in_address || 'Unknown'}
@@ -735,9 +757,16 @@ const Attendance = () => {
                                                 <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                                                     {session.total_hours || calculateDuration(session.time_in, session.time_out) || '--'}
                                                 </p>
-                                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${session.late_minutes > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                    {session.late_minutes > 0 ? 'Late' : 'On Time'}
-                                                </span>
+                                                {(() => {
+                                                    const st = (session.status || (session.late_minutes > 0 ? 'LATE' : '')).toUpperCase();
+                                                    const style = getStatusStyle(st);
+                                                    return (
+                                                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit ${style.bg} ${style.text}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+                                                            {style.label}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     ))
@@ -871,10 +900,7 @@ const Attendance = () => {
                                                     <div key={session.attendance_id || index} className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-github-dark-border hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors">
                                                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                             <div className="flex items-center gap-4">
-                                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold ${session.late_minutes > 0
-                                                                    ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
-                                                                    : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                                                    }`}>
+                                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold ${getStatusStyle(session.status).bg} ${getStatusStyle(session.status).text}`}>
                                                                     {new Date(session.time_in).getDate()}
                                                                 </div>
                                                                 <div>
@@ -882,10 +908,14 @@ const Attendance = () => {
                                                                         {new Date(session.time_in).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                                                     </p>
                                                                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${session.late_minutes > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                                                                            }`}>
-                                                                            {session.late_minutes > 0 ? 'Late' : 'On Time'}
-                                                                        </span>
+                                                                        {(() => {
+                                                                            const style = getStatusStyle(session.status);
+                                                                            return (
+                                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${style.bg} ${style.text}`}>
+                                                                                    {style.label}
+                                                                                </span>
+                                                                            );
+                                                                        })()}
                                                                         <span>•</span>
                                                                         <span>{session.time_in_address || 'Remote'}</span>
                                                                     </div>
@@ -936,18 +966,17 @@ const Attendance = () => {
                                         </div>
                                     </div>
 
-                                    {/* Card 2: Present % */}
                                     <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border relative overflow-hidden">
                                         <div className="flex justify-between items-start z-10 relative">
                                             <div>
                                                 <p className="text-sm text-slate-500 font-medium">Present</p>
                                                 <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
-                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT').length / monthlySessions.length) * 100) : 0}%
+                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT' && s.status !== 'LATE' && s.status !== 'OVERTIME').length / monthlySessions.length) * 100) : 0}%
                                                 </h3>
                                             </div>
                                             <div className="h-12 w-12 rounded-full border-4 border-emerald-100 dark:border-emerald-900/30 border-t-emerald-500 flex items-center justify-center">
                                                 <span className="text-[10px] font-bold text-emerald-600">
-                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT').length / monthlySessions.length) * 100) : 0}%
+                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT' && s.status !== 'LATE' && s.status !== 'OVERTIME').length / monthlySessions.length) * 100) : 0}%
                                                 </span>
                                             </div>
                                         </div>
@@ -970,7 +999,20 @@ const Attendance = () => {
                                         </div>
                                     </div>
 
-                                    {/* Card 4: Avg Hours */}
+                                    {/* Card 4: Overtime Days */}
+                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-slate-500 font-medium">Overtime</p>
+                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
+                                                {monthlySessions.filter(s => s.status === 'OVERTIME').length}
+                                            </h3>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-full bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center text-violet-600 dark:text-violet-400">
+                                            <History size={24} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 5: Avg Hours */}
                                     <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                                         <div>
                                             <p className="text-sm text-slate-500 font-medium">Avg Hours</p>

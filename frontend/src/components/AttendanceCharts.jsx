@@ -52,7 +52,7 @@ const AttendanceCharts = ({ sessions = [], date }) => {
         const data = Array.from({ length: daysInMonth }, (_, i) => ({
             day: i + 1,
             hours: 0,
-            status: 'Absent'
+            status: 'ABSENT'
         }));
 
         sessions.forEach(session => {
@@ -60,7 +60,7 @@ const AttendanceCharts = ({ sessions = [], date }) => {
             const dayIndex = d.getDate() - 1;
             if (data[dayIndex]) {
                 data[dayIndex].hours = parseFloat(session.total_hours || 0);
-                data[dayIndex].status = session.late_status ? 'Late' : 'Present';
+                data[dayIndex].status = session.late_status ? 'LATE' : 'PRESENT';
             }
         });
 
@@ -69,8 +69,8 @@ const AttendanceCharts = ({ sessions = [], date }) => {
 
     const statusData = useMemo(() => {
         return [
-            { name: 'On Time', value: stats.onTime },
-            { name: 'Late', value: stats.late },
+            { name: 'ON TIME', value: stats.onTime },
+            { name: 'LATE', value: stats.late },
             // Can add 'Leaves' if we passed that data
         ].filter(item => item.value > 0);
     }, [stats]);
@@ -105,7 +105,7 @@ const AttendanceCharts = ({ sessions = [], date }) => {
 
                 <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center justify-between">
                     <div>
-                        <p className="text-slate-500 dark:text-github-dark-muted text-sm font-medium mb-1">On Time</p>
+                        <p className="text-slate-500 dark:text-github-dark-muted text-sm font-medium mb-1">ON TIME</p>
                         <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text">{stats.onTime}</h3>
                     </div>
                     <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-600 dark:text-emerald-400">

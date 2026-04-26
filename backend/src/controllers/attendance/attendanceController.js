@@ -9,7 +9,8 @@ import * as AttendanceService from "../../services/attendance/attendanceService.
  */
 export const timeIn = catchAsync(async (req, res) => {
   // 1. DATA PREPARATION
-  const { user_id, org_id } = req.user;
+  const userId = req.user.id || req.user.user_id;
+  const { org_id } = req.user;
   const latitude = Number(req.body.latitude);
   const longitude = Number(req.body.longitude);
   const accuracy = Number(req.body.accuracy);
@@ -33,7 +34,7 @@ export const timeIn = catchAsync(async (req, res) => {
 
   // 3. DELEGATE TO SERVICE
   const result = await AttendanceService.processTimeIn({
-    user_id,
+    user_id: userId,
     org_id,
     latitude,
     longitude,
@@ -61,7 +62,8 @@ export const timeIn = catchAsync(async (req, res) => {
  */
 export const timeOut = catchAsync(async (req, res) => {
   // 1. DATA PREPARATION
-  const { user_id, org_id } = req.user;
+  const userId = req.user.id || req.user.user_id;
+  const { org_id } = req.user;
   const latitude = Number(req.body.latitude);
   const longitude = Number(req.body.longitude);
   const accuracy = Number(req.body.accuracy);
@@ -84,7 +86,7 @@ export const timeOut = catchAsync(async (req, res) => {
 
   // 3. DELEGATE TO SERVICE
   const result = await AttendanceService.processTimeOut({
-    user_id,
+    user_id: userId,
     org_id,
     latitude,
     longitude,
@@ -116,7 +118,7 @@ export const simulateTimeIn = catchAsync(async (req, res) => {
   }
 
   // Allow admin and hr to simulate for others
-  let target_user_id = req.user.user_id;
+  let target_user_id = req.user.id || req.user.user_id;
   if (req.body.user_id && ["admin", "hr"].includes(req.user.user_type)) {
     target_user_id = req.body.user_id;
   }
@@ -169,10 +171,12 @@ export const simulateTimeOut = catchAsync(async (req, res) => {
     return res.status(404).json({ ok: false, message: "Not Found" });
   }
 
-  let target_user_id = req.user.user_id;
+  // Allow admin and hr to simulate for others
+  let target_user_id = req.user.id || req.user.user_id;
   if (req.body.user_id && ["admin", "hr"].includes(req.user.user_type)) {
     target_user_id = req.body.user_id;
   }
+
 
   const {
     latitude = 0,
@@ -221,6 +225,7 @@ export const getAdminRecords = catchAsync(async (req, res) => {
 
   const { user_id, date_from, date_to, limit = 50 } = req.query;
   const org_id = req.user.org_id;
+  const current_user_id = req.user.id || req.user.user_id;
 
   const records = await AttendanceService.fetchAdminRecords({
     org_id,
@@ -238,7 +243,7 @@ export const getAdminRecords = catchAsync(async (req, res) => {
  * User endpoint to fetch their own attendance records
  */
 export const getUserRecords = catchAsync(async (req, res) => {
-  const userId = req.user.user_id;
+  const userId = req.user.id || req.user.user_id;
   const { date_from, date_to, limit = 50 } = req.query;
 
   const records = await AttendanceService.fetchUserRecords({
@@ -264,7 +269,7 @@ export const submitCorrectionRequest = catchAsync(async (req, res) => {
     proposed_data
   } = req.body;
 
-  const user_id = req.user.user_id;
+  const user_id = req.user.id || req.user.user_id;
   const org_id = req.user.org_id;
 
   if (!correction_type || !request_date || !reason) {
@@ -298,7 +303,7 @@ export const submitCorrectionRequest = catchAsync(async (req, res) => {
 export const getCorrectionRequests = catchAsync(async (req, res) => {
   const { status, date, month, year, page = 1, limit = 10 } = req.query;
   const org_id = req.user.org_id;
-  const user_id = req.user.user_id;
+  const user_id = req.user.id || req.user.user_id;
   const user_type = req.user.user_type;
 
   const result = await AttendanceService.fetchCorrectionRequests({
@@ -323,7 +328,7 @@ export const getCorrectionRequests = catchAsync(async (req, res) => {
 export const getCorrectionRequestById = catchAsync(async (req, res) => {
   const { acr_id } = req.params;
   const org_id = req.user.org_id;
-  const user_id = req.user.user_id;
+  const user_id = req.user.id || req.user.user_id;
   const role = req.user.user_type;
 
   const correction = await AttendanceService.fetchCorrectionRequestById({
@@ -349,7 +354,7 @@ export const reviewCorrectionRequest = catchAsync(async (req, res) => {
   const { status, review_comments, sessions } = req.body;
 
   const org_id = req.user.org_id;
-  const reviewer_id = req.user.user_id;
+  const reviewer_id = req.user.id || req.user.user_id;
   const role = req.user.user_type;
 
   if (role !== "admin" && role !== "hr") {
@@ -385,7 +390,7 @@ export const reviewCorrectionRequest = catchAsync(async (req, res) => {
  */
 export const exportRecords = catchAsync(async (req, res) => {
   const { month } = req.query;
-  const user_id = req.user.user_id;
+  const user_id = req.user.id || req.user.user_id;
   const org_id = req.user.org_id;
   const user_name = req.user.user_name;
 

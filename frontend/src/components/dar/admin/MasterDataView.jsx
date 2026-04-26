@@ -9,6 +9,7 @@ import MinimalSelect from "../../MinimalSelect"; // Ensure path is correct relat
 import MiniCalendar from '../MiniCalendar'; // Ensure path is correct relative to new location
 import api from '../../../services/api'; // Ensure path is correct relative to new location
 import { toast } from 'react-toastify';
+import { getStatusStyle, ATTENDANCE_STATUS } from '../../../utils/attendanceStatus';
 
 function shiftDateYMD(dateStr, deltaDays) {
     const base = new Date(`${dateStr}T00:00:00`);
@@ -331,7 +332,7 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                 // Final absence pass: do not label as absent when DAR/Event activities exist.
                 Object.values(grouped).forEach((item) => {
                     const hasActivities = Array.isArray(item.activities) && item.activities.length > 0;
-                    const explicitAbsent = String(item.attendance?.status || '').toUpperCase() === 'ABSENT';
+                    const explicitAbsent = String(item.attendance?.status || '').toUpperCase() === ATTENDANCE_STATUS.ABSENT;
                     item.isAbsent = !item.isHoliday && !hasActivities && explicitAbsent;
                 });
 
@@ -818,6 +819,17 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                                                 </span>
                                             )}
 
+                                                {/* Attendance Status badge */}
+                                            {user.attendance?.status && (() => {
+                                                const style = getStatusStyle(user.attendance.status);
+                                                return (
+                                                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full flex items-center gap-1 w-fit mt-1 ${style.bg} ${style.text}`}>
+                                                        <span className={`w-1 h-1 rounded-full ${style.dot}`} />
+                                                        {style.label}
+                                                    </span>
+                                                );
+                                            })()}
+
                                             <button
                                                 onClick={() => handleSummaryClick(user)}
                                                 className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors w-fit border border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800 dark:text-indigo-400"
@@ -862,7 +874,15 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
                                                     <div className="absolute inset-x-0 inset-y-1 bg-emerald-50/40 dark:bg-emerald-900/15 border border-emerald-100 dark:border-emerald-800/30 rounded-lg pointer-events-none z-0"></div>
                                                 )}
 
-                                                {/* 2. Absent Overlay (Background) - Exclusive to No Holiday */}
+                                                {/* 2. Status-based Overlays */}
+                                                {!user.isHoliday && (user.attendance?.status === ATTENDANCE_STATUS.MISSED_PUNCH) && (
+                                                    <div className={`absolute inset-x-0 inset-y-1 ${getStatusStyle(ATTENDANCE_STATUS.MISSED_PUNCH).bg} border border-rose-200 dark:border-rose-700/30 rounded-lg pointer-events-none z-0`} title="Missed Punch - Auto closed by system" />
+                                                )}
+                                                {!user.isHoliday && (user.attendance?.status === ATTENDANCE_STATUS.OVERTIME) && (
+                                                    <div className={`absolute inset-x-0 inset-y-1 ${getStatusStyle(ATTENDANCE_STATUS.OVERTIME).bg} border border-violet-200 dark:border-violet-700/30 rounded-lg pointer-events-none z-0`} title="Overtime shift" />
+                                                )}
+
+                                                {/* 3. Absent Overlay (Background) - Exclusive to No Holiday */}
                                                 {!user.isHoliday && user.isAbsent && (
                                                     <div className="absolute inset-x-0 inset-y-1 bg-red-50/40 dark:bg-red-900/15 border border-red-100 dark:border-red-800/30 rounded-lg pointer-events-none z-0"></div>
                                                 )}
