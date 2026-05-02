@@ -1,10 +1,7 @@
 import express from 'express';
 import catchAsync from '../../utils/catchAsync.js';
 import AppError from '../../utils/AppError.js';
-import {
-    getNotifications as getNotificationsService
-}
-from '../../services/notifications/notificationService.js';
+import { getNotifications as getNotificationsService, markNotificationAsRead, markAllNotificationsAsRead } from '../../services/notifications/notificationService.js';
 
 export const getNotifications = catchAsync(async (req, res, next) => {
 
