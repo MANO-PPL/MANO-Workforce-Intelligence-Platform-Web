@@ -5,7 +5,7 @@ import { getNotifications as getNotificationsService, markNotificationAsRead, ma
 
 export const getNotifications = catchAsync(async (req, res, next) => {
 
-    const user_id = req.user.user_id;
+    const user_id = req.user.user_id ?? req.user.id;
 
 
     if (!user_id) {
@@ -45,8 +45,7 @@ export const getNotifications = catchAsync(async (req, res, next) => {
 
 export const markAsRead = catchAsync(async (req, res, next) => {
 
-    const user_id =
-    req.user.user_id;
+    const user_id = req.user.user_id ?? req.user.id;
     const { id } = req.params;
 
     if (!id) {
@@ -87,8 +86,7 @@ export const markAsRead = catchAsync(async (req, res, next) => {
 export const markAllAsRead =
 catchAsync(async (req, res, next) => {
 
-    const user_id =
-    req.user.user_id;
+    const user_id = req.user.user_id ?? req.user.id;
     if (!user_id) {
 
         throw new AppError(
