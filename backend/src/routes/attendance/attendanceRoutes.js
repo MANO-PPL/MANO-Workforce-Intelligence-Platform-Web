@@ -117,4 +117,10 @@ router.patch("/correct-request/:acr_id",
   AttendanceController.reviewCorrectionRequest
 );
 
+/**
+ * GET /attendance/my-shift
+ * Fetch current user's shift policy
+ */
+router.get("/my-shift", authenticateJWT, AttendanceController.getMyShift);
+
 export default router;

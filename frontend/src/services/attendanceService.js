@@ -271,5 +271,15 @@ export const attendanceService = {
         } catch (error) {
             return { success: false, data: [] };
         }
+    },
+    // Get My Shift Policy
+    async getMyShiftPolicy() {
+        try {
+            const res = await api.get(`${API_BASE_URL}/my-shift`);
+            return res.data;
+        } catch (error) {
+            console.error("Failed to fetch shift policy", error);
+            return { success: false, shift: null };
+        }
     }
 };

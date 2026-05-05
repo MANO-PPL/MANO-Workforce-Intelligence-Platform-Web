@@ -4,13 +4,14 @@ import DashboardLayout from '../../components/DashboardLayout';
 import {
     Save, Play, Plus, X, Settings, Clock, MapPin, Calendar, AlertTriangle,
     CheckCircle, Trash2, Move, FileText, Zap, Briefcase, Edit2, Layers,
-    Search, Users, Check, ArrowRight
+    Search, Users, Check, ArrowRight, FileClock, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { buildPolicy, parsePolicy } from '../../utils/weekOffPolicy';
 
-const PolicyBuilder = () => {
+const ShiftManagement = () => {
     const location = useLocation();
     const { avatarTimestamp } = useAuth();
 
@@ -25,9 +26,15 @@ const PolicyBuilder = () => {
     const [isOtEnabled, setIsOtEnabled] = useState(false);
     const [shiftForm, setShiftForm] = useState({
         name: '', start: '09:00', end: '18:00', grace: 0,
-        otThreshold: 9.0, reqEntrySelfie: true, reqEntryGeofence: true,
-        reqExitSelfie: false, reqExitGeofence: false
+        otThreshold: 9.0, otBuffer: 0.5, correctionDeadline: 2,
+        reqEntrySelfie: true, reqEntryGeofence: true,
+        reqExitSelfie: false, reqExitGeofence: false,
+        workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        weekOffRules: [],
+        halfDayRules: []
     });
+    const [activeRuleDay, setActiveRuleDay] = useState(null);
+    const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
     // Delete Confirmation State
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -62,6 +69,8 @@ const PolicyBuilder = () => {
                     grace: s.grace_period_mins,
                     overtime: !!s.is_overtime_enabled,
                     otThreshold: parseFloat(s.overtime_threshold_hours),
+                    otBuffer: parseFloat(s.overtime_buffer_hours ?? s.policy_rules?.overtime?.buffer ?? 0.5),
+                    correctionDeadline: parseInt(s.policy_rules?.correction_deadline ?? 2),
                     policy_rules: s.policy_rules || {}
                 }));
                 setShifts(mapped);
@@ -104,18 +113,32 @@ const PolicyBuilder = () => {
     useEffect(() => {
         if (showShiftForm && editingShift) {
             const rules = editingShift.policy_rules || {};
+            const parsed = parsePolicy(rules.week_off_policy || rules.week_off || []);
             setShiftForm({
                 name: editingShift.name, start: editingShift.start, end: editingShift.end,
                 grace: editingShift.grace, otThreshold: editingShift.otThreshold || 8.0,
+                otBuffer: editingShift.otBuffer ?? 0.5,
+                correctionDeadline: editingShift.correctionDeadline ?? 2,
                 reqEntrySelfie: !!rules.entry_requirements?.selfie,
                 reqEntryGeofence: !!rules.entry_requirements?.geofence,
                 reqExitSelfie: !!rules.exit_requirements?.selfie,
                 reqExitGeofence: !!rules.exit_requirements?.geofence,
+                workingDays: parsed.workingDays.length > 0 ? parsed.workingDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                weekOffRules: parsed.weekOffRules,
+                halfDayRules: parsed.halfDayRules
             });
             setIsOtEnabled(!!editingShift.overtime);
+            setActiveRuleDay(null);
+            setShowAdvancedSettings(false);
         } else if (showShiftForm && !editingShift) {
-            setShiftForm({ name: '', start: '09:00', end: '18:00', grace: 0, otThreshold: 9.0, reqEntrySelfie: true, reqEntryGeofence: true, reqExitSelfie: false, reqExitGeofence: false });
+            setShiftForm({ 
+                name: '', start: '09:00', end: '18:00', grace: 0, otThreshold: 9.0, otBuffer: 0.5, correctionDeadline: 2,
+                reqEntrySelfie: true, reqEntryGeofence: true, reqExitSelfie: false, reqExitGeofence: false, 
+                workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], weekOffRules: [], halfDayRules: [] 
+            });
             setIsOtEnabled(false);
+            setActiveRuleDay(null);
+            setShowAdvancedSettings(false);
         }
     }, [showShiftForm, editingShift]);
 
@@ -123,14 +146,20 @@ const PolicyBuilder = () => {
     const handleSaveShift = async (e) => {
         e.preventDefault();
         const baseRules = editingShift ? (editingShift.policy_rules || {}) : {};
+        const week_off_policy = buildPolicy(shiftForm.workingDays, shiftForm.weekOffRules, shiftForm.halfDayRules);
         const policies = {
             ...baseRules,
             shift_timing: { start_time: shiftForm.start, end_time: shiftForm.end },
             grace_period: { minutes: parseInt(shiftForm.grace) || 0 },
-            overtime: { enabled: isOtEnabled, threshold: parseFloat(shiftForm.otThreshold) || 0 },
+            overtime: { enabled: isOtEnabled, threshold: parseFloat(shiftForm.otThreshold) || 0, buffer: parseFloat(shiftForm.otBuffer) || 0 },
+            correction_deadline: parseInt(shiftForm.correctionDeadline) || 2,
             entry_requirements: { selfie: shiftForm.reqEntrySelfie, geofence: shiftForm.reqEntryGeofence },
-            exit_requirements: { selfie: shiftForm.reqExitSelfie, geofence: shiftForm.reqExitGeofence }
+            exit_requirements: { selfie: shiftForm.reqExitSelfie, geofence: shiftForm.reqExitGeofence },
+            week_off_policy
         };
+        // Cleanup old fields if updating an old shift
+        delete policies.working_days;
+        delete policies.alternate_saturdays;
         try {
             if (editingShift) {
                 await adminService.updateShift(editingShift.id, { shift_name: shiftForm.name, policy_rules: policies });
@@ -202,6 +231,44 @@ const PolicyBuilder = () => {
             <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
         </label>
     );
+
+    const toggleRule = (day, ruleType, week) => {
+        setShiftForm(prev => {
+            const rules = [...prev[ruleType]];
+            const existingIdx = rules.findIndex(r => r.day === day);
+            
+            if (existingIdx >= 0) {
+                const rule = rules[existingIdx];
+                const weeks = rule.weeks.includes(week) 
+                    ? rule.weeks.filter(w => w !== week)
+                    : [...rule.weeks, week];
+                
+                if (weeks.length === 0) rules.splice(existingIdx, 1);
+                else rules[existingIdx] = { ...rule, weeks };
+            } else {
+                rules.push({ day, weeks: [week] });
+            }
+            return { ...prev, [ruleType]: rules };
+        });
+    };
+
+    const setRuleTiming = (day, ruleType, field, value) => {
+        setShiftForm(prev => {
+            const rules = [...prev[ruleType]];
+            const existingIdx = rules.findIndex(r => r.day === day);
+            if (existingIdx >= 0) {
+                const rule = rules[existingIdx];
+                rules[existingIdx] = {
+                    ...rule,
+                    timing: {
+                        ...(rule.timing || { start_time: prev.start, end_time: prev.end }),
+                        [field]: value
+                    }
+                };
+            }
+            return { ...prev, [ruleType]: rules };
+        });
+    };
 
     return (
         <DashboardLayout title="Shift Management" noPadding={true}>
@@ -327,54 +394,213 @@ const PolicyBuilder = () => {
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Grace Period</label>
-                                        <div className="relative">
-                                            <input type="number" required min="0" value={shiftForm.grace}
-                                                onChange={e => setShiftForm({ ...shiftForm, grace: e.target.value })}
-                                                className="w-full pl-3 pr-14 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">minutes</span>
+                                    {/* Working Days (Moved to basic section) */}
+                                    <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border space-y-4">
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text mb-3 flex items-center gap-2">
+                                                <Calendar size={15} className="text-slate-400" /> Working Days
+                                            </h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                                                    const isSelected = shiftForm.workingDays.includes(day);
+                                                    return (
+                                                        <div key={day} className="flex rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 transition-colors">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setShiftForm(prev => {
+                                                                        const newDays = isSelected 
+                                                                            ? prev.workingDays.filter(d => d !== day)
+                                                                            : [...prev.workingDays, day];
+                                                                        // Clean up rules for this day if we disable it
+                                                                        const newWo = isSelected ? prev.weekOffRules.filter(r => r.day !== day) : prev.weekOffRules;
+                                                                        const newHd = isSelected ? prev.halfDayRules.filter(r => r.day !== day) : prev.halfDayRules;
+                                                                        return { ...prev, workingDays: newDays, weekOffRules: newWo, halfDayRules: newHd };
+                                                                    });
+                                                                }}
+                                                                className={`px-4 py-2 text-sm font-medium transition-colors ${isSelected ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                                            >
+                                                                {day}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 mt-1">Time allowed after shift start before marking as "Late".</p>
                                     </div>
 
-                                    <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border space-y-1 divide-y divide-slate-100 dark:divide-slate-700/50">
-                                        <Toggle
-                                            label="Overtime Calculation" subLabel="Enable automatic OT tracking"
-                                            checked={isOtEnabled} onChange={e => setIsOtEnabled(e.target.checked)}
-                                        />
-                                        {isOtEnabled && (
-                                            <div className="pt-3">
-                                                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Minimum Hours for OT</label>
-                                                <div className="relative">
-                                                    <input type="number" step="0.1" value={shiftForm.otThreshold}
-                                                        onChange={e => setShiftForm({ ...shiftForm, otThreshold: e.target.value })}
-                                                        className="w-full pl-3 pr-8 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                    />
-                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">hr</span>
+                                    {/* Advanced Settings Toggle */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                                        className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border transition-colors"
+                                    >
+                                        <Settings size={16} />
+                                        {showAdvancedSettings ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+                                        {showAdvancedSettings ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </button>
+
+                                    {/* Advanced Settings Section */}
+                                    {showAdvancedSettings && (
+                                        <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Grace Period</label>
+                                                    <div className="relative">
+                                                        <input type="number" required min="0" value={shiftForm.grace}
+                                                            onChange={e => setShiftForm({ ...shiftForm, grace: e.target.value })}
+                                                            className="w-full pl-3 pr-14 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        />
+                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">minutes</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 mt-1">Allowed lateness buffer.</p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Corr. Deadline</label>
+                                                    <div className="relative">
+                                                        <input type="number" required min="1" value={shiftForm.correctionDeadline}
+                                                            onChange={e => setShiftForm({ ...shiftForm, correctionDeadline: e.target.value })}
+                                                            className="w-full pl-3 pr-10 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        />
+                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">days</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 mt-1">Days to correct missed punches.</p>
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
 
-                                    <div className="p-4 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl">
-                                        <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text mb-3 flex items-center gap-2">
-                                            <MapPin size={15} className="text-slate-400" /> Attendance Validation
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-x-6">
-                                            <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-In</p>
-                                                <Checkbox label="GPS Required" checked={shiftForm.reqEntryGeofence} onChange={() => setShiftForm(p => ({ ...p, reqEntryGeofence: !p.reqEntryGeofence }))} />
-                                                <Checkbox label="Selfie Required" checked={shiftForm.reqEntrySelfie} onChange={() => setShiftForm(p => ({ ...p, reqEntrySelfie: !p.reqEntrySelfie }))} />
+                                            <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border space-y-1 divide-y divide-slate-100 dark:divide-slate-700/50">
+                                                <Toggle
+                                                    label="Overtime Calculation" subLabel="Enable automatic OT tracking"
+                                                    checked={isOtEnabled} onChange={e => setIsOtEnabled(e.target.checked)}
+                                                />
+                                                {isOtEnabled && (
+                                                    <div className="pt-3 grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">OT Threshold</label>
+                                                            <div className="relative">
+                                                                <input type="number" step="0.1" value={shiftForm.otThreshold}
+                                                                    onChange={e => setShiftForm({ ...shiftForm, otThreshold: e.target.value })}
+                                                                    className="w-full pl-3 pr-8 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">hr</span>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Buffer Time</label>
+                                                            <div className="relative">
+                                                                <input type="number" step="0.1" value={shiftForm.otBuffer}
+                                                                    onChange={e => setShiftForm({ ...shiftForm, otBuffer: e.target.value })}
+                                                                    className="w-full pl-3 pr-10 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">hr</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</p>
-                                                <Checkbox label="GPS Required" checked={shiftForm.reqExitGeofence} onChange={() => setShiftForm(p => ({ ...p, reqExitGeofence: !p.reqExitGeofence }))} />
-                                                <Checkbox label="Selfie Required" checked={shiftForm.reqExitSelfie} onChange={() => setShiftForm(p => ({ ...p, reqExitSelfie: !p.reqExitSelfie }))} />
+
+                                            {/* Advanced Week Offs & Half Days */}
+                                            {shiftForm.workingDays.length < 7 && (
+                                                <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border space-y-4">
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-amber-600 dark:text-amber-500 mb-4 flex items-center gap-2">
+                                                            <AlertTriangle size={15} /> Alternate Full Days Off
+                                                        </h4>
+                                                        <div className="space-y-3">
+                                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                                                                .filter(day => !shiftForm.workingDays.includes(day))
+                                                                .map(day => (
+                                                                <div key={day} className="flex items-center gap-4">
+                                                                    <div className="w-16 text-xs font-bold text-slate-500 dark:text-slate-400">{day}</div>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {[1, 2, 3, 4, 5].map(week => {
+                                                                            const rule = shiftForm.weekOffRules.find(r => r.day === day) || { weeks: [] };
+                                                                            const isOff = rule.weeks.includes(week);
+                                                                            return (
+                                                                                <button
+                                                                                    key={week} type="button"
+                                                                                    onClick={() => toggleRule(day, 'weekOffRules', week)}
+                                                                                    className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${isOff ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-900/50 dark:text-amber-400' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'}`}
+                                                                                >
+                                                                                    {week}{week === 1 ? 'st' : week === 2 ? 'nd' : week === 3 ? 'rd' : 'th'}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="pt-5 border-t border-slate-200 dark:border-slate-700/50">
+                                                        <h4 className="text-sm font-semibold text-blue-600 dark:text-blue-500 mb-4 flex items-center gap-2">
+                                                            <Clock size={15} /> Half Days
+                                                        </h4>
+                                                        <div className="space-y-5">
+                                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                                                                const rule = shiftForm.halfDayRules.find(r => r.day === day) || { weeks: [] };
+                                                                const hasHalfDays = rule.weeks.length > 0;
+                                                                return (
+                                                                    <div key={day} className="flex flex-col gap-2">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="w-16 text-xs font-bold text-slate-500 dark:text-slate-400">{day}</div>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {[1, 2, 3, 4, 5].map(week => {
+                                                                                    const isHalf = rule.weeks.includes(week);
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={week} type="button"
+                                                                                            onClick={() => toggleRule(day, 'halfDayRules', week)}
+                                                                                            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${isHalf ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-900/50 dark:text-blue-400' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'}`}
+                                                                                        >
+                                                                                            {week}{week === 1 ? 'st' : week === 2 ? 'nd' : week === 3 ? 'rd' : 'th'}
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </div>
+                                                                        
+                                                                        {hasHalfDays && (
+                                                                            <div className="ml-20 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg p-3 flex gap-3 animate-in fade-in zoom-in-95">
+                                                                                <div className="flex-1">
+                                                                                    <label className="block text-[10px] font-semibold text-blue-700 dark:text-blue-400 mb-1">Half Day Start</label>
+                                                                                    <input type="time" value={rule.timing?.start_time || shiftForm.start || "09:00"} onChange={e => setRuleTiming(day, 'halfDayRules', 'start_time', e.target.value)}
+                                                                                           className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 text-slate-700 dark:text-slate-300 rounded focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" />
+                                                                                </div>
+                                                                                <div className="flex-1">
+                                                                                    <label className="block text-[10px] font-semibold text-blue-700 dark:text-blue-400 mb-1">Half Day End</label>
+                                                                                    <input type="time" value={rule.timing?.end_time || shiftForm.end || "13:00"} onChange={e => setRuleTiming(day, 'halfDayRules', 'end_time', e.target.value)}
+                                                                                           className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 text-slate-700 dark:text-slate-300 rounded focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" />
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="p-4 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl">
+                                                <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text mb-3 flex items-center gap-2">
+                                                    <MapPin size={15} className="text-slate-400" /> Attendance Validation
+                                                </h4>
+                                                <div className="grid grid-cols-2 gap-x-6">
+                                                    <div>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-In</p>
+                                                        <Checkbox label="GPS Required" checked={shiftForm.reqEntryGeofence} onChange={() => setShiftForm(p => ({ ...p, reqEntryGeofence: !p.reqEntryGeofence }))} />
+                                                        <Checkbox label="Selfie Required" checked={shiftForm.reqEntrySelfie} onChange={() => setShiftForm(p => ({ ...p, reqEntrySelfie: !p.reqEntrySelfie }))} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</p>
+                                                        <Checkbox label="GPS Required" checked={shiftForm.reqExitGeofence} onChange={() => setShiftForm(p => ({ ...p, reqExitGeofence: !p.reqExitGeofence }))} />
+                                                        <Checkbox label="Selfie Required" checked={shiftForm.reqExitSelfie} onChange={() => setShiftForm(p => ({ ...p, reqExitSelfie: !p.reqExitSelfie }))} />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     <div className="flex gap-3 pt-2">
                                         <button type="button" onClick={() => { setShowShiftForm(false); setEditingShift(null); }}
@@ -415,17 +641,79 @@ const PolicyBuilder = () => {
 
                                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                     {/* Summary Cards */}
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-4 gap-4">
                                         {[
                                             { label: 'Start Time', value: selectedShift.start, icon: <ArrowRight size={14} className="text-indigo-500" />, bg: 'indigo' },
                                             { label: 'Grace Period', value: `${selectedShift.grace || 0} min`, icon: <AlertTriangle size={14} className="text-amber-500" />, bg: 'amber' },
+                                            { label: 'Corr. Window', value: `${selectedShift.correctionDeadline || 2}d`, icon: <FileClock size={14} className="text-rose-500" />, bg: 'rose' },
                                             { label: 'Duration', value: calculateDuration(selectedShift.start, selectedShift.end), icon: <Clock size={14} className="text-teal-500" />, bg: 'teal' },
                                         ].map(card => (
                                             <div key={card.label} className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border/50 rounded-xl p-4">
-                                                <div className="flex items-center gap-1.5 mb-1">{card.icon}<p className="text-xs text-slate-500">{card.label}</p></div>
+                                                <div className="flex items-center gap-1.5 mb-1">{card.icon}<p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">{card.label}</p></div>
                                                 <p className="text-base font-bold text-slate-800 dark:text-github-dark-text font-mono">{card.value}</p>
                                             </div>
                                         ))}
+                                    </div>
+
+                                    {/* Work Days Display */}
+                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border/50 rounded-xl p-4 flex gap-6">
+                                        {(() => {
+                                            const rules = selectedShift.policy_rules || {};
+                                            const parsedRules = parsePolicy(rules.week_off_policy || rules.week_off || []);
+                                            const activeDays = parsedRules.workingDays.length > 0 ? parsedRules.workingDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                                            
+                                            return (
+                                                <div className="w-full">
+                                                    <div className="flex items-center gap-1.5 mb-3"><Calendar size={14} className="text-blue-500" /><p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Working Days</p></div>
+                                                    <div className="flex flex-wrap gap-1.5 mb-4">
+                                                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                                                            const isWork = activeDays.includes(day);
+                                                            return (
+                                                                <span key={day} className={`text-[10px] px-2 py-0.5 rounded ${isWork ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 line-through'}`}>
+                                                                    {day}
+                                                                </span>
+                                                            )
+                                                        })}
+                                                    </div>
+
+                                                    {(parsedRules.weekOffRules.length > 0 || parsedRules.halfDayRules.length > 0) && (
+                                                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700/50 space-y-3">
+                                                            {parsedRules.weekOffRules.length > 0 && (
+                                                                <div>
+                                                                    <p className="text-[10px] font-bold text-amber-600 dark:text-amber-500 mb-1.5 flex items-center gap-1"><AlertTriangle size={10} /> ALTERNATE FULL DAYS OFF</p>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {parsedRules.weekOffRules.map((rule, idx) => (
+                                                                            <span key={idx} className="text-[10px] px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-900/50">
+                                                                                {rule.day} ({rule.weeks.map(w => `${w}${w === 1 ? 'st' : w === 2 ? 'nd' : w === 3 ? 'rd' : 'th'}`).join(', ')})
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {parsedRules.halfDayRules.length > 0 && (
+                                                                <div>
+                                                                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-500 mb-1.5 flex items-center gap-1"><Clock size={10} /> HALF DAYS</p>
+                                                                    <div className="flex flex-col gap-2">
+                                                                        {parsedRules.halfDayRules.map((rule, idx) => (
+                                                                            <div key={idx} className="flex items-center gap-2">
+                                                                                <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-900/50">
+                                                                                    {rule.day} ({rule.weeks.map(w => `${w}${w === 1 ? 'st' : w === 2 ? 'nd' : w === 3 ? 'rd' : 'th'}`).join(', ')})
+                                                                                </span>
+                                                                                {rule.timing && rule.timing.start_time && (
+                                                                                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                                                                                        {rule.timing.start_time.substring(0,5)} → {rule.timing.end_time.substring(0,5)}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Policy Rules */}
@@ -466,7 +754,12 @@ const PolicyBuilder = () => {
                                         {selectedShift.overtime && (
                                             <div className="pt-3 border-t border-slate-200 dark:border-github-dark-border/50 flex items-center gap-2">
                                                 <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600"><Zap size={13} /></div>
-                                                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Overtime enabled after {selectedShift.otThreshold}h</span>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Overtime enabled after {selectedShift.otThreshold}h</span>
+                                                    {selectedShift.otBuffer > 0 && (
+                                                        <span className="text-[10px] text-slate-500">Buffer grace period: {selectedShift.otBuffer}h ({selectedShift.otBuffer * 60}m)</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -573,4 +866,4 @@ const PolicyBuilder = () => {
     );
 };
 
-export default PolicyBuilder;
+export default ShiftManagement;

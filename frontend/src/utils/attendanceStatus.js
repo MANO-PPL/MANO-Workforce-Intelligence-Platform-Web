@@ -10,6 +10,8 @@ export const ATTENDANCE_STATUS = {
   ABSENT: 'ABSENT',
   OVERTIME: 'OVERTIME',
   MISSED_PUNCH: 'MISSED_PUNCH',
+  WEEK_OFF: 'WEEK_OFF',
+  HOLIDAY: 'HOLIDAY',
 };
 
 /**
@@ -60,6 +62,20 @@ export function getStatusStyle(status) {
         text:  'text-rose-700 dark:text-rose-400',
         dot:   'bg-rose-500',
         label: 'MISSED PUNCH',
+      };
+    case 'WEEK_OFF':
+      return {
+        bg:    'bg-slate-200 dark:bg-slate-800',
+        text:  'text-slate-600 dark:text-slate-400',
+        dot:   'bg-slate-400',
+        label: 'WEEK OFF',
+      };
+    case 'HOLIDAY':
+      return {
+        bg:    'bg-sky-100 dark:bg-sky-900/30',
+        text:  'text-sky-700 dark:text-sky-400',
+        dot:   'bg-sky-500',
+        label: 'HOLIDAY',
       };
     default:
       return {

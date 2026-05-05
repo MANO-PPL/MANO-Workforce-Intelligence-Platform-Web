@@ -19,6 +19,7 @@ export async function getShiftsForOrg(org_id) {
             grace_period_mins: rules.grace_period?.minutes || 0,
             is_overtime_enabled: rules.overtime?.enabled ? 1 : 0,
             overtime_threshold_hours: rules.overtime?.threshold || 8.0,
+            overtime_buffer_hours: rules.overtime?.buffer ?? 0.5,
             policy_rules: rules
         };
     });
@@ -41,7 +42,8 @@ export async function createShift({ org_id, shift_name, start_time, end_time, gr
         },
         overtime: {
             enabled: is_overtime_enabled ? true : false,
-            threshold: Number(overtime_threshold_hours) || 8
+            threshold: Number(overtime_threshold_hours) || 8,
+            buffer: rules.overtime?.buffer ?? 0.5
         },
         entry_requirements: rules.entry_requirements || { selfie: true, geofence: true }
     };

@@ -420,3 +420,34 @@ export const exportRecords = catchAsync(async (req, res) => {
   await workbook.xlsx.write(res);
   res.end();
 });
+
+/**
+ * GET /attendance/my-shift
+ * Fetch the current logged-in user's shift and policy rules
+ */
+export async function getMyShift(req, res) {
+  try {
+    const { user_id } = req.user;
+    const shift = await AttendanceService.getUserShift(user_id);
+    
+    if (!shift) {
+      return res.status(404).json({ message: "No shift assigned to this user" });
+    }
+
+    const rules = ShiftManagementService.getShiftRules(shift);
+    
+    res.json({
+      ok: true,
+      shift: {
+        id: shift.shift_id,
+        name: shift.shift_name,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        rules
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching my shift:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}

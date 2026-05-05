@@ -15,7 +15,9 @@ import {
     CheckCircle2,
     Settings2,
     Calendar,
-    ChevronRight
+    ChevronRight,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react';
 
 const ShiftManagement = () => {
@@ -84,10 +86,14 @@ const ShiftManagement = () => {
     const [newEndTime, setNewEndTime] = useState('18:00');
     const [newGracePeriod, setNewGracePeriod] = useState('0');
     const [newOvertime, setNewOvertime] = useState(false);
+    const [newOtThreshold, setNewOtThreshold] = useState('8.0');
+    const [newOtBuffer, setNewOtBuffer] = useState('0.5');
+    const [newCorrectionDeadline, setNewCorrectionDeadline] = useState('2');
     const [newValCheckInGps, setNewValCheckInGps] = useState(true);
     const [newValCheckInSelfie, setNewValCheckInSelfie] = useState(true);
     const [newValCheckOutGps, setNewValCheckOutGps] = useState(false);
     const [newValCheckOutSelfie, setNewValCheckOutSelfie] = useState(false);
+    const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
     const handleOpenViewModal = (shift) => {
         setSelectedShift(shift);
@@ -101,10 +107,14 @@ const ShiftManagement = () => {
         setNewEndTime('18:00');
         setNewGracePeriod('0');
         setNewOvertime(false);
+        setNewOtThreshold('8.0');
+        setNewOtBuffer('0.5');
+        setNewCorrectionDeadline('2');
         setNewValCheckInGps(true);
         setNewValCheckInSelfie(true);
         setNewValCheckOutGps(false);
         setNewValCheckOutSelfie(false);
+        setShowAdvancedSettings(false);
         setIsAddModalOpen(true);
     };
 
@@ -116,11 +126,14 @@ const ShiftManagement = () => {
         setNewEndTime(selectedShift.endTime);
         setNewGracePeriod(selectedShift.gracePeriod.toString());
         setNewOvertime(selectedShift.overtime);
+        setNewOtThreshold((selectedShift.otThreshold || 8).toString());
+        setNewOtBuffer((selectedShift.otBuffer || 0.5).toString());
+        setNewCorrectionDeadline((selectedShift.correctionDeadline || 2).toString());
         setNewValCheckInGps(selectedShift.validation?.checkInGPS || false);
         setNewValCheckInSelfie(selectedShift.validation?.checkInSelfie || false);
         setNewValCheckOutGps(selectedShift.validation?.checkOutGPS || false);
         setNewValCheckOutSelfie(selectedShift.validation?.checkOutSelfie || false);
-        
+        setShowAdvancedSettings(false);
         setIsViewModalOpen(false);
         setIsAddModalOpen(true);
     };
@@ -134,6 +147,9 @@ const ShiftManagement = () => {
                 endTime: newEndTime,
                 gracePeriod: parseInt(newGracePeriod) || 0,
                 overtime: newOvertime,
+                otThreshold: parseFloat(newOtThreshold) || 8.0,
+                otBuffer: parseFloat(newOtBuffer) || 0.5,
+                correctionDeadline: parseInt(newCorrectionDeadline) || 2,
                 validation: {
                     checkInGPS: newValCheckInGps,
                     checkInSelfie: newValCheckInSelfie,
@@ -150,6 +166,9 @@ const ShiftManagement = () => {
                 endTime: newEndTime,
                 gracePeriod: parseInt(newGracePeriod) || 0,
                 overtime: newOvertime,
+                otThreshold: parseFloat(newOtThreshold) || 8.0,
+                otBuffer: parseFloat(newOtBuffer) || 0.5,
+                correctionDeadline: parseInt(newCorrectionDeadline) || 2,
                 color: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400',
                 validation: {
                     checkInGPS: newValCheckInGps,
@@ -305,15 +324,27 @@ const ShiftManagement = () => {
                                                 <Hourglass size={16} className="text-slate-400" />
                                                 <span className="text-sm font-semibold text-slate-600 dark:text-github-dark-muted">Grace Period</span>
                                             </div>
-                                            <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text bg-white dark:bg-github-dark-subtle px-3 py-1 rounded-full shadow-sm border border-slate-100 dark:border-github-dark-border">{selectedShift.gracePeriod} Minutes</span>
+                                            <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text bg-white dark:bg-github-dark-subtle px-3 py-1 rounded-full shadow-sm border border-slate-100 dark:border-github-dark-border">{selectedShift.gracePeriod}m</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-3">
+                                            <div className="flex items-center gap-2">
+                                                <AlertTriangle size={16} className="text-rose-500" />
+                                                <span className="text-sm font-semibold text-slate-600 dark:text-github-dark-muted">Corr. Deadline</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text bg-white dark:bg-github-dark-subtle px-3 py-1 rounded-full shadow-sm border border-slate-100 dark:border-github-dark-border">{selectedShift.correctionDeadline || 2} Days</span>
                                         </div>
                                         <div className="flex justify-between items-center pt-3">
                                             <div className="flex items-center gap-2">
                                                 <Zap size={16} className="text-indigo-500" />
                                                 <span className="text-sm font-semibold text-slate-600 dark:text-github-dark-muted">Overtime Tracking</span>
                                             </div>
-                                            <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${selectedShift.overtime ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-github-dark-muted'}`}>
-                                                {selectedShift.overtime ? 'Active' : 'Off'}
+                                            <div className="flex flex-col items-end">
+                                                <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${selectedShift.overtime ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-github-dark-muted'}`}>
+                                                    {selectedShift.overtime ? 'Active' : 'Off'}
+                                                </div>
+                                                {selectedShift.overtime && (
+                                                    <p className="text-[10px] text-slate-400 mt-1 font-medium italic">Threshold: {selectedShift.otThreshold}h | Buffer: {selectedShift.otBuffer}h</p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -434,92 +465,157 @@ const ShiftManagement = () => {
                                         </div>
                                     </div>
 
-                                    {/* Grace Period Slider-style Input */}
-                                    <div className="space-y-1.5">
-                                        <div className="flex justify-between items-center mb-1 px-1">
-                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Grace Period</label>
-                                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{newGracePeriod} mins</span>
-                                        </div>
-                                        <div className="relative group">
-                                            <Hourglass size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input 
-                                                type="number" 
-                                                value={newGracePeriod}
-                                                onChange={(e) => setNewGracePeriod(e.target.value)}
-                                                className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-16 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                            />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Minutes</span>
-                                        </div>
-                                    </div>
+                                    {/* Advanced Settings Toggle */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                                        className="w-full py-4 flex items-center justify-center gap-2 text-sm font-black text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-github-dark-subtle/50 hover:bg-slate-100 dark:hover:bg-github-dark-subtle rounded-2xl border border-slate-200 dark:border-github-dark-border transition-all"
+                                    >
+                                        <Settings2 size={18} />
+                                        {showAdvancedSettings ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+                                        {showAdvancedSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                                    </button>
 
-                                    {/* Toggles */}
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl p-4 border border-slate-100 dark:border-github-dark-border flex justify-between items-center group active:bg-slate-100 dark:active:bg-github-dark-subtle transition-colors" onClick={() => setNewOvertime(!newOvertime)}>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-xl transition-colors ${newOvertime ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'bg-white dark:bg-slate-800 text-slate-400'}`}>
-                                                <Zap size={18} fill={newOvertime ? 'currentColor' : 'none'} />
-                                            </div>
-                                            <div>
-                                                <p className="text-[13px] font-bold text-slate-800 dark:text-github-dark-text">Overtime Tracking</p>
-                                                <p className="text-[10px] text-slate-500 font-medium">Automate OT calculations</p>
-                                            </div>
-                                        </div>
-                                        <div className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 ${newOvertime ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                                            <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${newOvertime ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                                        </div>
-                                    </div>
-
-                                    {/* Validation Section */}
-                                    <div className="space-y-4 pt-2">
-                                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Validation Requirements</p>
-                                        
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {/* Check-In Column */}
-                                            <div className="space-y-3">
-                                                <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Check-In
-                                                </p>
-                                                <div className="space-y-2">
-                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                            {newValCheckInGps && <CheckCircle2 size={14} className="text-white" />}
-                                                        </div>
-                                                        <input type="checkbox" className="hidden" checked={newValCheckInGps} onChange={() => setNewValCheckInGps(!newValCheckInGps)} />
-                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
-                                                    </label>
-                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                            {newValCheckInSelfie && <CheckCircle2 size={14} className="text-white" />}
-                                                        </div>
-                                                        <input type="checkbox" className="hidden" checked={newValCheckInSelfie} onChange={() => setNewValCheckInSelfie(!newValCheckInSelfie)} />
-                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
-                                                    </label>
+                                    {/* Advanced Settings Section */}
+                                    {showAdvancedSettings && (
+                                        <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                                            {/* Grace Period & Correction Deadline Grid */}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between items-center mb-1 px-1">
+                                                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Late Grace</label>
+                                                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{newGracePeriod}m</span>
+                                                    </div>
+                                                    <div className="relative group">
+                                                        <Hourglass size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                        <input 
+                                                            type="number" 
+                                                            value={newGracePeriod}
+                                                            onChange={(e) => setNewGracePeriod(e.target.value)}
+                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between items-center mb-1 px-1">
+                                                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Corr. Deadline</label>
+                                                        <span className="text-sm font-black text-rose-600 dark:text-rose-400">{newCorrectionDeadline}d</span>
+                                                    </div>
+                                                    <div className="relative group">
+                                                        <AlertTriangle size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                        <input 
+                                                            type="number" 
+                                                            value={newCorrectionDeadline}
+                                                            onChange={(e) => setNewCorrectionDeadline(e.target.value)}
+                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            {/* Check-Out Column */}
-                                            <div className="space-y-3">
-                                                <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Check-Out
-                                                </p>
-                                                <div className="space-y-2">
-                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                            {newValCheckOutGps && <CheckCircle2 size={14} className="text-white" />}
+                                            {/* Toggles */}
+                                            <div className="space-y-4">
+                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl p-4 border border-slate-100 dark:border-github-dark-border flex justify-between items-center group active:bg-slate-100 dark:active:bg-github-dark-subtle transition-colors" onClick={() => setNewOvertime(!newOvertime)}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`p-2 rounded-xl transition-colors ${newOvertime ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'bg-white dark:bg-slate-800 text-slate-400'}`}>
+                                                            <Zap size={18} fill={newOvertime ? 'currentColor' : 'none'} />
                                                         </div>
-                                                        <input type="checkbox" className="hidden" checked={newValCheckOutGps} onChange={() => setNewValCheckOutGps(!newValCheckOutGps)} />
-                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
-                                                    </label>
-                                                    <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                            {newValCheckOutSelfie && <CheckCircle2 size={14} className="text-white" />}
+                                                        <div>
+                                                            <p className="text-[13px] font-bold text-slate-800 dark:text-github-dark-text">Overtime Tracking</p>
+                                                            <p className="text-[10px] text-slate-500 font-medium">Automate OT calculations</p>
                                                         </div>
-                                                        <input type="checkbox" className="hidden" checked={newValCheckOutSelfie} onChange={() => setNewValCheckOutSelfie(!newValCheckOutSelfie)} />
-                                                        <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
-                                                    </label>
+                                                    </div>
+                                                    <div className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 ${newOvertime ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${newOvertime ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                                    </div>
+                                                </div>
+
+                                                {newOvertime && (
+                                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Threshold</label>
+                                                            <div className="relative group">
+                                                                <Zap size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                                <input 
+                                                                    type="number" step="0.1"
+                                                                    value={newOtThreshold}
+                                                                    onChange={(e) => setNewOtThreshold(e.target.value)}
+                                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-10 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                                />
+                                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">Hrs</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Buffer</label>
+                                                            <div className="relative group">
+                                                                <Hourglass size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                                <input 
+                                                                    type="number" step="0.1"
+                                                                    value={newOtBuffer}
+                                                                    onChange={(e) => setNewOtBuffer(e.target.value)}
+                                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-10 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                                />
+                                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">Hrs</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Validation Section */}
+                                            <div className="space-y-4 pt-2">
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Validation Requirements</p>
+                                                
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    {/* Check-In Column */}
+                                                    <div className="space-y-3">
+                                                        <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Check-In
+                                                        </p>
+                                                        <div className="space-y-2">
+                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                                    {newValCheckInGps && <CheckCircle2 size={14} className="text-white" />}
+                                                                </div>
+                                                                <input type="checkbox" className="hidden" checked={newValCheckInGps} onChange={() => setNewValCheckInGps(!newValCheckInGps)} />
+                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
+                                                            </label>
+                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                                    {newValCheckInSelfie && <CheckCircle2 size={14} className="text-white" />}
+                                                                </div>
+                                                                <input type="checkbox" className="hidden" checked={newValCheckInSelfie} onChange={() => setNewValCheckInSelfie(!newValCheckInSelfie)} />
+                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Check-Out Column */}
+                                                    <div className="space-y-3">
+                                                        <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Check-Out
+                                                        </p>
+                                                        <div className="space-y-2">
+                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                                    {newValCheckOutGps && <CheckCircle2 size={14} className="text-white" />}
+                                                                </div>
+                                                                <input type="checkbox" className="hidden" checked={newValCheckOutGps} onChange={() => setNewValCheckOutGps(!newValCheckOutGps)} />
+                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
+                                                            </label>
+                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
+                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
+                                                                    {newValCheckOutSelfie && <CheckCircle2 size={14} className="text-white" />}
+                                                                </div>
+                                                                <input type="checkbox" className="hidden" checked={newValCheckOutSelfie} onChange={() => setNewValCheckOutSelfie(!newValCheckOutSelfie)} />
+                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 <div className="mt-10 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
