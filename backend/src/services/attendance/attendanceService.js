@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { attendanceDB } from "../../config/database.js";
 import * as S3Service from "../s3/s3Service.js";
 import EventBus from "../../utils/EventBus.js";
-import { PolicyService } from "./policyEngine.js";
+import * as ShiftService from "./shiftManagementService.js";
 
 // ========== HELPER FUNCTIONS ==========
 
@@ -39,41 +39,41 @@ export async function processTimeIn(context) {
     user_agent
   } = context;
 
-  // 1. Check Existing Session
+  // 1. Check Existing Session (Find most recent open session)
   const openSession = await attendanceDB("attendance_records")
     .where({ user_id })
     .whereNull("time_out")
-    .whereRaw("time_in >= DATE_SUB(?, INTERVAL 12 HOUR)", [localTime])
+    .orderBy("time_in", "desc")
     .first();
 
   if (openSession) {
     return { ok: false, status: 400, message: "Already timed in. Please time out first." };
   }
 
-  // 2. Policy Context
-  const sessionContext = await PolicyService.buildSessionContext(user_id, localTime, "time_in");
+  // 2. Shift Context
+  const sessionContext = await ShiftService.buildSessionContext(user_id, localTime, "time_in");
   const shift = await getUserShift(user_id);
-  const rules = PolicyService.getRulesFromShift(shift);
+  const rules = ShiftService.getShiftRules(shift);
 
-  // 3. Modular Policy Checks
+  // 3. Modular Shift Checks
 
   // A. Geolocation Check
-  const geoCheck = await PolicyService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.entry_requirements);
+  const geoCheck = await ShiftService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.entry_requirements);
   if (!geoCheck.ok) {
-    return { ok: false, status: 400, message: "Policy Violation: " + geoCheck.error };
+    return { ok: false, status: 400, message: "Shift Policy Violation: " + geoCheck.error };
   }
 
   // B. Biometric Check
-  const bioCheck = PolicyService.checkBiometricCompliance(file, rules.entry_requirements);
+  const bioCheck = ShiftService.checkBiometricCompliance(file, rules.entry_requirements);
   if (!bioCheck.ok) {
-    return { ok: false, status: 400, message: "Policy Violation: " + bioCheck.error };
+    return { ok: false, status: 400, message: "Shift Policy Violation: " + bioCheck.error };
   }
 
-  // 4. Policy Execution (Late Calculation)
+  // 4. Late Calculation
   let lateCheck = { minutesLate: 0, isLate: false, gracePeriod: 0 };
 
   if (sessionContext.is_first_session) {
-    lateCheck = PolicyService.calculateLateArrival(localTime, rules);
+    lateCheck = ShiftService.calculateLateArrival(localTime, rules);
   }
 
   const minutesLate = lateCheck.minutesLate;
@@ -195,35 +195,35 @@ export async function processTimeOut(context) {
     user_agent
   } = context;
 
-  // 1. Check Existing Session
+  // 1. Check Existing Session (Find most recent open session - NO TIME LIMIT)
   const openSession = await attendanceDB("attendance_records")
     .where({ user_id })
     .whereNull("time_out")
-    .whereRaw("time_in >= DATE_SUB(?, INTERVAL 12 HOUR)", [localTime])
     .orderBy("time_in", "desc")
     .first();
 
   if (!openSession) {
+    console.warn(`[Attendance] No open session found for user ${user_id}.`);
     return { ok: false, status: 400, message: "No active time-in found to time out." };
   }
 
-  // 2. Policy Context
-  const sessionContext = await PolicyService.buildSessionContext(user_id, localTime, "time_out");
+  // 2. Shift Context
+  const sessionContext = await ShiftService.buildSessionContext(user_id, localTime, "time_out");
   const shift = await getUserShift(user_id);
-  const rules = PolicyService.getRulesFromShift(shift);
+  const rules = ShiftService.getShiftRules(shift);
 
-  // 3. Modular Policy Checks
+  // 3. Modular Shift Checks
 
   // A. Geolocation Check
-  const geoCheck = await PolicyService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.exit_requirements);
+  const geoCheck = await ShiftService.checkLocationCompliance(user_id, latitude, longitude, accuracy, rules.exit_requirements);
   if (!geoCheck.ok) {
-    return { ok: false, status: 400, message: "Policy Violation: " + geoCheck.error };
+    return { ok: false, status: 400, message: "Shift Policy Violation: " + geoCheck.error };
   }
 
   // B. Biometric Check
-  const bioCheck = PolicyService.checkBiometricCompliance(file, rules.exit_requirements);
+  const bioCheck = ShiftService.checkBiometricCompliance(file, rules.exit_requirements);
   if (!bioCheck.ok) {
-    return { ok: false, status: 400, message: "Policy Violation: " + bioCheck.error };
+    return { ok: false, status: 400, message: "Shift Policy Violation: " + bioCheck.error };
   }
 
   // 4. S3 Upload
@@ -247,11 +247,15 @@ export async function processTimeOut(context) {
   const timeIn = new Date(openSession.time_in);
   const timeOut = new Date(localTime);
   const durationMs = timeOut - timeIn;
-  const totalHours = durationMs / (1000 * 60 * 60);
+  const totalHours = parseFloat((durationMs / (1000 * 60 * 60)).toFixed(2));
   const minutesLate = openSession.late_minutes || 0;
 
-  // Status Evaluation
-  const status = openSession.status === "LATE_NOT_PUNCHED_OUT" ? "LATE" : "PRESENT";
+  // Status Evaluation (Re-fetch context to include the session we just calculated)
+  const currentSessionContext = await ShiftService.buildSessionContext(user_id, localTime, "time_out");
+  currentSessionContext.total_hours = totalHours; // Pass session duration to engine
+  currentSessionContext.minutes_late = minutesLate; // Ensure lateness is available
+  currentSessionContext.total_hours_today = parseFloat((currentSessionContext.total_hours_today + totalHours).toFixed(2)); // Update aggregate
+  const status = ShiftService.evaluateStatus(rules, currentSessionContext);
 
   // Metadata Update
   let metadata = {};
@@ -273,7 +277,7 @@ export async function processTimeOut(context) {
     timezone: context.timezone || "N/A",
     total_hours: parseFloat(totalHours.toFixed(2))
   };
-  metadata.session_context_at_checkout = sessionContext;
+  metadata.session_context_at_checkout = currentSessionContext;
 
   // DB Update
   await attendanceDB("attendance_records")
@@ -283,16 +287,17 @@ export async function processTimeOut(context) {
       time_out_lat: latitude,
       time_out_lng: longitude,
       time_out_address: address,
-      overtime_hours: totalHours > (rules.overtime?.threshold || 8) ? (totalHours - (rules.overtime?.threshold || 8)) : 0,
-      status: "PRESENT",
+      // Overtime requires OT tracking to be enabled AND a minimum 30-minute (0.5 hr) buffer
+      overtime_hours: (rules.overtime?.enabled !== false && totalHours >= ((rules.overtime?.threshold || 8) + 0.5)) ? parseFloat((totalHours - (rules.overtime?.threshold || 8)).toFixed(2)) : 0,
+      status: status,
       metadata: JSON.stringify(metadata),
       updated_at: attendanceDB.fn.now(),
     });
 
-  // Daily Sync
+  // Daily Sync (Use session date, not current clock date, to handle overnight shifts)
   try {
-    const dateStrSync = localTime.split('T')[0];
-    await syncDailyAttendance(user_id, dateStrSync, { status });
+    const sessionDate = new Date(openSession.time_in).toISOString().split('T')[0];
+    await syncDailyAttendance(user_id, sessionDate, { status });
   } catch (dailyErr) {
     console.error("Daily Sync Error (Timeout):", dailyErr);
   }
@@ -302,7 +307,7 @@ export async function processTimeOut(context) {
     org_id,
     user_id,
     title: "Attendance Checked Out",
-    message: `You have successfully checked out at ${localTime}. Total hours today: ${sessionContext.total_hours_today.toFixed(2)}h`,
+    message: `You have successfully checked out at ${localTime}. Total hours today: ${currentSessionContext.total_hours_today.toFixed(2)}h`,
     type: "INFO",
     related_entity_type: "ATTENDANCE",
     related_entity_id: openSession.attendance_id
@@ -330,9 +335,11 @@ export async function processTimeOut(context) {
     image_key: imageKey,
     status,
     session_hours: parseFloat(totalHours.toFixed(2)),
-    total_hours_today: sessionContext.total_hours_today,
+    total_hours_today: currentSessionContext.total_hours_today,
     message: "Timed out successfully",
   };
+
+
 }
 
 /**
@@ -341,10 +348,11 @@ export async function processTimeOut(context) {
  */
 export async function syncDailyAttendance(user_id, dateStr, overrides = {}) {
   try {
-    // 1. Fetch all records for the day
+    // 1. Fetch all records for the day (Sanitize date to ensure match)
+    const sanitizedDate = dateStr.split('T')[0];
     const records = await attendanceDB("attendance_records")
       .where({ user_id })
-      .whereRaw("DATE(time_in) = ?", [dateStr])
+      .whereRaw("DATE(time_in) = ?", [sanitizedDate])
       .orderBy("time_in", "asc");
 
     if (!records.length) return;
@@ -385,10 +393,13 @@ export async function syncDailyAttendance(user_id, dateStr, overrides = {}) {
     let overtimeHours = 0;
     try {
       const shift = await getUserShift(user_id);
-      const rules = PolicyService.getRulesFromShift(shift);
+      const rules = ShiftService.getShiftRules(shift);
       const threshold = rules.overtime?.threshold || 8;
-      if (totalHours > threshold) {
-        overtimeHours = totalHours - threshold;
+      const buffer = 0.5; // 30 minutes minimum overtime required
+      const isEnabled = rules.overtime?.enabled !== false;
+      
+      if (isEnabled && totalHours >= (threshold + buffer)) {
+        overtimeHours = parseFloat((totalHours - threshold).toFixed(2));
       }
     } catch (e) {
       // Ignore missing shift/policy errors during sync
@@ -512,7 +523,24 @@ export async function fetchUserRecords({ user_id, date_from, date_to, limit }) {
     query = query.whereRaw("DATE(time_in) <= DATE(?)", [date_to]);
   }
 
-  const records = await query;
+  let records = await query;
+
+  // Ensure active (open) session is included even if it started outside the date range
+  const openSession = await attendanceDB("attendance_records")
+    .where("user_id", user_id)
+    .whereNull("time_out")
+    .select(
+      "attendance_records.*",
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
+      attendanceDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts")
+    )
+    .first();
+
+  if (openSession && !records.some(r => r.attendance_id === openSession.attendance_id)) {
+    records.unshift(openSession);
+  }
 
   const withUrls = await Promise.all(
     (records || []).map(async (row) => {
@@ -872,7 +900,7 @@ export async function exportRecordsToExcel({ user_id, org_id, month, year, month
       time_in: r.time_in ? new Date(r.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-",
       time_out: r.time_out ? new Date(r.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-",
       total_hours: duration,
-      status: r.late_minutes > 0 ? "Late" : "On Time",
+      status: r.status || "PRESENT",
       late_minutes: r.late_minutes || 0,
       location: r.time_in_address || "-",
       location_out: r.time_out_address || "-"

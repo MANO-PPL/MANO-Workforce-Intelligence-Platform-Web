@@ -139,7 +139,7 @@ const DailyActivity = () => {
                     attMap[dateKey] = {
                         timeIn: timeIn, // Earliest Time In
                         timeOut: timeOut, // Latest Time Out (will update)
-                        status: a.status || 'Present',
+                        status: a.status || 'PRESENT',
                         hasTimedIn: true,
                         intervals: []
                     };

@@ -121,6 +121,25 @@ body,
     }
 }
 
+/* Mobile safe-area helpers */
+.safe-top {
+    padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Drawer tuning for small devices */
+.mobile-drawer {
+    max-width: 92vw;
+    width: 100%;
+}
+
+/* Ensure mobile overlays are above browser UI and use smooth scrolling */
+.mobile-overlay {
+    -webkit-overflow-scrolling: touch;
+}
+
 .no-scrollbar::-webkit-scrollbar {
     display: none;
 }

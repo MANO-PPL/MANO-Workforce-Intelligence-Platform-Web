@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { attendanceDB } from '../config/database.js';
 import { syncDailyAttendance } from '../services/attendance/attendanceService.js';
+import * as ShiftService from '../services/attendance/shiftManagementService.js';
 
 /**
  * Hourly Attendance Processor
@@ -19,18 +20,14 @@ export async function processHourlyAttendance() {
             'users.user_id',
             'users.org_id',
             'users.shift_id',
-            'shifts.policy_rules',
-            'shifts.processing_time',
+            'shifts.*', // Select all shift columns for ShiftService
             'work_locations.timezone',
             'organizations.timezone as org_timezone'
         );
 
     for (const user of users) {
         try {
-            // Timezone Priority:
-            // 1. Last Attendance Record (Metadata) -> where they ARE right now
-            // 2. Organization Default -> fallback for new employees
-            // 3. UTC -> safety net
+            // ... (timezone logic remains same)
             let timeZone = user.org_timezone || 'UTC';
 
             const lastRecord = await attendanceDB('attendance_records')
@@ -91,21 +88,13 @@ async function processUserAttendanceForDate(user, dateStr) {
         .where({ user_id: user.user_id, date: dateStr })
         .first();
 
-    // Parse Shift Policy
-    let workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    let shiftEndTime = '18:00:00';
-    let alternateSaturdays = { enabled: false, off: [] };
+    // Parse Shift Rules using Service
+    const rules = ShiftService.getShiftRules(user);
+    
+    let workingDays = rules.working_days || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let shiftEndTime = rules.shift_timing?.end_time || '18:00:00';
+    let alternateSaturdays = rules.alternate_saturdays || { enabled: false, off: [] };
 
-    if (user.policy_rules) {
-        try {
-            const rules = typeof user.policy_rules === 'string' ? JSON.parse(user.policy_rules) : user.policy_rules;
-            if (rules.working_days) workingDays = rules.working_days;
-            if (rules.shift_timing?.end_time) shiftEndTime = rules.shift_timing.end_time;
-            if (rules.alternate_saturdays) alternateSaturdays = rules.alternate_saturdays;
-        } catch (e) {
-            console.error(`Failed to parse policy rules for user ${user.user_id}`, e);
-        }
-    }
 
     if (record) {
         // Existing record: auto-close if missing last_out
@@ -113,28 +102,50 @@ async function processUserAttendanceForDate(user, dateStr) {
             console.log(`⚠️ User ${user.user_id} forgot to check out on ${dateStr}. Auto-closing.`);
 
             const autoOutTime = `${dateStr} ${shiftEndTime}`;
-            
-            // Close the raw attendance record's open session
-            await attendanceDB('attendance_records')
+
+            // Find the session to preserve metadata
+            const openSession = await attendanceDB('attendance_records')
                 .where({ user_id: user.user_id })
                 .whereNull('time_out')
                 .whereRaw('DATE(time_in) = ?', [dateStr])
-                .update({
-                    time_out: autoOutTime,
-                    status: 'PRESENT',
-                    updated_at: attendanceDB.fn.now()
-                });
+                .first();
 
-            // Re-sync daily attendance which will compute total_hours and proper last_out
-            try {
-                await syncDailyAttendance(user.user_id, dateStr, { status: 'Present' });
-            } catch (err) {
-                console.error(`Failed to sync daily attendance for user ${user.user_id}:`, err);
+            if (openSession) {
+                let metadata = {};
+                try {
+                    metadata = typeof openSession.metadata === 'string'
+                        ? JSON.parse(openSession.metadata)
+                        : (openSession.metadata || {});
+                } catch (e) {
+                    console.warn(`Failed to parse metadata for session ${openSession.attendance_id}`);
+                }
+
+                metadata.auto_checkout = {
+                    performed_at: new Date().toISOString(),
+                    reason: "Forgot to clock out"
+                };
+
+                // Close the raw attendance record's open session with MISSED_PUNCH
+                await attendanceDB('attendance_records')
+                    .where({ attendance_id: openSession.attendance_id })
+                    .update({
+                        time_out: autoOutTime,
+                        status: 'MISSED_PUNCH',
+                        metadata: JSON.stringify(metadata),
+                        updated_at: attendanceDB.fn.now()
+                    });
+
+                // Re-sync daily attendance with MISSED_PUNCH status
+                try {
+                    await syncDailyAttendance(user.user_id, dateStr, { status: 'MISSED_PUNCH' });
+                } catch (err) {
+                    console.error(`Failed to sync daily attendance for user ${user.user_id}:`, err);
+                }
             }
         }
     } else {
         // Missing record: determine status
-        let status = 'Absent';
+        let status = 'ABSENT';
         let remarks = 'No show';
 
         // Check Holiday
@@ -143,7 +154,7 @@ async function processUserAttendanceForDate(user, dateStr) {
             .first();
 
         if (holiday) {
-            status = 'Holiday';
+            status = 'HOLIDAY';
             remarks = holiday.holiday_name;
         } else {
             // Check Leave
@@ -154,14 +165,14 @@ async function processUserAttendanceForDate(user, dateStr) {
                 .first();
 
             if (leave) {
-                status = 'Leave';
+                status = 'LEAVE';
                 remarks = `${leave.leave_type} (${leave.pay_type})`;
             } else {
                 // Check Weekend / Shift
                 const dayName = new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short' });
 
                 if (!workingDays.includes(dayName)) {
-                    status = 'Weekend';
+                    status = 'WEEKEND';
                     remarks = 'Weekly Off';
                 } else if (dayName === 'Sat' && alternateSaturdays.enabled) {
                     const d = new Date(dateStr);
@@ -169,7 +180,7 @@ async function processUserAttendanceForDate(user, dateStr) {
                     const weekNum = Math.ceil(dayOfMonth / 7);
 
                     if (alternateSaturdays.off.includes(weekNum)) {
-                        status = 'Weekend';
+                        status = 'WEEKEND';
                         remarks = `Saturday Off (Week ${weekNum})`;
                     }
                 }

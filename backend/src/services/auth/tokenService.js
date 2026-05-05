@@ -18,7 +18,7 @@ export function generateRefreshToken() {
  */
 export async function saveRefreshToken(userId, token, ipAddress, userAgent) {
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 Days validity
+    expiresAt.setDate(expiresAt.getDate() + 30); // 30 Days validity
 
     await attendanceDB('refresh_tokens').insert({
         user_id: userId,
@@ -112,4 +112,17 @@ export async function revokeAllTokensForUser(userId) {
     await attendanceDB('refresh_tokens')
         .where('user_id', userId)
         .update({ revoked: true });
+}
+
+/**
+ * Extend a refresh token by 30 days from now (Sliding Session)
+ * @param {string} token 
+ */
+export async function extendRefreshToken(token) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await attendanceDB('refresh_tokens')
+        .where('token', token)
+        .update({ expires_at: expiresAt });
 }

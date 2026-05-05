@@ -169,9 +169,9 @@ export const refreshAuthTokens = async (refreshToken, reqInfo) => {
     if (gracePeriodActive) {
         newRefreshToken = activeRefreshToken;
     } else {
-        newRefreshToken = TokenService.generateRefreshToken();
-        await TokenService.revokeRefreshToken(refreshToken, newRefreshToken);
-        await TokenService.saveRefreshToken(user.user_id, newRefreshToken, reqInfo.ip, reqInfo.userAgent);
+        // Sliding Session: Instead of rotating the token, just extend its expiry
+        await TokenService.extendRefreshToken(refreshToken);
+        newRefreshToken = refreshToken;
     }
 
     const tokenPayload = {

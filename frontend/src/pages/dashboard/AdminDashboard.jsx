@@ -30,6 +30,7 @@ import {
     ResponsiveContainer
 } from 'recharts';
 import { adminService } from '../../services/adminService';
+import { attendanceService } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
 
 const AdminDashboard = () => {
@@ -88,11 +89,33 @@ const AdminDashboard = () => {
             setIsLoading(true);
             const res = await adminService.getDashboardStats(range, month, year);
             if (res.success) {
+                let finalActivities = res.activities || [];
+                
+                // Fallback: If no activities are returned from the main stats, 
+                // fetch real-time attendance to populate the feed
+                if (finalActivities.length === 0) {
+                    try {
+                        const attendanceRes = await attendanceService.getRealTimeAttendance();
+                        if (attendanceRes.data) {
+                            finalActivities = attendanceRes.data.map(record => ({
+                                id: `att-${record.acr_id}`,
+                                user: record.user_name,
+                                action: record.time_out ? 'Checked Out' : 'Checked In',
+                                time: record.time_out || record.time_in,
+                                profile_image_url: record.profile_image_url,
+                                role: record.designation || 'Staff'
+                            })).slice(0, 10);
+                        }
+                    } catch (attError) {
+                        console.error("Failed to fetch fallback activities", attError);
+                    }
+                }
+
                 const dataToCache = {
                     stats: res.stats,
                     trends: res.trends,
                     chartData: res.chartData,
-                    activities: res.activities,
+                    activities: finalActivities,
                 };
                 setStats(dataToCache.stats);
                 setTrends(dataToCache.trends);

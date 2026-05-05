@@ -47,7 +47,7 @@ import MobileLogin from "./pages/user-auth/Login-mv";
 import MobileForgotPassword from "./pages/user-auth/ForgotPassword-mv";
 import MobileAdminDashboard from "./pages/dashboard/AdminDashboard-mv";
 import MobileEmployeeDashboard from "./pages/dashboard/EmployeeDashboard-mv";
-import MobileAttendance from "./pages/attendance/Attendance-mv";
+import MobileAttendance from "./pages/attendance/MobileAttendancePage";
 import MobileEmployeeList from "./pages/employees/EmployeeList-mv";
 import MobileEmployeeForm from "./pages/employees/EmployeeForm-mv";
 import MobileHolidayManagement from "./pages/holidays/HolidayManagement-mv";
@@ -59,6 +59,9 @@ import MobileGeoFencing from "./pages/geofencing/GeoFencing-mv";
 import MobileReports from "./pages/reports/Reports-mv";
 import MobileNotifications from "./pages/notifications/Notifications-mv";
 import MobileFeedback from "./pages/feedback/Feedback-mv";
+import DailyActivityMobile from "./pages/dar/DailyActivity-mv";
+import MobileBulkHolidayImport from "./pages/holidays/BulkHolidayImport-mv";
+import MobileBulkUpload from "./pages/employees/BulkUpload-mv";
 
 
 import SuperAdminDashboard from "./pages/dashboard/SuperAdminDashboard";
@@ -188,6 +191,17 @@ const RootHandler = () => {
   const { user, authChecked } = useAuth();
   const { device } = useDeviceType();
 
+  // For SEO: If we are not logged in (or checking), show the showcase landing.
+  // This prevents Googlebot from seeing a blank page during the auth check delay.
+  if (!user && !authChecked) {
+    const PageComp = device === "mobile" ? ShowcaseMobileHomePage : device === "tablet" ? ShowcaseTabletHomePage : ShowcaseHomePage;
+    return (
+      <ShowcaseShell>
+        <PageComp />
+      </ShowcaseShell>
+    );
+  }
+
   if (!authChecked) {
     return null;
   }
@@ -269,7 +283,7 @@ function App() {
               <Route path="/attendance" element={<ResponsiveRoute DesktopComponent={Attendance} MobileComponent={MobileAttendance} />} />
               <Route path="/holidays" element={<ResponsiveRoute DesktopComponent={HolidayManagement} MobileComponent={MobileHolidayManagement} />} />
               <Route path="/profile" element={<ResponsiveRoute DesktopComponent={Profile} MobileComponent={MobileProfile} />} />
-              <Route path="/daily-activity" element={<DailyActivity />} />
+              <Route path="/daily-activity" element={<ResponsiveRoute DesktopComponent={DailyActivity} MobileComponent={DailyActivityMobile} />} />
               <Route path="/apply-leave" element={<ResponsiveRoute DesktopComponent={LeaveApplication} MobileComponent={MobileLeaveApplication} />} />
               
               {/* Mobile-Only Pages fallback */}
@@ -286,8 +300,8 @@ function App() {
               <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeList} MobileComponent={MobileEmployeeList} />} />
               <Route path="/employees/add" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
               <Route path="/employees/edit/:id" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
-              <Route path="/employees/bulk" element={<BulkUpload />} />
-              <Route path="/holidays/bulk" element={<BulkHolidayImport />} />
+              <Route path="/employees/bulk" element={<ResponsiveRoute DesktopComponent={BulkUpload} MobileComponent={MobileBulkUpload} />} />
+              <Route path="/holidays/bulk" element={<ResponsiveRoute DesktopComponent={BulkHolidayImport} MobileComponent={MobileBulkHolidayImport} />} />
               <Route path="/dar-admin" element={<DARAdmin />} />
             </Route>
 

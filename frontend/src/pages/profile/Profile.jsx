@@ -6,6 +6,8 @@ import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Ed
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import ConfirmationModal from '../../components/modals/ConfirmationModal';
+import { AnimatePresence } from 'framer-motion';
 
 const Profile = () => {
     const navigate = useNavigate();
@@ -18,6 +20,15 @@ const Profile = () => {
     const [uploading, setUploading] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [imageTimestamp, setImageTimestamp] = useState(Date.now());
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info',
+        onConfirm: () => {},
+        confirmText: 'Confirm'
+    });
+    const [isDeletingAvatar, setIsDeletingAvatar] = useState(false);
 
     // Fetch full profile data on mount
     useEffect(() => {
@@ -115,33 +126,33 @@ const Profile = () => {
         }
     };
 
-    const handleDeleteAvatar = async () => {
-        if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
-
-        try {
-            const res = await api.delete('/profile');
-            if (res.data.ok) {
-                toast.success('Profile picture removed!');
-
-                // Update local state
-                setProfileData(prev => ({
-                    ...prev,
-                    profile_image_url: null
-                }));
-
-                // Refresh global user state
-                await fetchUser();
-
-                // Close preview modal
-                setShowPreview(false);
-
-                // Update timestamp for future uploads
-                setImageTimestamp(Date.now());
+    const handleDeleteAvatar = () => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Remove Photo?",
+            message: "Are you sure you want to remove your profile picture? This will reset your avatar to the default.",
+            type: 'danger',
+            confirmText: "Remove",
+            onConfirm: async () => {
+                try {
+                    setIsDeletingAvatar(true);
+                    const res = await api.delete('/profile');
+                    if (res.data.ok) {
+                        toast.success('Profile picture removed!');
+                        setProfileData(prev => ({ ...prev, profile_image_url: null }));
+                        await fetchUser();
+                        setShowPreview(false);
+                        setImageTimestamp(Date.now());
+                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    }
+                } catch (error) {
+                    console.error('Delete Error:', error);
+                    toast.error(error.response?.data?.message || 'Failed to remove image');
+                } finally {
+                    setIsDeletingAvatar(false);
+                }
             }
-        } catch (error) {
-            console.error('Delete Error:', error);
-            toast.error(error.response?.data?.message || 'Failed to remove image');
-        }
+        });
     };
 
     if (loading) {
@@ -316,6 +327,15 @@ const Profile = () => {
                 </div>,
                 document.body
             )}
+            <AnimatePresence>
+                {confirmModal.isOpen && (
+                    <ConfirmationModal
+                        {...confirmModal}
+                        isSubmitting={isDeletingAvatar}
+                        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                    />
+                )}
+            </AnimatePresence>
         </DashboardLayout>
     );
 };

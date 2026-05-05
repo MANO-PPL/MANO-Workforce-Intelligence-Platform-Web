@@ -5,6 +5,7 @@ import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 
 export const authenticateJWT = catchAsync(async (req, res, next) => {
+
     let token;
     const authHeader = req.headers['authorization'];
 

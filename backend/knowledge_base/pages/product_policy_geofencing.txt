@@ -1,2 +1,0 @@
-PAGE: MANO-Attendance
-URL: https://localhost:5173/product/policy-geofencing

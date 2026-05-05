@@ -27,6 +27,8 @@ import {
     Image as ImageIcon,
     ArrowLeft
 } from 'lucide-react';
+import ConfirmationModal from '../../components/modals/ConfirmationModal';
+import { AnimatePresence } from 'framer-motion';
 
 const AttachmentModal = ({ file, onClose }) => {
     if (!file) return null;
@@ -89,6 +91,15 @@ const LeaveApplication = () => {
     const [selectedLeave, setSelectedLeave] = useState(null); // For Detail View
     const [viewingAttachment, setViewingAttachment] = useState(null);
     const [adminAction, setAdminAction] = useState({ status: '', remarks: '', payType: 'Paid', payPercentage: 100 });
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info',
+        onConfirm: () => {},
+        confirmText: 'Confirm'
+    });
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
 
     // Admin Filter States
     const [searchTerm, setSearchTerm] = useState('');
@@ -241,18 +252,30 @@ const LeaveApplication = () => {
         e.target.style.height = e.target.scrollHeight + 'px';
     };
 
-    const handleWithdraw = async (leaveId) => {
-        if (!window.confirm("Are you sure you want to withdraw this request?")) return;
-        try {
-            const res = await api.delete(`/leaves/request/${leaveId}`);
-            if (res.data.ok) {
-                toast.success("Request withdrawn successfully");
-                fetchLeaves();
+    const handleWithdraw = (leaveId) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Withdraw Request?",
+            message: "Are you sure you want to withdraw this leave request? This action cannot be undone.",
+            type: 'warning',
+            confirmText: "Withdraw",
+            onConfirm: async () => {
+                try {
+                    setIsWithdrawing(true);
+                    const res = await api.delete(`/leaves/request/${leaveId}`);
+                    if (res.data.ok) {
+                        toast.success("Request withdrawn successfully");
+                        fetchLeaves();
+                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    }
+                } catch (error) {
+                    console.error("Withdraw error", error);
+                    toast.error(error.response?.data?.message || "Failed to withdraw request");
+                } finally {
+                    setIsWithdrawing(false);
+                }
             }
-        } catch (error) {
-            console.error("Withdraw error", error);
-            toast.error(error.response?.data?.message || "Failed to withdraw request");
-        }
+        });
     };
 
     const handleAdminAction = async (status) => {
@@ -588,7 +611,8 @@ const LeaveApplication = () => {
 
     // --- USER VIEW ---
     return (
-        <div className="w-full space-y-8">
+        <>
+            <div className="w-full space-y-8">
             <div className="flex flex-col gap-8 items-start">
 
                 {/* --- TOP: APPLY FORM --- */}
@@ -888,6 +912,16 @@ const LeaveApplication = () => {
                 </div>
             </div>
         </div>
+        <AnimatePresence>
+            {confirmModal.isOpen && (
+                <ConfirmationModal
+                    {...confirmModal}
+                    isSubmitting={isWithdrawing}
+                    onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                />
+            )}
+            </AnimatePresence>
+        </>
     );
 };
 
