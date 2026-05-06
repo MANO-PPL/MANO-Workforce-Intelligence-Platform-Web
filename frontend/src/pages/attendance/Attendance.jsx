@@ -174,7 +174,11 @@ const Attendance = () => {
             const recentRes = await attendanceService.getMyRecords();
             if (recentRes && recentRes.data && recentRes.data.length > 0) {
                 const today = new Date();
-                today.setHours(0, 0, 0, 0);
+                const todayDateStr = today.toISOString().split('T')[0];
+                
+                // Create a midnight copy for day calculation
+                const todayMidnight = new Date(today);
+                todayMidnight.setHours(0, 0, 0, 0);
 
                 const deadlineDays = myShift?.rules?.correction_deadline || 2;
                 const missedDates = [];
@@ -184,17 +188,19 @@ const Attendance = () => {
                     if (!session.time_out) {
                         const sessionDate = new Date(session.time_in);
                         const sessionDateStr = sessionDate.toISOString().split('T')[0];
-                        const todayDateStr = today.toISOString().split('T')[0];
 
                         if (sessionDateStr < todayDateStr) {
-                            // Only warn if status is MISSED_PUNCH and within correction deadline
-                            const diffTime = today - sessionDate.setHours(0, 0, 0, 0);
+                            // PAST DATE missed checkout
+                            const diffTime = todayMidnight - new Date(sessionDate).setHours(0, 0, 0, 0);
                             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                            if (session.status === 'MISSED_PUNCH' && diffDays <= deadlineDays) {
+                            // Show banner if not already escalated to ABSENT/REJECTED and within deadline
+                            const isNotProcessed = !['ABSENT', 'REJECTED'].includes(session.status);
+                            if (isNotProcessed && diffDays <= deadlineDays) {
                                 missedDates.push(sessionDateStr);
                             }
                         } else if (sessionDateStr === todayDateStr) {
+                            // TODAY'S active session
                             hasTodayActiveSession = true;
                         }
                     }
