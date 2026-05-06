@@ -9,7 +9,7 @@ import * as ShiftService from "./shiftManagementService.js";
 /**
  * Fetch User Shift
  */
-async function getUserShift(user_id) {
+export async function getUserShift(user_id) {
   const user = await attendanceDB("users")
     .join("shifts", "users.shift_id", "shifts.shift_id")
     .where("users.user_id", user_id)

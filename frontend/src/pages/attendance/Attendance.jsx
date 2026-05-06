@@ -173,16 +173,28 @@ const Attendance = () => {
             // Fetch recent records to detect missed punches and today's active session
             const recentRes = await attendanceService.getMyRecords();
             if (recentRes && recentRes.data && recentRes.data.length > 0) {
-                const todayDate = new Date().toISOString().split('T')[0];
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                const deadlineDays = myShift?.rules?.correction_deadline || 2;
                 const missedDates = [];
                 let hasTodayActiveSession = false;
 
                 for (const session of recentRes.data) {
                     if (!session.time_out) {
-                        const sessionDate = new Date(session.time_in).toISOString().split('T')[0];
-                        if (sessionDate < todayDate) {
-                            missedDates.push(sessionDate);
-                        } else if (sessionDate === todayDate) {
+                        const sessionDate = new Date(session.time_in);
+                        const sessionDateStr = sessionDate.toISOString().split('T')[0];
+                        const todayDateStr = today.toISOString().split('T')[0];
+
+                        if (sessionDateStr < todayDateStr) {
+                            // Only warn if status is MISSED_PUNCH and within correction deadline
+                            const diffTime = today - sessionDate.setHours(0, 0, 0, 0);
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                            if (session.status === 'MISSED_PUNCH' && diffDays <= deadlineDays) {
+                                missedDates.push(sessionDateStr);
+                            }
+                        } else if (sessionDateStr === todayDateStr) {
                             hasTodayActiveSession = true;
                         }
                     }
@@ -200,7 +212,7 @@ const Attendance = () => {
         } finally {
             setLoading(false);
         }
-    }, [selectedDate, activeTab]);
+    }, [selectedDate, activeTab, myShift]);
 
     // 2. Fetch Monthly Records (for "My Attendance" tab - History & Analytics)
     const fetchMonthlyRecords = useCallback(async () => {

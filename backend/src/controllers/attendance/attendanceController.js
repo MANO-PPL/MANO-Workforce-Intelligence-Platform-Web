@@ -2,6 +2,7 @@ import catchAsync from "../../utils/catchAsync.js";
 import * as MapsService from "../../services/google_api_services/maps.js";
 import { getEventSource } from "../../utils/clientInfo.js";
 import * as AttendanceService from "../../services/attendance/attendanceService.js";
+import * as ShiftManagementService from "../../services/attendance/shiftManagementService.js";
 
 /**
  * POST /attendance/timein
