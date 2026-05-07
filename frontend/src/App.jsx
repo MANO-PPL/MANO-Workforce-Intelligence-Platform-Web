@@ -24,7 +24,7 @@ import AttendanceMonitoring from "./pages/attendance-monitoring/AttendanceMonito
 import Reports from "./pages/reports/Reports"
 import HolidayManagement from "./pages/holidays/HolidayManagement"
 import BulkHolidayImport from "./pages/holidays/BulkHolidayImport"
-import PolicyBuilder from "./pages/policy-builder/PolicyBuilder"
+import ShiftManagement from "./pages/shift-management/ShiftManagement"
 import GeoFencing from "./pages/geofencing/GeoFencing"
 import Profile from "./pages/profile/Profile"
 import Subscription from "./pages/subscription/Subscription"
@@ -295,7 +295,7 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={['admin', 'hr']} />}>
               <Route path="/attendance-monitoring" element={<ResponsiveRoute DesktopComponent={AttendanceMonitoring} MobileComponent={MobileAttendanceMonitoring} />} />
               <Route path="/reports" element={<ResponsiveRoute DesktopComponent={Reports} MobileComponent={MobileReports} />} />
-              <Route path="/shift-management" element={<ResponsiveRoute DesktopComponent={PolicyBuilder} MobileComponent={MobileShiftManagement} />} />
+              <Route path="/shift-management" element={<ResponsiveRoute DesktopComponent={ShiftManagement} MobileComponent={MobileShiftManagement} />} />
               <Route path="/geofencing" element={<ResponsiveRoute DesktopComponent={GeoFencing} MobileComponent={MobileGeoFencing} />} />
               <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeList} MobileComponent={MobileEmployeeList} />} />
               <Route path="/employees/add" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />

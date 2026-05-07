@@ -2,6 +2,10 @@ import cron from 'node-cron';
 import { attendanceDB } from '../config/database.js';
 import { syncDailyAttendance } from '../services/attendance/attendanceService.js';
 import * as ShiftService from '../services/attendance/shiftManagementService.js';
+import EventBus from '../utils/EventBus.js';
+
+// Grace period (in days) before an uncorrected MISSED_PUNCH becomes ABSENT
+const MISSED_PUNCH_GRACE_DAYS = 2;
 
 /**
  * Hourly Attendance Processor
@@ -20,7 +24,7 @@ export async function processHourlyAttendance() {
             'users.user_id',
             'users.org_id',
             'users.shift_id',
-            'shifts.*', // Select all shift columns for ShiftService
+            'shifts.*',
             'work_locations.timezone',
             'organizations.timezone as org_timezone'
         );
@@ -80,37 +84,40 @@ export async function processHourlyAttendance() {
         }
     }
 
+    // --- SECOND PASS: Escalate expired MISSED_PUNCH to ABSENT ---
+    await escalateExpiredMissedPunches();
+
     console.log('✅ Hourly Attendance Check Completed.');
 }
 
+/**
+ * Process a single user's attendance for a specific date.
+ * - If they checked in but never checked out → flag as MISSED_PUNCH (NO auto-checkout)
+ * - If they never showed up → mark ABSENT/WEEK_OFF/HOLIDAY/LEAVE
+ */
 async function processUserAttendanceForDate(user, dateStr) {
     const record = await attendanceDB('daily_attendance')
         .where({ user_id: user.user_id, date: dateStr })
         .first();
 
-    // Parse Shift Rules using Service
+    // Parse Shift Rules using Service (now includes week_off_policy)
     const rules = ShiftService.getShiftRules(user);
-    
-    let workingDays = rules.working_days || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    let shiftEndTime = rules.shift_timing?.end_time || '18:00:00';
-    let alternateSaturdays = rules.alternate_saturdays || { enabled: false, off: [] };
-
 
     if (record) {
-        // Existing record: auto-close if missing last_out
+        // Existing record: check if missing last_out (forgot to checkout)
         if (record.first_in && !record.last_out) {
-            console.log(`⚠️ User ${user.user_id} forgot to check out on ${dateStr}. Auto-closing.`);
+            console.log(`⚠️ User ${user.user_id} forgot to check out on ${dateStr}. Marking as MISSED_PUNCH.`);
 
-            const autoOutTime = `${dateStr} ${shiftEndTime}`;
-
-            // Find the session to preserve metadata
-            const openSession = await attendanceDB('attendance_records')
+            // Find the open session(s) for this date
+            const openSessions = await attendanceDB('attendance_records')
                 .where({ user_id: user.user_id })
                 .whereNull('time_out')
-                .whereRaw('DATE(time_in) = ?', [dateStr])
-                .first();
+                .whereRaw('DATE(time_in) = ?', [dateStr]);
 
-            if (openSession) {
+            for (const openSession of openSessions) {
+                // Only flag sessions that haven't already been flagged
+                if (openSession.status === 'MISSED_PUNCH') continue;
+
                 let metadata = {};
                 try {
                     metadata = typeof openSession.metadata === 'string'
@@ -120,44 +127,72 @@ async function processUserAttendanceForDate(user, dateStr) {
                     console.warn(`Failed to parse metadata for session ${openSession.attendance_id}`);
                 }
 
-                metadata.auto_checkout = {
-                    performed_at: new Date().toISOString(),
-                    reason: "Forgot to clock out"
+                metadata.missed_punch = {
+                    flagged_at: new Date().toISOString(),
+                    reason: "Employee did not check out"
                 };
 
-                // Close the raw attendance record's open session with MISSED_PUNCH
+                // Flag the session as MISSED_PUNCH — DO NOT set time_out
                 await attendanceDB('attendance_records')
                     .where({ attendance_id: openSession.attendance_id })
                     .update({
-                        time_out: autoOutTime,
                         status: 'MISSED_PUNCH',
                         metadata: JSON.stringify(metadata),
                         updated_at: attendanceDB.fn.now()
                     });
-
-                // Re-sync daily attendance with MISSED_PUNCH status
-                try {
-                    await syncDailyAttendance(user.user_id, dateStr, { status: 'MISSED_PUNCH' });
-                } catch (err) {
-                    console.error(`Failed to sync daily attendance for user ${user.user_id}:`, err);
-                }
             }
+
+            // Sync daily attendance as MISSED_PUNCH
+            try {
+                await syncDailyAttendance(user.user_id, dateStr, { status: 'MISSED_PUNCH' });
+            } catch (err) {
+                console.error(`Failed to sync daily attendance for user ${user.user_id}:`, err);
+            }
+
+            // Send notification to user
+            EventBus.emitNotification({
+                org_id: user.org_id,
+                user_id: user.user_id,
+                title: "Missed Time Out",
+                message: `You forgot to check out on ${dateStr}. Please submit a correction request to fix your hours, otherwise it will be marked as absent.`,
+                type: "WARNING",
+                related_entity_type: "ATTENDANCE",
+                related_entity_id: null
+            });
         }
     } else {
-        // Missing record: determine status
+        // Missing record: determine status using the Week-Off Policy Engine
         let status = 'ABSENT';
         let remarks = 'No show';
 
-        // Check Holiday
-        const holiday = await attendanceDB('holidays')
-            .where({ org_id: user.org_id, holiday_date: dateStr })
-            .first();
+        // 1. Check Week-Off Policy (uses getDayType from shiftManagementService)
+        const dayType = ShiftService.getDayType(dateStr, rules.week_off_policy);
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayName = dayNames[new Date(dateStr).getDay()];
 
-        if (holiday) {
-            status = 'HOLIDAY';
-            remarks = holiday.holiday_name;
-        } else {
-            // Check Leave
+        if (dayType === 'week_off') {
+            status = 'WEEK_OFF';
+            remarks = `${dayName} - Weekly Off`;
+        } else if (dayType === 'half_day') {
+            // Half-day off but employee didn't show up at all
+            status = 'ABSENT';
+            remarks = `${dayName} - Half Day (No show)`;
+        }
+
+        // 2. Check National/Org Holidays (overrides week-off if it's a named holiday)
+        if (status !== 'WEEK_OFF') {
+            const holiday = await attendanceDB('holidays')
+                .where({ org_id: user.org_id, holiday_date: dateStr })
+                .first();
+
+            if (holiday) {
+                status = 'HOLIDAY';
+                remarks = holiday.holiday_name;
+            }
+        }
+
+        // 3. Check Approved Leave (overrides ABSENT, not WEEK_OFF or HOLIDAY)
+        if (status === 'ABSENT') {
             const leave = await attendanceDB('leave_requests')
                 .where({ user_id: user.user_id, status: 'Approved' })
                 .where('start_date', '<=', dateStr)
@@ -167,23 +202,6 @@ async function processUserAttendanceForDate(user, dateStr) {
             if (leave) {
                 status = 'LEAVE';
                 remarks = `${leave.leave_type} (${leave.pay_type})`;
-            } else {
-                // Check Weekend / Shift
-                const dayName = new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short' });
-
-                if (!workingDays.includes(dayName)) {
-                    status = 'WEEKEND';
-                    remarks = 'Weekly Off';
-                } else if (dayName === 'Sat' && alternateSaturdays.enabled) {
-                    const d = new Date(dateStr);
-                    const dayOfMonth = d.getDate();
-                    const weekNum = Math.ceil(dayOfMonth / 7);
-
-                    if (alternateSaturdays.off.includes(weekNum)) {
-                        status = 'WEEKEND';
-                        remarks = `Saturday Off (Week ${weekNum})`;
-                    }
-                }
             }
         }
 
@@ -197,6 +215,92 @@ async function processUserAttendanceForDate(user, dateStr) {
         });
 
         console.log(`📝 Marked User ${user.user_id} as ${status} for ${dateStr}`);
+    }
+}
+
+/**
+ * Escalate MISSED_PUNCH sessions that have exceeded the grace period
+ * without a correction request being submitted or approved.
+ * After MISSED_PUNCH_GRACE_DAYS days, the daily record is changed to ABSENT.
+ */
+async function escalateExpiredMissedPunches() {
+    // Find all MISSED_PUNCH daily records
+    const records = await attendanceDB('daily_attendance')
+        .where({ status: 'MISSED_PUNCH' });
+
+    for (const record of records) {
+        try {
+            // Fetch user and shift rules
+            const user = await attendanceDB('users')
+                .leftJoin('shifts', 'users.shift_id', 'shifts.shift_id')
+                .where('users.user_id', record.user_id)
+                .select('shifts.*')
+                .first();
+
+            if (!user) continue;
+
+            const rules = ShiftService.getShiftRules(user);
+            const graceDays = rules.correction_deadline || 2;
+
+            // Calculate if the record is expired
+            const recordDate = new Date(record.date);
+            recordDate.setHours(0, 0, 0, 0);
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const diffTime = today - recordDate;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= graceDays) {
+                // Still within grace period
+                continue;
+            }
+
+            // Check if user has submitted an approved/pending correction for this date
+            const correction = await attendanceDB('attendance_correction_requests')
+                .where({ user_id: record.user_id, request_date: record.date })
+                .whereIn('status', ['pending', 'approved'])
+                .first();
+
+            if (correction) {
+                // Correction exists — skip escalation
+                continue;
+            }
+
+            // No correction submitted — escalate to ABSENT
+            await attendanceDB('daily_attendance')
+                .where({ user_id: record.user_id, date: record.date })
+                .update({
+                    status: 'ABSENT',
+                    updated_at: attendanceDB.fn.now()
+                });
+
+            // Also update the attendance_records status
+            await attendanceDB('attendance_records')
+                .where({ user_id: record.user_id })
+                .whereRaw('DATE(time_in) = ?', [record.date])
+                .where({ status: 'MISSED_PUNCH' })
+                .update({
+                    status: 'ABSENT',
+                    updated_at: attendanceDB.fn.now()
+                });
+
+            // Notify the user
+            EventBus.emitNotification({
+                org_id: record.org_id,
+                user_id: record.user_id,
+                title: "Attendance Marked Absent",
+                message: `Your attendance for ${record.date} has been marked as ABSENT because the missed checkout was not corrected within ${graceDays} days.`,
+                type: "ERROR",
+                related_entity_type: "ATTENDANCE",
+                related_entity_id: null
+            });
+
+            console.log(`🚫 Escalated User ${record.user_id} from MISSED_PUNCH to ABSENT for ${record.date} (Grace: ${graceDays}d)`);
+        } catch (err) {
+            console.error(`Failed to escalate MISSED_PUNCH for user ${record.user_id} on ${record.date}:`, err);
+        }
     }
 }
 

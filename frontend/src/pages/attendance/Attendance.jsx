@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -80,11 +80,18 @@ const Attendance = () => {
     const [monthlySessions, setMonthlySessions] = useState([]); // For My Attendance tab
     const [loading, setLoading] = useState(false);
     const [holidays, setHolidays] = useState([]);
+    const [myShift, setMyShift] = useState(null);
 
-    // Fetch Holidays
+    // Fetch Holidays and Shift Policy
     useEffect(() => {
         attendanceService.getHolidays()
             .then(data => setHolidays(data.holidays || []))
+            .catch(console.error);
+            
+        attendanceService.getMyShiftPolicy()
+            .then(data => {
+                if (data.ok) setMyShift(data.shift);
+            })
             .catch(console.error);
     }, []);
 
@@ -153,6 +160,7 @@ const Attendance = () => {
     // --- DATA FETCHING ---
 
     const [globalActiveSession, setGlobalActiveSession] = useState(false);
+    const [missedPunchWarning, setMissedPunchWarning] = useState(null); // { dates: ['2026-05-01', ...] }
 
     // 1. Fetch Daily Records (for "Mark Attendance" tab)
     const fetchDailyRecords = useCallback(async () => {
@@ -162,14 +170,47 @@ const Attendance = () => {
             const res = await attendanceService.getMyRecords(selectedDate, selectedDate);
             if (res.ok) setDailySessions(res.data);
 
-            // Also fetch recent 1 record to determine global active session status
-            // This prevents the "Time Out" button from being disabled if the session started yesterday
+            // Fetch recent records to detect missed punches and today's active session
             const recentRes = await attendanceService.getMyRecords();
             if (recentRes && recentRes.data && recentRes.data.length > 0) {
-                // If the most recent record has no time_out, they are globally active
-                setGlobalActiveSession(!recentRes.data[0].time_out);
+                const today = new Date();
+                const todayDateStr = today.toISOString().split('T')[0];
+                
+                // Create a midnight copy for day calculation
+                const todayMidnight = new Date(today);
+                todayMidnight.setHours(0, 0, 0, 0);
+
+                const deadlineDays = myShift?.rules?.correction_deadline || 2;
+                const missedDates = [];
+                let hasTodayActiveSession = false;
+
+                for (const session of recentRes.data) {
+                    if (!session.time_out) {
+                        const sessionDate = new Date(session.time_in);
+                        const sessionDateStr = sessionDate.toISOString().split('T')[0];
+
+                        if (sessionDateStr < todayDateStr) {
+                            // PAST DATE missed checkout
+                            const diffTime = todayMidnight - new Date(sessionDate).setHours(0, 0, 0, 0);
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                            // Show banner if not already escalated to ABSENT/REJECTED and within deadline
+                            const isNotProcessed = !['ABSENT', 'REJECTED'].includes(session.status);
+                            if (isNotProcessed && diffDays <= deadlineDays) {
+                                missedDates.push(sessionDateStr);
+                            }
+                        } else if (sessionDateStr === todayDateStr) {
+                            // TODAY'S active session
+                            hasTodayActiveSession = true;
+                        }
+                    }
+                }
+
+                setGlobalActiveSession(hasTodayActiveSession);
+                setMissedPunchWarning(missedDates.length > 0 ? { dates: [...new Set(missedDates)] } : null);
             } else {
                 setGlobalActiveSession(false);
+                setMissedPunchWarning(null);
             }
         } catch (error) {
             console.error(error);
@@ -177,7 +218,7 @@ const Attendance = () => {
         } finally {
             setLoading(false);
         }
-    }, [selectedDate, activeTab]);
+    }, [selectedDate, activeTab, myShift]);
 
     // 2. Fetch Monthly Records (for "My Attendance" tab - History & Analytics)
     const fetchMonthlyRecords = useCallback(async () => {
@@ -397,6 +438,19 @@ const Attendance = () => {
             return;
         }
 
+        // ENFORCE DYNAMIC CORRECTION DEADLINE
+        const deadlineDays = myShift?.rules?.correction_deadline || 2;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const reqDate = new Date(corrDate);
+        reqDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil((today - reqDate) / (1000 * 60 * 60 * 24));
+
+        if (diffDays > deadlineDays) {
+            toast.error(`Correction requests can only be submitted within ${deadlineDays} days of the attendance date.`);
+            return;
+        }
+
         // Validation for sessions if manual correction
         if (corrMethod === 'add_session') {
             const validSessions = corrSessions.filter(s => s.time_in && s.time_out);
@@ -600,6 +654,23 @@ const Attendance = () => {
         }
     }
 
+    // --- NON-WORKING DAY CHECK ---
+    const isWorkingDayToday = useMemo(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        // 1. Is it a holiday?
+        if (holidays.some(h => h.holiday_date === todayStr)) return false;
+
+        // 2. Is it in the shift working days?
+        if (myShift?.rules?.workingDays) {
+            const todayDay = new Date().toLocaleDateString('en-US', { weekday: 'short' });
+            if (!myShift.rules.workingDays.includes(todayDay)) {
+                return false;
+            }
+        }
+        
+        return true;
+    }, [myShift, holidays]);
 
     return (
         <DashboardLayout title="Attendance">
@@ -693,6 +764,47 @@ const Attendance = () => {
                                 );
                             })()}
                         </div>
+
+                        {!isWorkingDayToday && !globalActiveSession && (
+                            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                                <div className="p-2 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-500 rounded-lg shrink-0">
+                                    <AlertCircle size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-amber-800 dark:text-amber-500">Non-Working Day</p>
+                                    <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mt-0.5">
+                                        Today is not a scheduled working day. Any hours worked today will not be counted towards your regular attendance.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {missedPunchWarning && (
+                            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 rounded-xl flex flex-col sm:flex-row gap-4 justify-between items-center animate-in fade-in slide-in-from-top-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-500 rounded-lg relative">
+                                        <AlertCircle size={20} />
+                                        {missedPunchWarning.dates.length > 1 && (
+                                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                                {missedPunchWarning.dates.length}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-amber-800 dark:text-amber-500">Missed Time Out</p>
+                                        <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mt-0.5">
+                                            You forgot to time out on {missedPunchWarning.dates.join(', ')}. Please submit a correction request or it will be marked absent.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => { setActiveTab('my_attendance'); setSubTab('correction'); }}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap shadow-sm"
+                                >
+                                    Fix Now
+                                </button>
+                            </div>
+                        )}
 
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-end items-center gap-4 relative" ref={calendarRef}>

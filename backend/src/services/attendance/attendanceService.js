@@ -9,7 +9,7 @@ import * as ShiftService from "./shiftManagementService.js";
 /**
  * Fetch User Shift
  */
-async function getUserShift(user_id) {
+export async function getUserShift(user_id) {
   const user = await attendanceDB("users")
     .join("shifts", "users.shift_id", "shifts.shift_id")
     .where("users.user_id", user_id)
@@ -39,10 +39,12 @@ export async function processTimeIn(context) {
     user_agent
   } = context;
 
-  // 1. Check Existing Session (Find most recent open session)
+  // 1. Check Existing Session — only block if open session is from TODAY
+  const todayDate = localTime.split('T')[0];
   const openSession = await attendanceDB("attendance_records")
     .where({ user_id })
     .whereNull("time_out")
+    .whereRaw("DATE(time_in) = DATE(?)", [todayDate])
     .orderBy("time_in", "desc")
     .first();
 
@@ -287,8 +289,8 @@ export async function processTimeOut(context) {
       time_out_lat: latitude,
       time_out_lng: longitude,
       time_out_address: address,
-      // Overtime requires OT tracking to be enabled AND a minimum 30-minute (0.5 hr) buffer
-      overtime_hours: (rules.overtime?.enabled !== false && totalHours >= ((rules.overtime?.threshold || 8) + 0.5)) ? parseFloat((totalHours - (rules.overtime?.threshold || 8)).toFixed(2)) : 0,
+      // Overtime requires OT tracking to be enabled AND exceeding threshold + buffer
+      overtime_hours: (rules.overtime?.enabled !== false && totalHours >= ((rules.overtime?.threshold || 8) + (rules.overtime?.buffer ?? 0.5))) ? parseFloat((totalHours - (rules.overtime?.threshold || 8)).toFixed(2)) : 0,
       status: status,
       metadata: JSON.stringify(metadata),
       updated_at: attendanceDB.fn.now(),
@@ -395,7 +397,7 @@ export async function syncDailyAttendance(user_id, dateStr, overrides = {}) {
       const shift = await getUserShift(user_id);
       const rules = ShiftService.getShiftRules(shift);
       const threshold = rules.overtime?.threshold || 8;
-      const buffer = 0.5; // 30 minutes minimum overtime required
+      const buffer = Number(rules.overtime?.buffer ?? 0.5); // Configurable buffer from shift policy
       const isEnabled = rules.overtime?.enabled !== false;
       
       if (isEnabled && totalHours >= (threshold + buffer)) {
@@ -525,22 +527,6 @@ export async function fetchUserRecords({ user_id, date_from, date_to, limit }) {
 
   let records = await query;
 
-  // Ensure active (open) session is included even if it started outside the date range
-  const openSession = await attendanceDB("attendance_records")
-    .where("user_id", user_id)
-    .whereNull("time_out")
-    .select(
-      "attendance_records.*",
-      attendanceDB.raw("DATE_FORMAT(attendance_records.time_in, '%Y-%m-%dT%H:%i:%s') as time_in_ts"),
-      attendanceDB.raw("DATE_FORMAT(attendance_records.time_out, '%Y-%m-%dT%H:%i:%s') as time_out_ts"),
-      attendanceDB.raw("DATE_FORMAT(attendance_records.created_at, '%Y-%m-%dT%H:%i:%s') as created_at_ts"),
-      attendanceDB.raw("DATE_FORMAT(attendance_records.updated_at, '%Y-%m-%dT%H:%i:%s') as updated_at_ts")
-    )
-    .first();
-
-  if (openSession && !records.some(r => r.attendance_id === openSession.attendance_id)) {
-    records.unshift(openSession);
-  }
 
   const withUrls = await Promise.all(
     (records || []).map(async (row) => {
@@ -591,6 +577,23 @@ export async function createCorrectionRequest({
   proposed_data,
   reason
 }) {
+  // FETCH DYNAMIC DEADLINE FROM SHIFT RULES
+  const userShift = await getUserShift(user_id);
+  const rules = ShiftService.getShiftRules(userShift || {});
+  const deadlineDays = rules.correction_deadline || 2;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const reqDate = new Date(request_date);
+  reqDate.setHours(0, 0, 0, 0);
+
+  const diffTime = today - reqDate;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays > deadlineDays) {
+    throw new Error(`Correction requests can only be submitted within ${deadlineDays} days of the attendance date.`);
+  }
+
   // ENFORCE SINGLE REQUEST PER DAY: Delete any existing request for this date
   await attendanceDB("attendance_correction_requests")
     .where({ user_id, org_id, request_date })
