@@ -128,8 +128,8 @@ function SeoManager() {
         ? "Access the MANO Attendance secure login portal. Manage your workforce, track live attendance, and generate reports."
         : "MANO Attendance workforce platform.";
 
-    const canonicalPath = isPublicLanding || isLoginPage || isForgotPassword ? path : "/";
-    const canonicalUrl = `${SEO_BASE_URL}${canonicalPath}`;
+    const canonicalPath = isPublicLanding ? "" : isLoginPage ? "login" : isForgotPassword ? "forgot-password" : "";
+    const canonicalUrl = `${SEO_BASE_URL}/${canonicalPath}`;
     const robots = isPublicLanding || isLoginPage || isForgotPassword ? "index, follow" : "noindex, nofollow";
 
     document.title = title;
@@ -140,8 +140,10 @@ function SeoManager() {
     upsertMetaTag('meta[property="og:title"]', { property: "og:title", content: title });
     upsertMetaTag('meta[property="og:description"]', { property: "og:description", content: description });
     upsertMetaTag('meta[property="og:url"]', { property: "og:url", content: canonicalUrl });
+    upsertMetaTag('meta[property="og:image"]', { property: "og:image", content: `${SEO_BASE_URL}/showcase/rag-assistant.png` });
     upsertMetaTag('meta[name="twitter:title"]', { name: "twitter:title", content: title });
     upsertMetaTag('meta[name="twitter:description"]', { name: "twitter:description", content: description });
+    upsertMetaTag('meta[name="twitter:image"]', { name: "twitter:image", content: `${SEO_BASE_URL}/showcase/rag-assistant.png` });
   }, [location.pathname, user]);
 
   return null;

@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip as MapTooltip } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+
+// Fix for Leaflet default icon issues in React
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
 import DashboardLayout from '../../components/DashboardLayout';
 import {
     Search,
@@ -25,11 +37,16 @@ import {
     PieChart as PieChartIcon,
     BarChart as BarChartIcon,
     RefreshCcw,
+    RefreshCw,
     MapPin,
-    Table
+    Table,
+    ChevronDown,
+    Layers,
+    Check
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { attendanceService } from '../../services/attendanceService';
+import DatePicker from '../../components/DatePicker';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -44,7 +61,17 @@ const AttendanceMonitoring = () => {
 
     const { avatarTimestamp } = useAuth();
     const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
-    const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table'
+    const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table' | 'map'
+    const [activeTheme, setActiveTheme] = useState('voyager');
+    const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+
+    const MAP_THEMES = {
+        dark: { name: 'Night Mode', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
+        light: { name: 'Light Mode', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' },
+        voyager: { name: 'Day Mode', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' },
+        satellite: { name: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
+        streets: { name: 'Streets', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }
+    };
     const [selectedRequest, setSelectedRequest] = useState(1); // For Detail View
     const [selectedLiveUser, setSelectedLiveUser] = useState(null); // For Live Attendance Detail Modal
 
@@ -144,7 +171,11 @@ const AttendanceMonitoring = () => {
                             isLate: (r.late_minutes || 0) > 0,
                             lateReason: r.late_reason,
                             inImage: r.time_in_image,
-                            outImage: r.time_out_image
+                            outImage: r.time_out_image,
+                            inLat: r.time_in_lat,
+                            inLng: r.time_in_lng,
+                            outLat: r.time_out_lat,
+                            outLng: r.time_out_lng
                         };
                     });
 
@@ -159,7 +190,7 @@ const AttendanceMonitoring = () => {
                     const isCurrentlyActive = sessions.some(s => s.isActive);
 
                     let allStatuses = [];
-                    
+
                     if (isCurrentlyActive) {
                         allStatuses.push('Active');
                         if (userRecords.some(r => r.late_minutes > 0)) allStatuses.push('Late');
@@ -172,12 +203,12 @@ const AttendanceMonitoring = () => {
                             if (latest.status === 'MISSED_PUNCH' || latest.status === 'Missed Punch') allStatuses.push('Missed Punch');
                             if (userRecords.some(r => r.late_minutes > 0)) allStatuses.push('Late');
                             if ((latest.overtime_hours || 0) > 0 || latest.status === 'OVERTIME' || latest.status === 'Overtime') allStatuses.push('Overtime');
-                            
+
                             if (allStatuses.length === 0) allStatuses.push('Present');
-                            
+
                             status = allStatuses.includes('Missed Punch') ? 'Missed Punch' :
-                                     allStatuses.includes('Overtime') ? 'Overtime' :
-                                     allStatuses.includes('Late') ? 'Late' : 'Present';
+                                allStatuses.includes('Overtime') ? 'Overtime' :
+                                    allStatuses.includes('Late') ? 'Late' : 'Present';
                         }
                     }
 
@@ -235,6 +266,28 @@ const AttendanceMonitoring = () => {
             setLastSynced(new Date());
         }
     };
+
+    // Theme Sync Effect
+    useEffect(() => {
+        const isDark = document.documentElement.classList.contains('dark');
+        setActiveTheme(isDark ? 'dark' : 'voyager');
+
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    const darkActive = document.documentElement.classList.contains('dark');
+                    setActiveTheme(darkActive ? 'dark' : 'voyager');
+                }
+            });
+        });
+
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['class'],
+        });
+
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         // Always fetch requests to keep the badge count updated
@@ -305,10 +358,10 @@ const AttendanceMonitoring = () => {
 
     // Stats Cards Data
     const statCards = [
-        { label: 'Total Present', value: stats.present, icon: <UserCheck size={20} />, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
-        { label: 'Late Arrivals', value: stats.late, icon: <Clock size={20} />, color: 'text-amber-600', bg: 'bg-amber-100 dark:bg-amber-900/30' },
-        { label: 'Absent', value: stats.absent, icon: <UserX size={20} />, color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-900/30' },
-        { label: 'Currently Active', value: stats.active, icon: <Activity size={20} />, color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+        { label: 'Total Present', value: stats.present, icon: <UserCheck size={20} />, bg: 'bg-emerald-50 dark:bg-emerald-500/10', color: 'text-emerald-600 dark:text-emerald-400' },
+        { label: 'Late Arrivals', value: stats.late, icon: <Clock size={20} />, bg: 'bg-amber-50 dark:bg-amber-500/10', color: 'text-amber-600 dark:text-amber-400' },
+        { label: 'Absent', value: stats.absent, icon: <UserX size={20} />, bg: 'bg-rose-50 dark:bg-rose-500/10', color: 'text-rose-600 dark:text-rose-400' },
+        { label: 'Currently Active', value: stats.active, icon: <Activity size={20} />, bg: 'bg-blue-50 dark:bg-blue-500/10', color: 'text-blue-600 dark:text-blue-400' },
     ];
 
     // Filter Logic for Live Tab
@@ -486,25 +539,81 @@ const AttendanceMonitoring = () => {
         return Object.entries(frequency).map(([name, value]) => ({ name, value }));
     };
 
+    // --- MAP HELPER COMPONENTS ---
+    const MapRecenter = ({ data }) => {
+        const map = useMap();
+        useEffect(() => {
+            if (!data || data.length === 0) return;
+            
+            // Find bounds for all markers
+            const points = [];
+            data.forEach(user => {
+                user.sessions.forEach(s => {
+                    if (s.inLat && s.inLng) points.push([Number(s.inLat), Number(s.inLng)]);
+                    if (s.outLat && s.outLng) points.push([Number(s.outLat), Number(s.outLng)]);
+                });
+            });
+
+            if (points.length > 0) {
+                map.fitBounds(points, { padding: [50, 50], maxZoom: 15 });
+            }
+        }, [data, map]);
+        return null;
+    };
+
+
     return (
-        <DashboardLayout title="Live Attendance">
+        <>
+            <style>
+                {`
+                .user-marker-in, .user-marker-out, .user-marker-combined {
+                    z-index: 500 !important;
+                }
+                .marker-inner {
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    transform-origin: bottom center;
+                }
+                .user-marker-in:hover .marker-inner, .user-marker-out:hover .marker-inner, .user-marker-combined:hover .marker-inner {
+                    transform: scale(1.2) translateY(-10px) !important;
+                }
+                .user-marker-in:hover, .user-marker-out:hover, .user-marker-combined:hover {
+                    z-index: 1000 !important;
+                }
+                .premium-tooltip {
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    padding: 0 !important;
+                    pointer-events: none !important;
+                }
+                .premium-tooltip::before {
+                    display: none !important;
+                }
+                `}
+            </style>
+
+            <DashboardLayout title="Live Attendance">
             <div className="space-y-6">
 
                 {/* Tabs */}
-                <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
+                <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-lg w-fit">
                     <button
                         onClick={() => setActiveTab('live')}
-                        className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'live' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'live' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
                     >
+                        <LayoutGrid size={16} className={activeTab === 'live' ? 'text-indigo-500' : 'text-slate-400'} />
                         Live Dashboard
                     </button>
                     <button
                         onClick={() => setActiveTab('requests')}
-                        className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-3 relative ${activeTab === 'requests' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
+                        className={`relative flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === 'requests' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
                     >
-                        <span>Correction Requests</span>
-                        {requestCount > 0 && (
-                            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{requestCount}</span>
+                        <FileText size={16} className={activeTab === 'requests' ? 'text-indigo-500' : 'text-slate-400'} />
+                        Correction Requests
+                        {requestCount > 0 && activeTab !== 'requests' && (
+                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full animate-pulse border-2 border-slate-100 dark:border-github-dark-subtle">
+                                {requestCount}
+                            </span>
                         )}
                     </button>
                 </div>
@@ -514,7 +623,7 @@ const AttendanceMonitoring = () => {
                         {/* Stats Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             {statCards.map((stat, index) => (
-                                <div key={index} className="bg-white dark:bg-dark-card p-4 rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between transition-colors duration-300">
+                                <div key={index} className="bg-white dark:bg-dark-card p-4 rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between transition-colors duration-300">
                                     <div>
                                         <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted">{stat.label}</p>
                                         <p className="text-2xl font-bold text-slate-800 dark:text-github-dark-text mt-1">{stat.value}</p>
@@ -527,203 +636,232 @@ const AttendanceMonitoring = () => {
                         </div>
 
                         {/* Main Content */}
-                        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden transition-colors duration-300">
+                        <div className="bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden transition-colors duration-300">
 
-                            {/* Toolbar */}
-                            <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <h2 className="text-lg font-semibold text-slate-800 dark:text-github-dark-text">Real-time Monitoring</h2>
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                                        <span className="relative flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                        </span>
-                                        Live
+                            {/* Premium Control Center */}
+                            <div className="p-6 border-b border-slate-200 dark:border-github-dark-border bg-white dark:bg-dark-card space-y-6">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-3">
+                                            <h2 className="text-2xl font-black text-slate-900 dark:text-github-dark-text tracking-tighter uppercase">
+                                                {activeView === 'cards' ? 'Employee Overview' : activeView === 'graph' ? 'Live Analytics' : 'Activity Timeline'}
+                                            </h2>
+                                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-md">
+                                                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
+                                                <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Real-time</span>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400 dark:text-github-dark-muted font-medium mt-1">
+                                            {activeView === 'cards' && 'Monitoring all on-duty staff status and session availability.'}
+                                            {activeView === 'graph' && 'Deep dive into attendance metrics, trends, and department KPIs.'}
+                                            {activeView === 'table' && 'High-density Gantt visualization of daily employee movements.'}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 bg-slate-50 dark:bg-github-dark-subtle/30 p-1.5 rounded-lg border border-slate-100 dark:border-github-dark-border">
+                                        <div className="flex items-center gap-3 w-48">
+                                            <DatePicker
+                                                value={selectedDate}
+                                                onChange={(date) => setSelectedDate(date)}
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => fetchData()}
+                                            className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-white dark:hover:bg-dark-card rounded-md transition-all shadow-sm group"
+                                            title="Sync Data"
+                                        >
+                                            <RefreshCw size={16} className="group-active:rotate-180 transition-transform duration-500" />
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 w-full sm:w-auto">
-                                    <div className="relative flex-1 sm:flex-none">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input
-                                            type="text"
-                                            placeholder="Search employee..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="pl-9 pr-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-full sm:w-64 transition-all"
-                                        />
+                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4 border-t border-slate-50 dark:border-github-dark-border/30">
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <div className="relative flex-1 max-w-md group">
+                                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search by name, role or department..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="pl-11 pr-4 py-2.5 text-xs w-full rounded-lg border border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20 text-slate-900 dark:text-github-dark-text focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-dark-card outline-none transition-all shadow-inner"
+                                            />
+                                        </div>
+                                        <div className="relative">
+                                            <select
+                                                value={departmentFilter}
+                                                onChange={(e) => setDepartmentFilter(e.target.value)}
+                                                className="pl-10 pr-8 py-2.5 text-xs rounded-lg border border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20 text-slate-700 dark:text-github-dark-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner appearance-none min-w-[140px] font-bold"
+                                            >
+                                                <option value="All">All Departments</option>
+                                                <option value="Sales">Sales</option>
+                                                <option value="Retail">Retail</option>
+                                                <option value="Logistics">Logistics</option>
+                                                <option value="Operations">Operations</option>
+                                                <option value="IT">IT</option>
+                                                <option value="HR">HR</option>
+                                            </select>
+                                            <Filter size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                        </div>
                                     </div>
 
-                                    <div className="relative">
-                                        <select
-                                            value={departmentFilter}
-                                            onChange={(e) => setDepartmentFilter(e.target.value)}
-                                            className="appearance-none pl-3 pr-8 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
-                                        >
-                                            <option value="All">All Depts</option>
-                                            <option value="Sales">Sales</option>
-                                            <option value="Retail">Retail</option>
-                                            <option value="Logistics">Logistics</option>
-                                            <option value="Operations">Operations</option>
-                                            <option value="IT">IT</option>
-                                            <option value="HR">HR</option>
-                                        </select>
-                                        <Filter className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+                                    {/* Uniform View Switcher */}
+                                    <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-lg w-fit border border-slate-200 dark:border-github-dark-border/50">
+                                        {[
+                                            { id: 'cards', label: 'Overview', icon: LayoutGrid },
+                                            { id: 'graph', label: 'Analytics', icon: BarChartIcon },
+                                            { id: 'table', label: 'Timeline', icon: Table },
+                                            { id: 'map', label: 'Map View', icon: MapPin }
+                                        ].map((view) => (
+                                            <button
+                                                key={view.id}
+                                                onClick={() => setActiveView(view.id)}
+                                                className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-xs font-bold transition-all duration-200 ${
+                                                    activeView === view.id 
+                                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                                                    : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
+                                                }`}
+                                            >
+                                                <view.icon size={14} className={activeView === view.id ? 'text-indigo-500' : 'text-slate-400'} />
+                                                {view.label}
+                                            </button>
+                                        ))}
                                     </div>
-
-
-                                    <div className="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg flex items-center gap-1">
-                                        <button
-                                            onClick={() => setActiveView('cards')}
-                                            className={`p-1.5 rounded-md transition-all ${activeView === 'cards' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                            title="Card View"
-                                        >
-                                            <LayoutGrid size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveView('graph')}
-                                            className={`p-1.5 rounded-md transition-all ${activeView === 'graph' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                            title="Graph View"
-                                        >
-                                            <PieChartIcon size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveView('table')}
-                                            className={`p-1.5 rounded-md transition-all ${activeView === 'table' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                            title="Table View"
-                                        >
-                                            <Table size={18} />
-                                        </button>
-                                    </div>
-
-                                    <input
-                                        type="date"
-                                        value={selectedDate}
-                                        onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/50 text-slate-900 dark:text-github-dark-text focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                    />
-
-                                    <button
-                                        onClick={() => fetchData()}
-                                        className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                                        title={`Refresh (Last sync: ${lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`}
-                                    >
-                                        <RefreshCcw size={20} className={loading ? "animate-spin" : ""} />
-                                    </button>
                                 </div>
                             </div>
 
+
                             <div className="p-6 bg-slate-50/50 dark:bg-github-dark-subtle/10 min-h-[500px]">
                                 {activeView === 'table' ? (
-                                    <div className="bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left">
-                                                <thead className="bg-slate-50 dark:bg-github-dark-subtle/50 text-xs uppercase text-slate-500 font-semibold border-b border-slate-200 dark:border-github-dark-border">
-                                                    <tr>
-                                                        <th className="px-6 py-4">Employee</th>
-                                                        <th className="px-6 py-4">Status</th>
-                                                        <th className="px-6 py-4">Session Info</th>
-                                                        <th className="px-6 py-4">Total Time</th>
-                                                        <th className="px-6 py-4">Latest Location</th>
-                                                        <th className="px-6 py-4 text-right">Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                                                    {loading && attendanceData.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan="6" className="p-10 text-center text-slate-400">Loading data...</td>
-                                                        </tr>
-                                                    ) : filteredData.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan="6" className="p-10 text-center text-slate-400">No employees found.</td>
-                                                        </tr>
-                                                    ) : (
-                                                        filteredData.map((item) => (
-                                                            <tr key={item.id} onClick={() => setSelectedLiveUser(item)} className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer ${item.status === 'Absent' ? 'opacity-60 grayscale-[0.3]' : ''}`}>
-                                                                <td className="px-6 py-4">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle dark:text-github-dark-muted' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
-                                                                            {item.avatar.startsWith('http') ? (
-                                                                                <img src={`${item.avatar}?t=${avatarTimestamp}`} alt={item.name} className="w-full h-full object-cover" />
-                                                                            ) : (
-                                                                                item.avatar
-                                                                            )}
-                                                                        </div>
-                                                                        <div>
-                                                                            <p className="font-semibold text-sm text-slate-800 dark:text-github-dark-text">{item.name}</p>
-                                                                            <p className="text-xs text-slate-500 dark:text-github-dark-muted">{item.role} • {item.department}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-6 py-4">
-                                                                    <div className="flex flex-wrap gap-1">
-                                                                        {item.allStatuses && item.allStatuses.map(statusBadge => (
-                                                                            <span key={statusBadge} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(statusBadge).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
-                                                                                <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${statusBadge === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
-                                                                                {statusBadge}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-6 py-4">
-                                                                    {item.sessions.length > 0 ? (
-                                                                        <div className="flex flex-col gap-1.5">
-                                                                            {/* Time Row */}
-                                                                            <div className="flex items-center gap-2 text-xs">
-                                                                                <span className="font-mono text-emerald-600 dark:text-emerald-400">{item.sessions[0].in}</span>
-                                                                                <span className="text-slate-300 dark:text-slate-600">→</span>
-                                                                                <span className={`font-mono ${item.sessions[0].isActive ? 'text-indigo-500 font-bold animate-pulse' : 'text-slate-500 dark:text-github-dark-muted'}`}>
-                                                                                    {item.sessions[0].out}
-                                                                                </span>
-                                                                                {item.sessions.length > 1 && (
-                                                                                    <span className="text-[10px] text-slate-400 italic font-medium ml-1">+{item.sessions.length - 1} more</span>
-                                                                                )}
-                                                                            </div>
+                                    <div className="bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+                                        <div className="overflow-x-auto custom-scrollbar">
+                                            <div className="min-w-[1200px]">
+                                                {/* Timeline Header */}
+                                                <div className="flex bg-slate-50 dark:bg-github-dark-subtle/50 border-b border-slate-200 dark:border-github-dark-border">
+                                                    <div className="w-[300px] shrink-0 px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-slate-50 dark:bg-github-dark-subtle/50 z-20">
+                                                        Employee Details
+                                                    </div>
+                                                    <div className="flex-1 flex">
+                                                        {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
+                                                            <div key={hour} className="flex-1 py-4 text-center text-[10px] font-bold text-slate-400 border-r border-slate-200 dark:border-github-dark-border/30 last:border-r-0">
+                                                                {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
 
-                                                                            {/* Location Row */}
-                                                                            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-github-dark-muted">
-                                                                                <div className="flex items-center gap-1" title={item.sessions[0].inLocation}>
-                                                                                    <MapPin size={10} className="text-emerald-500 shrink-0" />
-                                                                                    <span className="max-w-[120px] truncate">{item.sessions[0].inLocation}</span>
-                                                                                </div>
-                                                                                {(item.sessions[0].outLocation || item.sessions[0].isActive) && (
-                                                                                    <>
-                                                                                        <span className="text-slate-300">→</span>
-                                                                                        <div className="flex items-center gap-1" title={item.sessions[0].outLocation || "Active"}>
-                                                                                            <MapPin size={10} className={`${item.sessions[0].isActive ? 'text-indigo-400 animate-pulse' : 'text-red-500'} shrink-0`} />
-                                                                                            <span className="max-w-[120px] truncate">
-                                                                                                {item.sessions[0].outLocation || "Current Location"}
-                                                                                            </span>
-                                                                                        </div>
-                                                                                    </>
+                                                {/* Timeline Rows */}
+                                                <div className="divide-y divide-slate-100 dark:divide-github-dark-border/50">
+                                                    {loading && attendanceData.length === 0 ? (
+                                                        <div className="p-10 text-center text-slate-400">Loading timeline...</div>
+                                                    ) : filteredData.length === 0 ? (
+                                                        <div className="p-10 text-center text-slate-400">No employees found.</div>
+                                                    ) : (
+                                                        filteredData.map((item) => {
+                                                            const startHour = 6;
+                                                            const totalHours = 16;
+                                                            const timeToPct = (date) => {
+                                                                if (!date) return null;
+                                                                const h = date.getHours();
+                                                                const m = date.getMinutes();
+                                                                const totalMinutes = (h - startHour) * 60 + m;
+                                                                return Math.max(0, Math.min(100, (totalMinutes / (totalHours * 60)) * 100));
+                                                            };
+
+                                                            return (
+                                                                <div key={item.id} className="flex hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors group cursor-pointer" onClick={() => setSelectedLiveUser(item)}>
+                                                                    {/* Employee Info (Sticky) */}
+                                                                    <div className="w-[300px] shrink-0 px-6 py-4 flex items-center gap-3 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-github-dark-subtle/30 z-10">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle dark:text-github-dark-muted' : 'bg-gradient-to-br from-indigo-500/10 to-purple-600/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20'}`}>
+                                                                                {item.avatar.startsWith('http') ? (
+                                                                                    <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                                                                                ) : (
+                                                                                    item.avatar
                                                                                 )}
                                                                             </div>
+                                                                            <div className="min-w-0">
+                                                                                <p className="font-bold text-sm text-slate-800 dark:text-github-dark-text truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{item.name}</p>
+                                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30'}`}>
+                                                                                        {item.status.split(' ')[0]}
+                                                                                    </span>
+                                                                                    <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-mono font-bold">{item.totalHours} Hrs</span>
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
-                                                                    ) : (
-                                                                        <span className="text-slate-400 text-xs italic">-</span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-6 py-4">
-                                                                    <span className={`font-mono text-sm font-bold ${item.status === 'Absent' ? 'text-slate-300 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
-                                                                        {item.totalHours}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-6 py-4">
-                                                                    <div className="flex items-center gap-1.5 max-w-[140px]" title={item.location}>
-                                                                        <MapPin size={12} className="text-slate-400 shrink-0" />
-                                                                        <span className="text-xs text-slate-500 dark:text-github-dark-muted truncate">{item.location}</span>
                                                                     </div>
-                                                                </td>
-                                                                <td className="px-6 py-4 text-right">
-                                                                    <button className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
-                                                                        <MoreVertical size={16} />
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        ))
+
+                                                                    {/* Timeline Grid */}
+                                                                    <div className="flex-1 relative flex h-20 items-center">
+                                                                        {/* Hour Grid Lines */}
+                                                                        <div className="absolute inset-0 flex">
+                                                                            {Array.from({ length: 16 }).map((_, i) => (
+                                                                                <div key={i} className="flex-1 border-r border-slate-100 dark:border-github-dark-border/30 last:border-r-0"></div>
+                                                                            ))}
+                                                                        </div>
+
+                                                                        {/* Session Blocks */}
+                                                                        <div className="absolute inset-x-0 h-10 z-10 px-2">
+                                                                            {item.sessions.map((session, sIdx) => {
+                                                                                const startPos = timeToPct(session.rawIn);
+                                                                                const endPos = session.isActive ? timeToPct(new Date()) : timeToPct(session.rawOut);
+                                                                                const width = endPos - startPos;
+
+                                                                                if (startPos === null) return null;
+
+                                                                                return (
+                                                                                    <div
+                                                                                        key={sIdx}
+                                                                                        className={`absolute top-0 h-full rounded-md border-2 shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all cursor-pointer group/session ${session.isActive ? 'bg-gradient-to-r from-indigo-500 to-blue-500 border-indigo-400/50 animate-pulse' : 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400/50'}`}
+                                                                                        style={{ left: `${startPos}%`, width: `${Math.max(width, 1)}%` }}
+                                                                                    >
+                                                                                        {/* Floating Labels on active */}
+                                                                                        {session.isActive && (
+                                                                                            <div className="absolute -top-6 left-0 right-0 text-center">
+                                                                                                <span className="text-[8px] font-black bg-indigo-500 text-white px-2 py-0.5 rounded-md uppercase tracking-widest shadow-lg">Active Now</span>
+                                                                                            </div>
+                                                                                        )}
+
+                                                                                        {/* Tooltip on Hover */}
+                                                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 px-4 py-3 bg-slate-900 dark:bg-github-dark-bg text-white text-[10px] rounded-lg opacity-0 group-hover/session:opacity-100 transition-all duration-300 transform translate-y-2 group-hover/session:translate-y-0 whitespace-nowrap z-30 pointer-events-none shadow-2xl border border-slate-700 dark:border-github-dark-border min-w-[180px]">
+                                                                                            <div className="flex items-center justify-between mb-2">
+                                                                                                <span className="text-slate-400 font-black uppercase tracking-widest text-[8px]">Session Period</span>
+                                                                                                <div className="flex items-center gap-1 text-emerald-400 font-mono font-bold">
+                                                                                                    <Clock size={10} />
+                                                                                                    {session.in} - {session.out}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
+                                                                                                <MapPin size={12} className="text-indigo-400 shrink-0" />
+                                                                                                <div className="flex flex-col">
+                                                                                                    <span className="text-[8px] uppercase text-slate-500 font-bold">Location</span>
+                                                                                                    <span className="text-[10px] leading-tight max-w-[140px] truncate">{session.inLocation}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 dark:bg-github-dark-bg rotate-45 border-r border-b border-slate-700 dark:border-github-dark-border"></div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+
+                                                                        {/* Background Indicator for late arrival */}
+                                                                        {item.allStatuses && item.allStatuses.includes('Late') && item.sessions[0] && (
+                                                                            <div
+                                                                                className="absolute left-0 h-1 bg-amber-400/20 rounded-full"
+                                                                                style={{ width: `${timeToPct(item.sessions[0].rawIn)}%` }}
+                                                                                title="Late Arrival Period"
+                                                                            ></div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
                                                     )}
-                                                </tbody>
-                                            </table>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 ) : activeView === 'cards' ? (
@@ -747,12 +885,12 @@ const AttendanceMonitoring = () => {
                                                         )}
                                                         <div
                                                             onClick={() => setSelectedLiveUser(item)}
-                                                            className={`bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-github-dark-border hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col cursor-pointer ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}
+                                                            className={`bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col cursor-pointer ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}
                                                         >
                                                             {/* Card Header */}
                                                             <div className="p-5 flex items-start justify-between">
                                                                 <div className="flex gap-4">
-                                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle dark:text-github-dark-muted' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
+                                                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle dark:text-github-dark-muted' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`}>
                                                                         {item.avatar.startsWith('http') ? (
                                                                             <img src={`${item.avatar}?t=${avatarTimestamp}`} alt={item.name} className="w-full h-full object-cover" />
                                                                         ) : (
@@ -772,7 +910,7 @@ const AttendanceMonitoring = () => {
                                                             {/* Status Badge Line */}
                                                             <div className="px-5 pb-4 flex flex-wrap items-center gap-2">
                                                                 {item.allStatuses && item.allStatuses.map(statusBadge => (
-                                                                    <span key={statusBadge} className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border shadow-sm ${getStatusStyle(statusBadge).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
+                                                                    <span key={statusBadge} className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-sm ${getStatusStyle(statusBadge).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')}`}>
                                                                         <div className={`w-1.5 h-1.5 rounded-full mr-2 ${statusBadge === 'Active' ? 'animate-pulse bg-current' : 'bg-current'}`}></div>
                                                                         {statusBadge}
                                                                     </span>
@@ -797,7 +935,7 @@ const AttendanceMonitoring = () => {
                                                                 ) : item.sessions.length > 0 ? (
                                                                     <div className="relative pl-4 border-l-2 border-indigo-500">
                                                                         {/* Session Indicator Dot */}
-                                                                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white dark:border-dark-card shadow-sm ${item.sessions[0].isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
+                                                                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-md border-2 border-white dark:border-dark-card shadow-sm ${item.sessions[0].isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
 
                                                                         <div className="flex items-center justify-between mb-2">
                                                                             <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest">
@@ -887,13 +1025,343 @@ const AttendanceMonitoring = () => {
                                             </div>
                                         )}
                                     </div>
-                                ) : (
+                                ) : activeView === 'map' ? (
+                                    /* Map View Layout */
+                                    <div className="h-[650px] bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-github-dark-border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-500 relative">
+                                        <MapContainer
+                                            center={[20, 78]}
+                                            zoom={5}
+                                            className="h-full w-full z-0"
+                                            attributionControl={false}
+                                        >
+                                            <TileLayer url={MAP_THEMES[activeTheme].url} />
+                                            
+                                            {/* Map Theme Switcher Overlay */}
+                                            <div className="absolute top-4 right-4 z-[1001]">
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
+                                                        className="flex items-center gap-2 bg-white dark:bg-github-dark-subtle text-slate-800 dark:text-github-dark-text px-4 py-2.5 rounded-xl shadow-lg border border-slate-200 dark:border-github-dark-border hover:border-indigo-500/50 transition-all group"
+                                                    >
+                                                        <Layers size={18} className="text-indigo-500 group-hover:scale-110 transition-transform" />
+                                                        <span className="text-sm font-semibold">{MAP_THEMES[activeTheme].name}</span>
+                                                        <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${isThemeMenuOpen ? 'rotate-180' : ''}`} />
+                                                    </button>
+
+                                                    {isThemeMenuOpen && (
+                                                        <>
+                                                            <div className="fixed inset-0 z-10" onClick={() => setIsThemeMenuOpen(false)} />
+                                                            <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-20">
+                                                                <div className="py-1">
+                                                                    {Object.entries(MAP_THEMES).map(([id, theme]) => (
+                                                                        <button
+                                                                            key={id}
+                                                                            onClick={() => {
+                                                                                setActiveTheme(id);
+                                                                                setIsThemeMenuOpen(false);
+                                                                            }}
+                                                                            className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors ${activeTheme === id
+                                                                                ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-bold'
+                                                                                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                                                }`}
+                                                                        >
+                                                                            <span>{theme.name}</span>
+                                                                            {activeTheme === id && <Check size={14} className="text-indigo-500" />}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <MapRecenter data={filteredData} />
+
+                                            {(() => {
+                                                const areCoordsSame = (lat1, lng1, lat2, lng2) => {
+                                                    if (!lat1 || !lng1 || !lat2 || !lng2) return false;
+                                                    return Math.abs(Number(lat1) - Number(lat2)) < 0.0001 && 
+                                                           Math.abs(Number(lng1) - Number(lng2)) < 0.0001;
+                                                };
+
+                                                return filteredData.map(user => (
+                                                    user.sessions.map((session, sIdx) => {
+                                                        const isSameLoc = areCoordsSame(session.inLat, session.inLng, session.outLat, session.outLng);
+
+                                                        if (isSameLoc) {
+                                                            return (
+                                                                <Marker 
+                                                                    key={`${user.id}-${sIdx}-combined`}
+                                                                    position={[Number(session.inLat), Number(session.inLng)]}
+                                                                    icon={L.divIcon({
+                                                                        className: 'user-marker-combined',
+                                                                        html: `<div class="marker-inner relative">
+                                                                                <div class="w-10 h-10 rounded-full border-2 border-transparent bg-white dark:bg-github-dark-subtle shadow-lg overflow-hidden flex items-center justify-center" style="border-image: linear-gradient(to bottom right, #10b981 50%, #f43f5e 50%) 1;">
+                                                                                    <div class="absolute inset-0 border-2 border-emerald-500 rounded-full" style="clip-path: polygon(0 0, 100% 0, 0 100%);"></div>
+                                                                                    <div class="absolute inset-0 border-2 border-rose-500 rounded-full" style="clip-path: polygon(100% 0, 100% 100%, 0 100%);"></div>
+                                                                                    ${user.avatar.startsWith('http') 
+                                                                                        ? `<img src="${user.avatar}" class="w-full h-full object-cover rounded-full" />` 
+                                                                                        : `<span class="text-xs font-black text-slate-600 dark:text-slate-300">${user.avatar}</span>`
+                                                                                    }
+                                                                                </div>
+                                                                                <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-600 rounded-full border-2 border-white dark:border-dark-card flex items-center justify-center shadow-sm">
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                                                                </div>
+                                                                               </div>`,
+                                                                        iconSize: [40, 40],
+                                                                        iconAnchor: [20, 20]
+                                                                    })}
+                                                                >
+                                                                    <MapTooltip direction="auto" offset={[0, -10]} opacity={1} className="premium-tooltip" sticky={true}>
+                                                                        <div className="bg-white dark:bg-[#0d1117] rounded-xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden w-[320px] animate-in fade-in zoom-in-95 duration-200">
+                                                                            <div className="p-2.5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                                                                                <div className="flex items-center gap-2.5">
+                                                                                    <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden shrink-0">
+                                                                                        {user.avatar.startsWith('http') ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
+                                                                                    </div>
+                                                                                    <div className="min-w-0">
+                                                                                        <p className="font-bold text-slate-800 dark:text-github-dark-text text-xs leading-tight">{user.name}</p>
+                                                                                        <p className="text-[9px] text-slate-500 font-medium">Full Session Details</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="p-2.5 space-y-3">
+                                                                                {/* In Section */}
+                                                                                <div className="space-y-2">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Time In</span>
+                                                                                        </div>
+                                                                                        <span className="text-[10px] font-bold text-emerald-600 px-2 py-0.5 rounded-full">{session.in}</span>
+                                                                                    </div>
+                                                                                    {session.inImage && (
+                                                                                        <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border h-20 bg-slate-100 dark:bg-github-dark-subtle">
+                                                                                            <img src={session.inImage} className="w-full h-full object-cover" />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <div className="border-t border-slate-100 dark:border-github-dark-border pt-3 space-y-2">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                                                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Time Out</span>
+                                                                                        </div>
+                                                                                        <span className="text-[10px] font-bold text-rose-600 px-2 py-0.5 rounded-full">{session.out}</span>
+                                                                                    </div>
+                                                                                    {session.outImage && (
+                                                                                        <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border h-20 bg-slate-100 dark:bg-github-dark-subtle">
+                                                                                            <img src={session.outImage} className="w-full h-full object-cover" />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <div className="flex flex-col gap-0.5 p-2 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
+                                                                                    <div className="flex items-center gap-1.5 text-[8px] font-bold text-slate-400 uppercase">
+                                                                                        <MapPin size={8} className="text-indigo-500" /> Location
+                                                                                    </div>
+                                                                                    <p className="text-[9px] text-slate-600 dark:text-slate-300 leading-tight break-words whitespace-normal">{session.inLocation}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </MapTooltip>
+                                                                </Marker>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <React.Fragment key={`${user.id}-${sIdx}`}>
+                                                        {session.inLat && session.inLng && (
+                                                            <Marker 
+                                                                position={[Number(session.inLat), Number(session.inLng)]}
+                                                                icon={L.divIcon({
+                                                                    className: 'user-marker-in',
+                                                                    html: `<div class="marker-inner relative">
+                                                                            <div class="w-10 h-10 rounded-full border-2 border-emerald-500 bg-white dark:bg-github-dark-subtle shadow-lg overflow-hidden flex items-center justify-center">
+                                                                                ${user.avatar.startsWith('http') 
+                                                                                    ? `<img src="${user.avatar}" class="w-full h-full object-cover" />` 
+                                                                                    : `<span class="text-xs font-black text-slate-600 dark:text-slate-300">${user.avatar}</span>`
+                                                                                }
+                                                                            </div>
+                                                                            <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-dark-card flex items-center justify-center shadow-sm">
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                                                                            </div>
+                                                                           </div>`,
+                                                                    iconSize: [40, 40],
+                                                                    iconAnchor: [20, 20]
+                                                                })}
+                                                            >
+                                                                <MapTooltip direction="auto" offset={[0, -10]} opacity={1} className="premium-tooltip" sticky={true}>
+                                                                    <div className="bg-white dark:bg-[#0d1117] rounded-xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden w-[280px] animate-in fade-in zoom-in-95 duration-200">
+                                                                        <div className="p-2.5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                                                                            <div className="flex items-center gap-2.5">
+                                                                                <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden shrink-0">
+                                                                                    {user.avatar.startsWith('http') ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
+                                                                                </div>
+                                                                                <div className="min-w-0">
+                                                                                    <p className="font-bold text-slate-800 dark:text-github-dark-text text-xs leading-tight">{user.name}</p>
+                                                                                    <p className="text-[9px] text-slate-500 font-medium">{user.role}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="p-2.5 space-y-2.5">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Login</span>
+                                                                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full uppercase">{session.in}</span>
+                                                                            </div>
+                                                                            
+                                                                            {session.inImage && (
+                                                                                <div className="relative group/img rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border h-24 bg-slate-100 dark:bg-github-dark-subtle">
+                                                                                    <img src={session.inImage} className="w-full h-full object-cover" />
+                                                                                </div>
+                                                                            )}
+
+                                                                            <div className="flex flex-col gap-0.5 p-2 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
+                                                                                <div className="flex items-center gap-1.5 text-[8px] font-bold text-slate-400 uppercase">
+                                                                                    <MapPin size={8} className="text-indigo-500" /> Location
+                                                                                </div>
+                                                                                <p className="text-[9px] text-slate-600 dark:text-slate-300 leading-tight break-words whitespace-normal">{session.inLocation}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </MapTooltip>
+                                                                <Popup className="premium-popup">
+                                                                    <div className="p-1 min-w-[200px]">
+                                                                        <div className="flex items-center gap-3 mb-3 pb-3 border-b border-slate-100">
+                                                                            <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                                                                                {user.avatar.startsWith('http') ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="font-bold text-slate-800 text-sm leading-tight">{user.name}</p>
+                                                                                <p className="text-[10px] text-slate-500 font-medium">{user.role}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Type</span>
+                                                                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase">Time In</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</span>
+                                                                                <span className="text-[10px] font-mono font-bold text-slate-700">{session.in}</span>
+                                                                            </div>
+                                                                            <div className="flex flex-col gap-1 mt-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
+                                                                                <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase">
+                                                                                    <MapPin size={10} /> Location
+                                                                                </div>
+                                                                                <p className="text-[10px] text-slate-600 leading-tight break-words whitespace-normal">{session.inLocation}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </Popup>
+                                                            </Marker>
+                                                        )}
+                                                        {session.outLat && session.outLng && (
+                                                            <Marker 
+                                                                position={[Number(session.outLat), Number(session.outLng)]}
+                                                                icon={L.divIcon({
+                                                                    className: 'user-marker-out',
+                                                                    html: `<div class="marker-inner relative">
+                                                                            <div class="w-10 h-10 rounded-full border-2 border-rose-500 bg-white dark:bg-github-dark-subtle shadow-lg overflow-hidden flex items-center justify-center">
+                                                                                ${user.avatar.startsWith('http') 
+                                                                                    ? `<img src="${user.avatar}" class="w-full h-full object-cover" />` 
+                                                                                    : `<span class="text-xs font-black text-slate-600 dark:text-slate-300">${user.avatar}</span>`
+                                                                                }
+                                                                            </div>
+                                                                            <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-rose-500 rounded-full border-2 border-white dark:border-dark-card flex items-center justify-center shadow-sm">
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                                                                            </div>
+                                                                           </div>`,
+                                                                    iconSize: [40, 40],
+                                                                    iconAnchor: [20, 20]
+                                                                })}
+                                                            >
+                                                                <MapTooltip direction="auto" offset={[0, -10]} opacity={1} className="premium-tooltip" sticky={true}>
+                                                                    <div className="bg-white dark:bg-[#0d1117] rounded-xl shadow-2xl border border-slate-200 dark:border-github-dark-border overflow-hidden w-[280px] animate-in fade-in zoom-in-95 duration-200">
+                                                                        <div className="p-2.5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                                                                            <div className="flex items-center gap-2.5">
+                                                                                <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden shrink-0">
+                                                                                    {user.avatar.startsWith('http') ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
+                                                                                </div>
+                                                                                <div className="min-w-0">
+                                                                                    <p className="font-bold text-slate-800 dark:text-github-dark-text text-xs leading-tight">{user.name}</p>
+                                                                                    <p className="text-[9px] text-slate-500 font-medium">{user.role}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="p-2.5 space-y-2.5">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Logout</span>
+                                                                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 rounded-full uppercase">{session.out}</span>
+                                                                            </div>
+                                                                            
+                                                                            {session.outImage && (
+                                                                                <div className="relative group/img rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border h-24 bg-slate-100 dark:bg-github-dark-subtle">
+                                                                                    <img src={session.outImage} className="w-full h-full object-cover" />
+                                                                                </div>
+                                                                            )}
+
+                                                                            <div className="flex flex-col gap-0.5 p-2 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
+                                                                                <div className="flex items-center gap-1.5 text-[8px] font-bold text-slate-400 uppercase">
+                                                                                    <MapPin size={8} className="text-indigo-500" /> Location
+                                                                                </div>
+                                                                                <p className="text-[9px] text-slate-600 dark:text-slate-300 leading-tight break-words whitespace-normal">{session.outLocation}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </MapTooltip>
+                                                                <Popup className="premium-popup">
+                                                                    <div className="p-1 min-w-[200px]">
+                                                                        <div className="flex items-center gap-3 mb-3 pb-3 border-b border-slate-100">
+                                                                            <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                                                                                {user.avatar.startsWith('http') ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="font-bold text-slate-800 text-sm leading-tight">{user.name}</p>
+                                                                                <p className="text-[10px] text-slate-500 font-medium">{user.role}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Type</span>
+                                                                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full uppercase">Time Out</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</span>
+                                                                                <span className="text-[10px] font-mono font-bold text-slate-700">{session.out}</span>
+                                                                            </div>
+                                                                            <div className="flex flex-col gap-1 mt-2 p-2 bg-slate-50 rounded-lg border border-slate-100">
+                                                                                <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase">
+                                                                                    <MapPin size={10} /> Location
+                                                                                </div>
+                                                                                <p className="text-[10px] text-slate-600 leading-tight break-words whitespace-normal">{session.outLocation}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </Popup>
+                                                            </Marker>
+                                                        )}
+                                                    </React.Fragment>
+                                                        );
+                                                    })
+                                                ));
+                                            })()}
+                                        </MapContainer>
+                                    </div>
+                                ) : activeView === 'graph' ? (
                                     /* Graph View Layout */
-                                    <div className="space-y-6">
+                                    <div className="space-y-6 animate-in fade-in duration-500">
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {/* Status Distribution */}
-                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
-                                                <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Attendance Status</h3>
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm hover:shadow-md transition-all">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Attendance Status</h3>
+                                                    <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-md">
+                                                        <PieChartIcon size={20} />
+                                                    </div>
+                                                </div>
                                                 <div className="h-[300px] w-full">
                                                     <ResponsiveContainer width="100%" height="100%">
                                                         <PieChart>
@@ -901,42 +1369,48 @@ const AttendanceMonitoring = () => {
                                                                 data={getStatusData()}
                                                                 cx="50%"
                                                                 cy="50%"
-                                                                innerRadius={60}
+                                                                innerRadius={70}
                                                                 outerRadius={100}
-                                                                paddingAngle={5}
+                                                                paddingAngle={8}
                                                                 dataKey="value"
+                                                                stroke="none"
                                                             >
                                                                 {getStatusData().map((entry, index) => (
-                                                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                                                    <Cell key={`cell-${index}`} fill={entry.color} className="hover:opacity-80 transition-opacity cursor-pointer" />
                                                                 ))}
                                                             </Pie>
                                                             <Tooltip
-                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
-                                                                itemStyle={{ color: '#fff' }}
+                                                                contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.9)', backdropFilter: 'blur(8px)', borderColor: 'rgba(51, 65, 85, 0.5)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                                                itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                                                             />
-                                                            <Legend verticalAlign="bottom" height={36} />
+                                                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
                                                         </PieChart>
                                                     </ResponsiveContainer>
                                                 </div>
                                             </div>
 
                                             {/* Department Breakdown */}
-                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
-                                                <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Department Metrics</h3>
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm hover:shadow-md transition-all">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Department Metrics</h3>
+                                                    <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-lg">
+                                                        <BarChartIcon size={20} />
+                                                    </div>
+                                                </div>
                                                 <div className="h-[300px] w-full">
                                                     <ResponsiveContainer width="100%" height="100%">
                                                         <BarChart data={getDepartmentData()}>
-                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
-                                                            <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                                            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.3} />
+                                                            <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                                                            <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
                                                             <Tooltip
-                                                                cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
-                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff', borderRadius: '8px' }}
+                                                                cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }}
+                                                                contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.9)', backdropFilter: 'blur(8px)', borderColor: 'rgba(51, 65, 85, 0.5)', borderRadius: '12px', color: '#fff' }}
                                                             />
-                                                            <Legend />
+                                                            <Legend iconType="circle" />
                                                             <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
                                                             <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
-                                                            <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                                                            <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[6, 6, 0, 0]} />
                                                         </BarChart>
                                                     </ResponsiveContainer>
                                                 </div>
@@ -945,17 +1419,17 @@ const AttendanceMonitoring = () => {
 
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {/* Check-in Activity */}
-                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm hover:shadow-md transition-all">
                                                 <div className="flex items-center justify-between mb-6">
-                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Peak Check-in Hours</h3>
-                                                    <div className="flex items-center gap-4 text-[10px] uppercase font-bold tracking-wider">
-                                                        <div className="flex items-center gap-1.5 text-indigo-600">
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Staff Activity Timeline</h3>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
                                                             <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                                                            New
+                                                            <span className="text-[10px] font-bold text-slate-500 dark:text-github-dark-muted uppercase">Login</span>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 text-purple-600">
-                                                            <div className="w-2 h-2 rounded-full bg-purple-500 border-2 border-dashed border-purple-200"></div>
-                                                            Repeat
+                                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
+                                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                            <span className="text-[10px] font-bold text-slate-500 dark:text-github-dark-muted uppercase">Active</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -963,56 +1437,66 @@ const AttendanceMonitoring = () => {
                                                     <ResponsiveContainer width="100%" height="100%">
                                                         <AreaChart data={getTimelineData()}>
                                                             <defs>
-                                                                <linearGradient id="colorCheckins" x1="0" y1="0" x2="0" y2="1">
-                                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                                                </linearGradient>
-                                                                <linearGradient id="colorRepeats" x1="0" y1="0" x2="0" y2="1">
-                                                                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2} />
-                                                                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                                                                </linearGradient>
                                                                 <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
-                                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
                                                                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                                                 </linearGradient>
+                                                                <linearGradient id="colorCheckins" x1="0" y1="0" x2="0" y2="1">
+                                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
+                                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                                </linearGradient>
                                                             </defs>
-                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.3} />
                                                             <XAxis dataKey="time" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} interval={1} />
-                                                            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                                                            <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                                             <Tooltip
-                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
-                                                                itemStyle={{ fontSize: '12px' }}
+                                                                contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.9)', backdropFilter: 'blur(8px)', borderColor: 'rgba(51, 65, 85, 0.5)', borderRadius: '12px', color: '#fff' }}
                                                             />
-                                                            <Legend verticalAlign="top" height={36} iconType="circle" />
                                                             <Area name="Active Staff" type="monotone" dataKey="active" stroke="#10b981" fillOpacity={1} fill="url(#colorActive)" strokeWidth={3} />
-                                                            <Area name="New Check-ins" type="monotone" dataKey="checkins" stroke="#6366f1" fillOpacity={1} fill="url(#colorCheckins)" strokeWidth={2} />
-                                                            <Area name="Repeat Check-ins" type="monotone" dataKey="repeats" stroke="#a855f7" fillOpacity={1} fill="url(#colorRepeats)" strokeWidth={2} strokeDasharray="5 5" />
+                                                            <Area name="Staff Check-ins" type="monotone" dataKey="checkins" stroke="#6366f1" fillOpacity={1} fill="url(#colorCheckins)" strokeWidth={3} />
                                                         </AreaChart>
                                                     </ResponsiveContainer>
                                                 </div>
                                             </div>
 
                                             {/* Login Frequency */}
-                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
-                                                <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Login Frequency</h3>
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm hover:shadow-md transition-all">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Session Frequency</h3>
+                                                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg">
+                                                        <Activity size={20} />
+                                                    </div>
+                                                </div>
                                                 <div className="h-[300px] w-full">
                                                     <ResponsiveContainer width="100%" height="100%">
-                                                        <BarChart data={getLoginFrequencyData()} layout="vertical">
-                                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" opacity={0.5} />
-                                                            <XAxis type="number" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                                            <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} width={80} />
+                                                        <BarChart data={getLoginFrequencyData()} layout="vertical" margin={{ left: 20 }}>
+                                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" opacity={0.3} />
+                                                            <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                                            <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={80} />
                                                             <Tooltip
-                                                                cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
-                                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff', borderRadius: '8px' }}
+                                                                cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }}
+                                                                contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.9)', backdropFilter: 'blur(8px)', borderColor: 'rgba(51, 65, 85, 0.5)', borderRadius: '12px', color: '#fff' }}
                                                             />
-                                                            <Bar dataKey="value" name="Employees" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                                                            <Bar dataKey="value" name="Employees" fill="#6366f1" radius={[0, 8, 8, 0]} barSize={24}>
+                                                                {getLoginFrequencyData().map((entry, index) => (
+                                                                    <Cell key={`cell-${index}`} fill={`url(#gradBar-${index})`} />
+                                                                ))}
+                                                            </Bar>
+                                                            <defs>
+                                                                {getLoginFrequencyData().map((_, i) => (
+                                                                    <linearGradient key={i} id={`gradBar-${i}`} x1="0" y1="0" x2="1" y2="0">
+                                                                        <stop offset="0%" stopColor="#6366f1" />
+                                                                        <stop offset="100%" stopColor="#a855f7" />
+                                                                    </linearGradient>
+                                                                ))}
+                                                            </defs>
                                                         </BarChart>
                                                     </ResponsiveContainer>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                )}
+                                ) : null}
                             </div>
                         </div>
                     </>
@@ -1020,7 +1504,7 @@ const AttendanceMonitoring = () => {
                     // Approvals Tab Content
                     <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-14rem)]">
 
-                        <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
+                        <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
                             {/* Header and Search */}
                             <div className="p-4 border-b border-slate-200 dark:border-github-dark-border space-y-4">
                                 <div className="flex justify-between items-center px-1">
@@ -1037,7 +1521,7 @@ const AttendanceMonitoring = () => {
                                         placeholder="Search by employee name..."
                                         value={correctionSearchTerm}
                                         onChange={(e) => setCorrectionSearchTerm(e.target.value)}
-                                        className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                        className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-md focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
                                     />
                                 </div>
 
@@ -1513,7 +1997,8 @@ const AttendanceMonitoring = () => {
                 </AnimatePresence>
 
             </div>
-        </DashboardLayout >
+            </DashboardLayout>
+        </>
     );
 };
 
@@ -1571,75 +2056,118 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                 <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <div className="h-6 w-1 bg-indigo-500 rounded-full"></div>
+                            <div className="h-6 w-1 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
                             <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted">Today's Timeline</h4>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${user.status === 'Active' ? 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border shadow-sm ${user.status.includes('Active') ? 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'}`}>
                                 {user.status}
                             </span>
-                            <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-github-dark-subtle px-2 py-0.5 rounded">
+                            <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-github-dark-muted bg-slate-100 dark:bg-github-dark-subtle/50 px-2 py-0.5 rounded border border-slate-200 dark:border-github-dark-border">
                                 {user.totalHours} Hrs
                             </span>
                         </div>
                     </div>
 
                     {user.lateReason && (
-                        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl">
-                            <h5 className="text-[9px] font-black uppercase text-amber-600 dark:text-amber-500 tracking-widest mb-1">Late Reason</h5>
-                            <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed italic line-clamp-2">"{user.lateReason}"</p>
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl shadow-sm">
+                            <h5 className="text-[9px] font-black uppercase text-amber-600 dark:text-amber-500 tracking-widest mb-1 flex items-center gap-1.5">
+                                <AlertTriangle size={10} /> Late Reason
+                            </h5>
+                            <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed italic">"{user.lateReason}"</p>
                         </div>
                     )}
 
-                    <div className="relative pl-3 space-y-4 border-l-2 border-slate-100 dark:border-github-dark-border ml-2">
+                    <div className="relative pl-3 space-y-5 border-l-2 border-slate-100 dark:border-github-dark-border ml-2">
                         {user.sessions.length === 0 ? (
                             <div className="text-center py-10 text-slate-400 italic text-xs">No activity recorded for today.</div>
                         ) : (
                             user.sessions.map((session, idx) => (
-                                <div key={idx} className="relative pl-6 pb-2">
+                                <div key={idx} className="relative pl-6">
                                     {/* Timeline Dot */}
-                                    <div className={`absolute -left-[11px] top-0.5 w-5 h-5 rounded-full border-2 border-white dark:border-dark-card shadow-sm flex items-center justify-center z-10 ${session.isActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                    <div className={`absolute -left-[11px] top-1 w-5 h-5 rounded-full border-2 border-white dark:border-dark-card shadow-md flex items-center justify-center z-10 ${session.isActive ? 'bg-indigo-500 animate-pulse ring-4 ring-indigo-500/10' : 'bg-slate-200 dark:bg-slate-700'}`}>
                                         {session.isActive && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
                                     </div>
 
-                                    <div className={`bg-slate-50/50 dark:bg-github-dark-subtle/20 border ${session.isActive ? 'border-indigo-100 dark:border-indigo-500/20' : 'border-slate-100 dark:border-github-dark-border'} rounded-xl p-3 shadow-sm`}>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-3">
+                                    {/* Session Card */}
+                                    <div className={`bg-white dark:bg-dark-card border ${session.isActive ? 'border-indigo-200 dark:border-indigo-500/40 shadow-indigo-100/50' : 'border-slate-200 dark:border-github-dark-border'} rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 group`}>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-4">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Start</span>
-                                                    <span className="text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400">{session.in}</span>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Start</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Clock size={12} className="text-emerald-500" />
+                                                        <span className="text-sm font-mono font-bold text-slate-800 dark:text-github-dark-text">{session.in}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="w-4 h-px bg-slate-200 dark:bg-slate-700"></div>
+                                                <div className="w-8 h-px bg-slate-100 dark:bg-github-dark-subtle mt-4"></div>
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">End</span>
-                                                    <span className={`text-sm font-mono font-bold ${session.isActive ? 'text-indigo-500 animate-pulse' : 'text-slate-600 dark:text-github-dark-muted'}`}>
-                                                        {session.out}
-                                                    </span>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">End</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <LogOut size={12} className={session.isActive ? 'text-indigo-400' : 'text-rose-500'} />
+                                                        <span className={`text-sm font-mono font-bold ${session.isActive ? 'text-indigo-500 animate-pulse' : 'text-slate-800 dark:text-github-dark-text'}`}>
+                                                            {session.out}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block leading-none mb-0.5">Duration</span>
-                                                <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">{session.hours}</span>
+                                            <div className="text-right bg-slate-50 dark:bg-github-dark-subtle/30 p-2 rounded-lg border border-slate-100 dark:border-github-dark-border">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block leading-none mb-1">Duration</span>
+                                                <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">{session.isActive ? '-' : (session.hours || '-')}</span>
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-github-dark-border/50">
-                                            <div className="flex items-start gap-2 text-[11px] text-slate-500 dark:text-github-dark-muted">
-                                                <MapPin size={12} className="shrink-0 mt-0.5 text-indigo-400 opacity-60" />
-                                                <span className="line-clamp-2" title={session.inLocation}>{session.inLocation}</span>
+                                        <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-50 dark:border-github-dark-border/30">
+                                            {/* Punch In Details */}
+                                            <div className="space-y-2">
+                                                <span className="text-[9px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest block">Punch In</span>
+                                                <div className="flex items-start gap-1.5">
+                                                    <MapPin size={10} className="shrink-0 mt-0.5 text-emerald-500 opacity-70" />
+                                                    <span className="text-[10px] text-slate-500 dark:text-github-dark-muted leading-tight line-clamp-2" title={session.inLocation}>
+                                                        {session.inLocation}
+                                                    </span>
+                                                </div>
+                                                {session.inImage && (
+                                                    <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border group/img cursor-pointer shadow-sm" onClick={() => setPreviewImage(session.inImage)}>
+                                                        <img src={session.inImage} alt="In Selfie" className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
+                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <Search size={16} className="text-white" />
+                                                        </div>
+                                                        <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded text-[8px] font-bold text-white uppercase tracking-tighter">Selfie In</div>
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {session.inImage && (
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => setPreviewImage(session.inImage)}
-                                                        className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border hover:ring-2 hover:ring-indigo-500 transition-all"
-                                                    >
-                                                        <img src={session.inImage} alt="In Selfie" className="w-full h-full object-cover" />
-                                                    </button>
-                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Selfie In</span>
-                                                </div>
-                                            )}
+                                            {/* Punch Out Details */}
+                                            <div className="space-y-2">
+                                                <span className="text-[9px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest block">Punch Out</span>
+                                                {session.outLocation ? (
+                                                    <div className="flex items-start gap-1.5">
+                                                        <MapPin size={10} className="shrink-0 mt-0.5 text-rose-500 opacity-70" />
+                                                        <span className="text-[10px] text-slate-500 dark:text-github-dark-muted leading-tight line-clamp-2" title={session.outLocation}>
+                                                            {session.outLocation}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-4 flex items-center">
+                                                        <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">{session.isActive ? 'Ongoing...' : 'N/A'}</span>
+                                                    </div>
+                                                )}
+                                                {session.outImage ? (
+                                                    <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border group/img cursor-pointer shadow-sm" onClick={() => setPreviewImage(session.outImage)}>
+                                                        <img src={session.outImage} alt="Out Selfie" className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
+                                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <Search size={16} className="text-white" />
+                                                        </div>
+                                                        <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded text-[8px] font-bold text-white uppercase tracking-tighter">Selfie Out</div>
+                                                    </div>
+                                                ) : !session.isActive && (
+                                                    <div className="w-full aspect-video rounded-xl bg-slate-50 dark:bg-github-dark-subtle/20 border border-dashed border-slate-200 dark:border-github-dark-border flex flex-col items-center justify-center gap-1">
+                                                        <XCircle size={14} className="text-slate-300" />
+                                                        <span className="text-[9px] text-slate-400 font-medium">No Selfie Out</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
