@@ -60,7 +60,7 @@ const SidebarItem = ({ icon, text, to }) => {
 
 const getNavItems = (userType) => {
     const allItems = [
-        { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/", roles: ['admin', 'hr', 'employee', 'super_admin'] },
+        { icon: <LayoutDashboard size={20} />, text: "Dashboard", to: "/dashboard", roles: ['admin', 'hr', 'employee', 'super_admin'] },
         { icon: <Building size={20} />, text: "Organizations", to: "/organizations", roles: ['super_admin'] },
         { icon: <ShieldAlert size={20} />, text: "Security Alerts", to: "/super-admin/alerts", roles: ['super_admin'] },
         { icon: <MessageSquare size={20} />, text: "User Feedback", to: "/super-admin/feedback", roles: ['super_admin'] },
