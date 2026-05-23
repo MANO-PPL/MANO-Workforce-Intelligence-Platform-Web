@@ -7,6 +7,7 @@ import { Mail, Lock, ArrowRight, Loader2, Eye, EyeOff, Shield, Activity, Zap, Cp
 import ReCAPTCHA from "react-google-recaptcha";
 
 const Login = () => {
+    const isCaptchaEnabled = String(import.meta.env.VITE_ENABLE_CAPTCHA).toLowerCase().trim() !== 'false';
     const { login } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
@@ -15,11 +16,14 @@ const Login = () => {
     });
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const [captchaToken, setCaptchaToken] = useState(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isDark, setIsDark] = useState(true);
 
     useEffect(() => {
+        console.log("🔒 [Vite Env Check] VITE_ENABLE_CAPTCHA:", import.meta.env.VITE_ENABLE_CAPTCHA);
+        console.log("🔒 CAPTCHA is Enabled on Frontend?", isCaptchaEnabled);
         const handleResize = () => setIsMobile(window.innerWidth < 1024);
         window.addEventListener("resize", handleResize);
 
@@ -40,17 +44,17 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Skip captcha for mobile OR if not set in env (for dev convenience)
-        if (!isMobile && !captchaToken && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+        // Skip captcha for mobile OR if not set in env (for dev convenience) OR if captcha is disabled via env
+        if (isCaptchaEnabled && !isMobile && !captchaToken && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
             toast.error("Please complete the security check.");
             return;
         }
 
         setLoading(true);
         try {
-            await login(formData.identifier, formData.password);
+            await login(formData.identifier, formData.password, isCaptchaEnabled ? captchaToken : undefined, rememberMe);
             toast.success("Identity Verified. Access Granted.");
-            navigate("/");
+            navigate("/dashboard");
         } catch (err) {
             const errorMessage = err.response?.data?.message || "Authentication Failed";
             toast.error(errorMessage);
@@ -227,8 +231,34 @@ const Login = () => {
                                 </div>
                             </div>
 
+                            {/* Remember Me Checkbox */}
+                            <div className="flex items-center justify-between px-1">
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        checked={rememberMe}
+                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-5 h-5 rounded-lg border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] flex items-center justify-center transition-all peer-checked:bg-indigo-600 peer-checked:border-indigo-600 group-hover:scale-105">
+                                        <svg
+                                            className={`w-3.5 h-3.5 text-white transition-opacity ${rememberMe ? 'opacity-100' : 'opacity-0'}`}
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth="3.5"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] select-none transition-colors group-hover:text-slate-600 dark:group-hover:text-slate-400">
+                                        Keep me signed in
+                                    </span>
+                                </label>
+                            </div>
+
                             {/* ReCAPTCHA (Desktop only) */}
-                            {!isMobile && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
+                            {isCaptchaEnabled && !isMobile && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
                                 <div className="flex justify-center scale-[0.8] -my-2 transform transition-all opacity-90 translate-x-[-15px]">
                                     <ReCAPTCHA
                                         sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}

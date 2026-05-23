@@ -274,125 +274,125 @@ const ShiftManagement = () => {
         <DashboardLayout title="Shift Management" noPadding={true}>
             <div className="flex h-[calc(100vh-64px)] p-6 gap-6 animate-in fade-in duration-300">
 
-                    {/* LEFT: Shift List */}
-                    <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
-                        <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/50 space-y-3">
-                            <div className="flex justify-between items-center">
-                                <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">Shifts</h3>
-                                <button
-                                    onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
-                                    className="p-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-                                    title="Create new shift"
-                                >
-                                    <Plus size={18} />
-                                </button>
-                            </div>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                                <input
-                                    type="text"
-                                    placeholder="Search shifts..."
-                                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
-                                    value={shiftSearch}
-                                    onChange={e => setShiftSearch(e.target.value)}
-                                />
-                            </div>
+                {/* LEFT: Shift List */}
+                <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+                    <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/50 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">Shifts</h3>
+                            <button
+                                onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
+                                className="p-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                                title="Create new shift"
+                            >
+                                <Plus size={18} />
+                            </button>
                         </div>
-
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-                            {isLoadingShifts && (
-                                <div className="py-10 text-center text-slate-400 text-sm">Loading shifts...</div>
-                            )}
-                            {!isLoadingShifts && filteredShifts.length === 0 && (
-                                <div className="py-10 text-center space-y-2">
-                                    <Briefcase size={32} className="mx-auto text-slate-300 dark:text-slate-600" />
-                                    <p className="text-sm text-slate-400">No shifts found</p>
-                                    <button
-                                        onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
-                                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                                    >+ Create first shift</button>
-                                </div>
-                            )}
-                            {filteredShifts.map(shift => (
-                                <div
-                                    key={shift.id}
-                                    onClick={() => { setSelectedShift(shift); setShowShiftForm(false); }}
-                                    className={`p-3 rounded-lg border transition-all cursor-pointer group ${selectedShift?.id === shift.id
-                                        ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-900/50 shadow-sm'
-                                        : 'bg-white dark:bg-dark-card border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                                        }`}
-                                >
-                                    <div className="flex justify-between items-start mb-1.5">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                                            <h4 className={`font-semibold text-sm ${selectedShift?.id === shift.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>
-                                                {shift.name}
-                                            </h4>
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-slate-500 dark:text-github-dark-muted font-mono mb-2">
-                                        {shift.start} → {shift.end}
-                                    </p>
-                                    <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-github-dark-muted">
-                                        <span className="flex items-center gap-1"><Clock size={10} />{calculateDuration(shift.start, shift.end)}</span>
-                                        <span className="flex items-center gap-1"><Users size={10} />{users.filter(u => u.shift_id === shift.id).length} Staff</span>
-                                    </div>
-                                </div>
-                            ))}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                            <input
+                                type="text"
+                                placeholder="Search shifts..."
+                                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
+                                value={shiftSearch}
+                                onChange={e => setShiftSearch(e.target.value)}
+                            />
                         </div>
                     </div>
 
-                    {/* CENTER: Shift Details / Edit Form */}
-                    <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
-                        {!selectedShift && !showShiftForm ? (
-                            <div className="flex-1 flex items-center justify-center flex-col gap-4 text-slate-400">
-                                <Briefcase size={48} className="opacity-20" />
-                                <p className="text-sm">Select a shift to view details</p>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                        {isLoadingShifts && (
+                            <div className="py-10 text-center text-slate-400 text-sm">Loading shifts...</div>
+                        )}
+                        {!isLoadingShifts && filteredShifts.length === 0 && (
+                            <div className="py-10 text-center space-y-2">
+                                <Briefcase size={32} className="mx-auto text-slate-300 dark:text-slate-600" />
+                                <p className="text-sm text-slate-400">No shifts found</p>
                                 <button
                                     onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-                                >
-                                    <Plus size={16} /> New Shift
+                                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                                >+ Create first shift</button>
+                            </div>
+                        )}
+                        {filteredShifts.map(shift => (
+                            <div
+                                key={shift.id}
+                                onClick={() => { setSelectedShift(shift); setShowShiftForm(false); }}
+                                className={`p-3 rounded-lg border transition-all cursor-pointer group ${selectedShift?.id === shift.id
+                                    ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-900/50 shadow-sm'
+                                    : 'bg-white dark:bg-dark-card border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                    }`}
+                            >
+                                <div className="flex justify-between items-start mb-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                                        <h4 className={`font-semibold text-sm ${selectedShift?.id === shift.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>
+                                            {shift.name}
+                                        </h4>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-github-dark-muted font-mono mb-2">
+                                    {shift.start} → {shift.end}
+                                </p>
+                                <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-github-dark-muted">
+                                    <span className="flex items-center gap-1"><Clock size={10} />{calculateDuration(shift.start, shift.end)}</span>
+                                    <span className="flex items-center gap-1"><Users size={10} />{users.filter(u => u.shift_id === shift.id).length} Staff</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* CENTER: Shift Details / Edit Form */}
+                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+                    {!selectedShift && !showShiftForm ? (
+                        <div className="flex-1 flex items-center justify-center flex-col gap-4 text-slate-400">
+                            <Briefcase size={48} className="opacity-20" />
+                            <p className="text-sm">Select a shift to view details</p>
+                            <button
+                                onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                            >
+                                <Plus size={16} /> New Shift
+                            </button>
+                        </div>
+                    ) : showShiftForm ? (
+                        /* ── Shift Form ── */
+                        <>
+                            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-github-dark-border">
+                                <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">
+                                    {editingShift ? 'Edit Shift' : 'Create New Shift'}
+                                </h3>
+                                <button onClick={() => { setShowShiftForm(false); setEditingShift(null); }} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded">
+                                    <X size={20} />
                                 </button>
                             </div>
-                        ) : showShiftForm ? (
-                            /* ── Shift Form ── */
-                            <>
-                                <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-github-dark-border">
-                                    <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">
-                                        {editingShift ? 'Edit Shift' : 'Create New Shift'}
-                                    </h3>
-                                    <button onClick={() => { setShowShiftForm(false); setEditingShift(null); }} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded">
-                                        <X size={20} />
-                                    </button>
+                            <form onSubmit={handleSaveShift} className="flex-1 overflow-y-auto p-5 space-y-5">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Shift Name</label>
+                                    <input
+                                        type="text" required value={shiftForm.name}
+                                        onChange={e => setShiftForm({ ...shiftForm, name: e.target.value })}
+                                        placeholder="e.g. Morning Shift A"
+                                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
+                                    />
                                 </div>
-                                <form onSubmit={handleSaveShift} className="flex-1 overflow-y-auto p-5 space-y-5">
+
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Shift Name</label>
-                                        <input
-                                            type="text" required value={shiftForm.name}
-                                            onChange={e => setShiftForm({ ...shiftForm, name: e.target.value })}
-                                            placeholder="e.g. Morning Shift A"
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Start Time</label>
+                                        <input type="time" required value={shiftForm.start}
+                                            onChange={e => setShiftForm({ ...shiftForm, start: e.target.value })}
                                             className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
                                         />
                                     </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Start Time</label>
-                                            <input type="time" required value={shiftForm.start}
-                                                onChange={e => setShiftForm({ ...shiftForm, start: e.target.value })}
-                                                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">End Time</label>
-                                            <input type="time" required value={shiftForm.end}
-                                                onChange={e => setShiftForm({ ...shiftForm, end: e.target.value })}
-                                                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
-                                            />
-                                        </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">End Time</label>
+                                        <input type="time" required value={shiftForm.end}
+                                            onChange={e => setShiftForm({ ...shiftForm, end: e.target.value })}
+                                            className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
+                                        />
                                     </div>
+                                </div>
 
                                     {/* Working Days (Moved to basic section) */}
                                     <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border space-y-4">
@@ -602,42 +602,42 @@ const ShiftManagement = () => {
                                         </div>
                                     )}
 
-                                    <div className="flex gap-3 pt-2">
-                                        <button type="button" onClick={() => { setShowShiftForm(false); setEditingShift(null); }}
-                                            className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-github-dark-text rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                                            Cancel
-                                        </button>
-                                        <button type="submit"
-                                            className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors flex items-center justify-center gap-2">
-                                            <Save size={15} /> Save Shift
-                                        </button>
+                                <div className="flex gap-3 pt-2">
+                                    <button type="button" onClick={() => { setShowShiftForm(false); setEditingShift(null); }}
+                                        className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-github-dark-text rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button type="submit"
+                                        className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors flex items-center justify-center gap-2">
+                                        <Save size={15} /> Save Shift
+                                    </button>
+                                </div>
+                            </form>
+                        </>
+                    ) : (
+                        /* ── Shift Detail View ── */
+                        <>
+                            <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                                        <Clock size={20} />
                                     </div>
-                                </form>
-                            </>
-                        ) : (
-                            /* ── Shift Detail View ── */
-                            <>
-                                <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
-                                            <Clock size={20} />
-                                        </div>
-                                        <div>
-                                            <h2 className="font-bold text-lg text-slate-900 dark:text-github-dark-text">{selectedShift.name}</h2>
-                                            <p className="text-xs text-slate-500 font-mono">{selectedShift.start} → {selectedShift.end} • {calculateDuration(selectedShift.start, selectedShift.end)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => { setEditingShift(selectedShift); setShowShiftForm(true); }}
-                                            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
-                                        ><Edit2 size={15} /> Edit</button>
-                                        <button
-                                            onClick={() => handleDeleteShiftClick(selectedShift)}
-                                            className="flex items-center gap-1.5 px-3 py-2 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
-                                        ><Trash2 size={15} /> Delete</button>
+                                    <div>
+                                        <h2 className="font-bold text-lg text-slate-900 dark:text-github-dark-text">{selectedShift.name}</h2>
+                                        <p className="text-xs text-slate-500 font-mono">{selectedShift.start} → {selectedShift.end} • {calculateDuration(selectedShift.start, selectedShift.end)}</p>
                                     </div>
                                 </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => { setEditingShift(selectedShift); setShowShiftForm(true); }}
+                                        className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
+                                    ><Edit2 size={15} /> Edit</button>
+                                    <button
+                                        onClick={() => handleDeleteShiftClick(selectedShift)}
+                                        className="flex items-center gap-1.5 px-3 py-2 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
+                                    ><Trash2 size={15} /> Delete</button>
+                                </div>
+                            </div>
 
                                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                     {/* Summary Cards */}
@@ -768,73 +768,73 @@ const ShiftManagement = () => {
                         )}
                     </div>
 
-                    {/* RIGHT: User Assignment */}
-                    <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
-                        <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/50 space-y-3">
-                            <div className="flex items-center gap-2">
-                                <Users size={16} className="text-slate-500" />
-                                <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">Assigned Staff</h3>
-                                {selectedShift && (
-                                    <span className="ml-auto text-xs font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
-                                        {users.filter(u => u.shift_id === selectedShift.id).length}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                                <input
-                                    type="text" placeholder="Search staff..."
-                                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
-                                    value={userSearch}
-                                    onChange={e => setUserSearch(e.target.value)}
-                                />
-                            </div>
+                {/* RIGHT: User Assignment */}
+                <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+                    <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/50 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Users size={16} className="text-slate-500" />
+                            <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">Assigned Staff</h3>
+                            {selectedShift && (
+                                <span className="ml-auto text-xs font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+                                    {users.filter(u => u.shift_id === selectedShift.id).length}
+                                </span>
+                            )}
                         </div>
-
-                        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-                            {loadingUsers && <p className="text-sm text-slate-400 px-3 py-4 text-center">Loading users...</p>}
-                            {!loadingUsers && filteredUsers.map(user => {
-                                const isAssigned = selectedShift && user.shift_id === selectedShift.id;
-                                const hasOtherShift = user.shift_id && (!selectedShift || user.shift_id !== selectedShift.id);
-                                const otherShift = hasOtherShift ? shifts.find(s => s.id === user.shift_id) : null;
-                                return (
-                                    <div key={user.user_id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors group">
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-400 overflow-hidden flex-shrink-0">
-                                                {user.profile_image_url ? (
-                                                    <img src={`${user.profile_image_url}?t=${avatarTimestamp}`} alt={user.user_name} className="w-full h-full object-cover" />
-                                                ) : user.user_name?.charAt(0)}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-medium text-slate-800 dark:text-github-dark-text truncate">{user.user_name}</p>
-                                                <p className="text-[11px] text-slate-400 truncate">
-                                                    {otherShift ? <span className="text-amber-500">{otherShift.name}</span> : user.desg_name}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => selectedShift && handleToggleUserShift(user.user_id, isAssigned)}
-                                            disabled={!selectedShift}
-                                            title={!selectedShift ? 'Select a shift first' : isAssigned ? 'Remove from shift' : 'Assign to shift'}
-                                            className={`p-1.5 rounded-md transition-all flex-shrink-0 ${!selectedShift ? 'cursor-not-allowed opacity-30' : isAssigned
-                                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                                : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600'
-                                                }`}
-                                        >
-                                            {isAssigned ? <Check size={16} /> : <Plus size={16} />}
-                                        </button>
-                                    </div>
-                                );
-                            })}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                            <input
+                                type="text" placeholder="Search staff..."
+                                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text"
+                                value={userSearch}
+                                onChange={e => setUserSearch(e.target.value)}
+                            />
                         </div>
                     </div>
-                </div>
 
-                {/* --- DELETE CONFIRMATION MODAL --- */}
-                {isDeleteModalOpen && (
-                    <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/80 backdrop-blur-md transition-all duration-200 animate-in fade-in">
-                        <div className="flex min-h-full items-center justify-center p-4">
-                            <div className="relative w-full max-w-lg bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 mx-auto">
+                    <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                        {loadingUsers && <p className="text-sm text-slate-400 px-3 py-4 text-center">Loading users...</p>}
+                        {!loadingUsers && filteredUsers.map(user => {
+                            const isAssigned = selectedShift && user.shift_id === selectedShift.id;
+                            const hasOtherShift = user.shift_id && (!selectedShift || user.shift_id !== selectedShift.id);
+                            const otherShift = hasOtherShift ? shifts.find(s => s.id === user.shift_id) : null;
+                            return (
+                                <div key={user.user_id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors group">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-400 overflow-hidden flex-shrink-0">
+                                            {user.profile_image_url ? (
+                                                <img src={`${user.profile_image_url}?t=${avatarTimestamp}`} alt={user.user_name} className="w-full h-full object-cover" />
+                                            ) : user.user_name?.charAt(0)}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-slate-800 dark:text-github-dark-text truncate">{user.user_name}</p>
+                                            <p className="text-[11px] text-slate-400 truncate">
+                                                {otherShift ? <span className="text-amber-500">{otherShift.name}</span> : user.desg_name}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => selectedShift && handleToggleUserShift(user.user_id, isAssigned)}
+                                        disabled={!selectedShift}
+                                        title={!selectedShift ? 'Select a shift first' : isAssigned ? 'Remove from shift' : 'Assign to shift'}
+                                        className={`p-1.5 rounded-md transition-all flex-shrink-0 ${!selectedShift ? 'cursor-not-allowed opacity-30' : isAssigned
+                                            ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
+                                            : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600'
+                                            }`}
+                                    >
+                                        {isAssigned ? <Check size={16} /> : <Plus size={16} />}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* --- DELETE CONFIRMATION MODAL --- */}
+            {isDeleteModalOpen && (
+                <div className="fixed inset-0 z-[10000] overflow-y-auto bg-slate-950/80 backdrop-blur-md transition-all duration-200 animate-in fade-in">
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="relative w-full max-w-lg bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 mx-auto">
                             <div className="p-10 text-center">
                                 <div className="w-20 h-20 bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
                                     <AlertTriangle size={40} />
@@ -858,10 +858,10 @@ const ShiftManagement = () => {
                                     </button>
                                 </div>
                             </div>
-                            </div>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
         </DashboardLayout>
     );
 };
