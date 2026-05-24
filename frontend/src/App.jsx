@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
+
 import ErrorBoundary from "./ErrorBoundary";
 import ResponsiveRoute from "./components/ResponsiveRoute";
 import { AuthProvider } from "./context/AuthContext";
@@ -230,7 +231,7 @@ function App() {
       <NotificationProvider>
         <SeoManager />
         <ScaleManager />
-        <ToastContainer position="top-right" autoClose={3000} />
+        <ToastContainer position="bottom-center" autoClose={3000} limit={1} hideProgressBar={true} pauseOnHover={false} pauseOnFocusLoss={false} closeOnClick={true} />
         <Routes>
 
           {/* Website Landing (shown first when not logged in) */}
