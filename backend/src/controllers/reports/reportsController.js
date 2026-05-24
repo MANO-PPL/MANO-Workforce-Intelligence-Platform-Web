@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import * as reportsService from '../../services/reports/reportsServices.js';
 
 // Helper: Generate PDF using PDFKit with a professional grid/table design
-const generatePdf = (title, columns, rows) => {
+export const generatePdf = (title, columns, rows) => {
     const doc = new PDFDocument({
         size: 'A4',
         layout: columns.length > 7 ? 'landscape' : 'portrait',
@@ -176,7 +176,7 @@ const getColLetter = (col) => {
 };
 
 // Helper: Style Excel Worksheet beautifully
-const styleExcelWorksheet = (worksheet, type) => {
+export const styleExcelWorksheet = (worksheet, type) => {
     // 1. Enable Gridlines
     worksheet.views = [{ showGridLines: true }];
 
@@ -293,7 +293,7 @@ const styleExcelWorksheet = (worksheet, type) => {
             const r1Header = worksheet.getRow(1).getCell(colNumber).value?.toString().toLowerCase() || '';
             const r2Header = isMultiDayMatrix ? (worksheet.getRow(2).getCell(colNumber).value?.toString().toLowerCase() || '') : '';
             const colHeader = `${r1Header} ${r2Header}`;
-            if (['name', 'department', 'dept', 'employee', 'reason', 'in location', 'out location', 'email', 'phone', 'role', 'designation', 'position'].some(k => colHeader.includes(k))) {
+            if (['name', 'department', 'dept', 'employee', 'reason', 'location', 'in location', 'out location', 'email', 'phone', 'role', 'designation', 'position'].some(k => colHeader.includes(k))) {
                 cell.alignment.horizontal = 'left';
             }
 
