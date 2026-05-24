@@ -44,7 +44,7 @@ const SuperAdminDashboard = () => {
       const res = await api.get('/super-admin/monitor/feedback');
       const all = Array.isArray(res.data.data) ? res.data.data : [];
       // Show only pending entries, most recent 5
-      const pending = all.filter(f => f.status === 'pending').slice(0, 5);
+      const pending = all.filter(f => !f.status || ['pending', 'open', ''].includes(f.status.toLowerCase())).slice(0, 5);
       setRecentFeedback(pending);
     } catch (err) {
       console.error('Failed to fetch feedback:', err);
@@ -59,7 +59,7 @@ const SuperAdminDashboard = () => {
       const res = await api.get('/super-admin/monitor/alerts');
       const all = Array.isArray(res.data.data) ? res.data.data : [];
       // Show only open alerts, most recent 5
-      const open = all.filter(a => a.status === 'open').slice(0, 5);
+      const open = all.filter(a => a.status && ['open', 'unseen'].includes(a.status.toLowerCase())).slice(0, 5);
       setRecentAlerts(open);
     } catch (err) {
       console.error('Failed to fetch alerts:', err);
@@ -73,18 +73,17 @@ const SuperAdminDashboard = () => {
       <div className="space-y-6 sm:space-y-8">
 
         {/* Welcome Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-github-dark-text">Overview</h1>
-            <p className="text-slate-500 dark:text-github-dark-muted">Welcome back, Super Admin</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate('/reports')}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium"
-            >
-              Generate System Report
-            </button>
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-github-dark-border bg-gradient-to-r from-amber-500/10 via-indigo-500/5 to-transparent dark:from-amber-500/5 dark:via-indigo-500/5 dark:to-transparent p-6 sm:p-8 shadow-sm">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-1/3 w-24 h-24 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="relative z-10 flex flex-col gap-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-github-dark-text tracking-tight">
+              Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-indigo-600 dark:from-amber-400 dark:to-indigo-400 font-extrabold">Super Admin</span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-github-dark-muted max-w-2xl leading-relaxed">
+              Access system metrics, manage organizations, monitor audit logs, and configure global platform settings from this panel.
+            </p>
           </div>
         </div>
 
@@ -119,7 +118,7 @@ const SuperAdminDashboard = () => {
             label="Unseen"
             icon={<ShieldAlert className="text-red-500" size={24} />}
             loading={loading}
-            onClick={() => navigate('/super-admin/security-alerts')}
+            onClick={() => navigate('/super-admin/alerts')}
             highlight={stats.openAlerts > 0}
             danger
           />
@@ -196,7 +195,7 @@ const SuperAdminDashboard = () => {
                 )}
               </div>
               <button
-                onClick={() => navigate('/super-admin/security-alerts')}
+                onClick={() => navigate('/super-admin/alerts')}
                 className="flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
               >
                 View All <ChevronRight size={14} />

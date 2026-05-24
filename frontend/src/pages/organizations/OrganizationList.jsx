@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
-import { Building, Plus, Loader2, Save, X, Search, Calendar, Shield, Activity, Clock, Users, Trash2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Building, Plus, Loader2, Save, X, Search, Calendar, Shield, Activity, Clock, Users, Trash2, AlertTriangle, RotateCcw, Pencil } from 'lucide-react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import LoadingScreen from '../../components/LoadingScreen';
 
 const OrganizationList = () => {
     const [organizations, setOrganizations] = useState([]);
@@ -208,8 +209,8 @@ const OrganizationList = () => {
     const displayedOrgs = listTab === 'active' ? activeOrgs : pendingOrgs;
 
     return (
-        <DashboardLayout title="Organization Management">
-            <div className="flex flex-col flex-1 space-y-4 min-h-0">
+        <DashboardLayout title="Organization Management" noPadding={true}>
+            <div className="h-[calc(100vh-64px)] p-6 space-y-4 overflow-hidden flex flex-col min-h-0">
 
                 {/* Main Content: Split View */}
                 <div className="flex flex-1 gap-6 overflow-hidden">
@@ -237,39 +238,47 @@ const OrganizationList = () => {
                         </div>
 
                         {/* Tabs */}
-                        <div className="flex border-b border-slate-100 dark:border-github-dark-border">
-                            <button
-                                type="button"
-                                onClick={() => { setListTab('active'); setSelectedOrg(null); setIsEditing(false); }}
-                                className={`flex-1 py-2.5 text-xs font-semibold tracking-wide transition-colors ${listTab === 'active'
-                                        ? 'text-indigo-600 border-b-2 border-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                                        : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-github-dark-text'
+                        <div className="px-4 py-3 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/30 dark:bg-github-dark-subtle/10">
+                            <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-full">
+                                <button
+                                    type="button"
+                                    onClick={() => { setListTab('active'); setSelectedOrg(null); setIsEditing(false); }}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                                        listTab === 'active'
+                                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                            : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                                     }`}
-                            >
-                                Organizations
-                                <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] ${listTab === 'active' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                >
+                                    <span>Active</span>
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                        listTab === 'active'
+                                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300'
+                                            : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                                     }`}>{activeOrgs.length}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => { setListTab('deleted'); setSelectedOrg(null); setIsEditing(false); }}
-                                className={`flex-1 py-2.5 text-xs font-semibold tracking-wide transition-colors ${listTab === 'deleted'
-                                        ? 'text-amber-600 border-b-2 border-amber-500 dark:text-amber-400 dark:border-amber-400'
-                                        : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-github-dark-text'
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setListTab('deleted'); setSelectedOrg(null); setIsEditing(false); }}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                                        listTab === 'deleted'
+                                            ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                                            : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                                     }`}
-                            >
-                                Deleted
-                                {pendingOrgs.length > 0 && (
-                                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] ${listTab === 'deleted' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-500'
-                                        }`}>{pendingOrgs.length}</span>
-                                )}
-                            </button>
+                                >
+                                    <span>Deleted</span>
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                        listTab === 'deleted'
+                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300'
+                                            : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                    }`}>{pendingOrgs.length}</span>
+                                </button>
+                            </div>
                         </div>
 
                         {/* List */}
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1 no-scrollbar relative min-h-[250px]">
                             {loading ? (
-                                <div className="flex justify-center p-8"><Loader2 className="animate-spin text-slate-400" /></div>
+                                <LoadingScreen message="Fetching organizations..." isSuperAdmin={true} fullScreen={false} />
                             ) : displayedOrgs.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center p-8 text-slate-400 dark:text-github-dark-muted gap-2">
                                     {listTab === 'deleted'
@@ -365,8 +374,9 @@ const OrganizationList = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setIsEditing(true)}
-                                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-github-dark-subtle dark:hover:bg-slate-700 text-slate-700 dark:text-github-dark-text rounded-lg font-medium transition-colors flex items-center gap-2 text-sm"
+                                                className="px-4 py-2 border border-slate-200 dark:border-github-dark-border hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-github-dark-subtle text-slate-700 dark:text-github-dark-text rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 text-sm shadow-sm hover:shadow-[0_2px_8px_rgba(99,102,241,0.15)] active:scale-[0.98]"
                                             >
+                                                <Pencil size={15} />
                                                 Edit Details
                                             </button>
                                         ) : (
@@ -378,7 +388,7 @@ const OrganizationList = () => {
                                                             setIsEditing(false);
                                                             handleSelectOrg(selectedOrg); // reset form
                                                         }}
-                                                        className="px-4 py-2 border border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg font-medium transition-colors text-sm"
+                                                        className="px-4 py-2 border border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg font-semibold transition-colors text-sm active:scale-[0.98]"
                                                     >
                                                         Cancel
                                                     </button>
@@ -386,7 +396,7 @@ const OrganizationList = () => {
                                                 <button
                                                     type="submit"
                                                     disabled={formLoading}
-                                                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-70 text-sm shadow-md shadow-indigo-500/20"
+                                                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 disabled:opacity-70 text-sm shadow-md shadow-indigo-500/20 active:scale-[0.98]"
                                                 >
                                                     {formLoading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                                     Save Changes
@@ -398,7 +408,7 @@ const OrganizationList = () => {
                                             <button
                                                 type="button"
                                                 onClick={handleCancelDeletion}
-                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 text-sm ml-2 shadow-sm"
+                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 text-sm ml-2 shadow-sm active:scale-[0.98]"
                                             >
                                                 <RotateCcw size={14} /> Recover Organization
                                             </button>
@@ -407,7 +417,7 @@ const OrganizationList = () => {
                                             <button
                                                 type="button"
                                                 onClick={handleDeactivate}
-                                                className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/40 dark:hover:bg-red-900/60 dark:text-red-400 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm ml-2"
+                                                className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/40 dark:hover:bg-red-900/60 dark:text-red-400 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 text-sm ml-2 active:scale-[0.98]"
                                             >
                                                 Deactivate
                                             </button>
@@ -416,7 +426,7 @@ const OrganizationList = () => {
                                             <button
                                                 type="button"
                                                 onClick={handleReactivate}
-                                                className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/40 dark:hover:bg-emerald-900/60 dark:text-emerald-400 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm ml-2"
+                                                className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/40 dark:hover:bg-emerald-900/60 dark:text-emerald-400 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 text-sm ml-2 active:scale-[0.98]"
                                             >
                                                 Reactivate
                                             </button>
@@ -425,7 +435,7 @@ const OrganizationList = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setDeleteConfirmOrg(selectedOrg)}
-                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 text-sm ml-2 shadow-sm"
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 text-sm ml-2 shadow-sm active:scale-[0.98]"
                                             >
                                                 <Trash2 size={14} /> Delete Org
                                             </button>
@@ -434,8 +444,8 @@ const OrganizationList = () => {
                                 </div>
 
                                 {/* Details / Form Body */}
-                                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                                    <div className="max-w-3xl space-y-8">
+                                <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+                                    <div className="w-full space-y-6">
 
                                         {/* Pending Deletion Warning Banner */}
                                         {selectedOrg?.status === 'pending_deletion' && (
@@ -456,194 +466,198 @@ const OrganizationList = () => {
                                             </div>
                                         )}
 
-                                        {/* General Info Section */}
-                                        <section>
-                                            <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider mb-4 border-b border-slate-200 dark:border-github-dark-border pb-2">General Information</h3>
-                                            <div className="grid grid-cols-2 gap-6 relative">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Organization Name</label>
-                                                    {isEditing ? (
-                                                        <input required value={formData.org_name} onChange={(e) => setFormData({ ...formData, org_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" placeholder="e.g. Acme Corp" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text font-medium">{selectedOrg.org_name}</div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Organization Code</label>
-                                                    {isEditing ? (
-                                                        <input required disabled={!!selectedOrg} value={formData.org_code} onChange={(e) => setFormData({ ...formData, org_code: e.target.value.toUpperCase() })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-900 font-mono" placeholder="e.g. ACM01" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text font-mono">{selectedOrg.org_code}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </section>
-
-                                        {/* Contact Section */}
-                                        <section>
-                                            <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider mb-4 border-b border-slate-200 dark:border-github-dark-border pb-2">Organization Contact Details</h3>
-                                            <div className="grid grid-cols-2 gap-6 relative">
-                                                <div className="space-y-1.5 col-span-2">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Contact Person Name</label>
-                                                    {isEditing ? (
-                                                        <input value={formData.contact_name} onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" placeholder="e.g. John Doe" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text">{selectedOrg.contact_name || 'N/A'}</div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Contact Email Address</label>
-                                                    {isEditing ? (
-                                                        <input type="email" value={formData.contact_email} onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" placeholder="contact@example.com" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text">{selectedOrg.contact_email || 'N/A'}</div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Contact Phone Number</label>
-                                                    {isEditing ? (
-                                                        <input type="tel" value={formData.contact_phone} onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" placeholder="+1 234 567 8900" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text font-mono">{selectedOrg.contact_phone || 'N/A'}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </section>
-
-                                        {/* Admin Section (Only on create) */}
-                                        {isEditing && !selectedOrg && (
-                                            <section>
-                                                <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider mb-4 border-b border-slate-200 dark:border-github-dark-border pb-2">Initial Admin Setup</h3>
-                                                <div className="grid grid-cols-2 gap-6 relative p-5 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
-                                                    <div className="space-y-1.5 col-span-2">
-                                                        <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Admin Name</label>
-                                                        <input value={formData.admin_name} onChange={(e) => setFormData({ ...formData, admin_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" placeholder="e.g. Admin Supervisor" />
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* Card 1: General & Contact Information */}
+                                            <div className="bg-slate-50/50 dark:bg-github-dark-subtle/20 border border-slate-100 dark:border-github-dark-border p-6 rounded-2xl space-y-6">
+                                                <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider pb-2 border-b border-slate-200 dark:border-github-dark-border flex items-center gap-2">
+                                                    <Building size={16} className="text-indigo-500" /> General & Contact Details
+                                                </h3>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Organization Name</label>
+                                                        {isEditing ? (
+                                                            <input required value={formData.org_name} onChange={(e) => setFormData({ ...formData, org_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="e.g. Acme Corp" />
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-semibold text-sm shadow-sm">{selectedOrg.org_name}</div>
+                                                        )}
                                                     </div>
 
                                                     <div className="space-y-1.5">
-                                                        <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Admin Email Address <span className="text-red-500">*</span></label>
-                                                        <input type="email" required value={formData.admin_email} onChange={(e) => setFormData({ ...formData, admin_email: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" placeholder="admin@example.com" />
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Organization Code</label>
+                                                        {isEditing ? (
+                                                            <input required disabled={!!selectedOrg} value={formData.org_code} onChange={(e) => setFormData({ ...formData, org_code: e.target.value.toUpperCase() })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-900 font-mono text-sm" placeholder="e.g. ACM01" />
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-mono text-sm shadow-sm">{selectedOrg.org_code}</div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-1.5 sm:col-span-2">
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Contact Person Name</label>
+                                                        {isEditing ? (
+                                                            <input value={formData.contact_name} onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="e.g. John Doe" />
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text text-sm shadow-sm">{selectedOrg.contact_name || 'N/A'}</div>
+                                                        )}
                                                     </div>
 
                                                     <div className="space-y-1.5">
-                                                        <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Admin Phone Number</label>
-                                                        <input type="tel" value={formData.admin_phone} onChange={(e) => setFormData({ ...formData, admin_phone: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" placeholder="+1 234 567 8900" />
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Contact Email Address</label>
+                                                        {isEditing ? (
+                                                            <input type="email" value={formData.contact_email} onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="contact@example.com" />
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text text-sm shadow-sm truncate" title={selectedOrg.contact_email}>{selectedOrg.contact_email || 'N/A'}</div>
+                                                        )}
                                                     </div>
 
-                                                    <div className="space-y-1.5 col-span-2">
-                                                        <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted relative z-10">Initial Admin Password <span className="text-red-500">*</span></label>
-                                                        <input type="text" required value={formData.admin_password} onChange={(e) => setFormData({ ...formData, admin_password: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors font-mono" placeholder="Set a secure password for the first admin login" />
-                                                        <p className="text-xs text-slate-500 mt-1">This generated user will be an organizational admin with full local access.</p>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Contact Phone Number</label>
+                                                        {isEditing ? (
+                                                            <input type="tel" value={formData.contact_phone} onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="+1 234 567 8900" />
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-mono text-sm shadow-sm">{selectedOrg.contact_phone || 'N/A'}</div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            </section>
-                                        )}
-
-                                        {/* Subscription & Status Section */}
-                                        <section>
-                                            <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider mb-4 border-b border-slate-200 dark:border-github-dark-border pb-2">Status & Subscription</h3>
-                                            <div className="grid grid-cols-2 gap-6 relative">
-                                                <div className="space-y-1.5 relative z-10">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted flex items-center gap-1.5"><Activity size={14} /> Account Status</label>
-                                                    {isEditing ? (
-                                                        <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors appearance-none">
-                                                            <option value="active">Active</option>
-                                                            <option value="inactive">Inactive</option>
-                                                            <option value="suspended">Suspended</option>
-                                                        </select>
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent flex items-center">
-                                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${selectedOrg.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                                                }`}>
-                                                                <span className={`w-1.5 h-1.5 rounded-full ${selectedOrg.status === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                                                                {selectedOrg.status}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5 relative z-10">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted flex items-center gap-1.5"><Shield size={14} /> Subscription Plan</label>
-                                                    {isEditing ? (
-                                                        <select value={formData.subscription_plan} onChange={(e) => setFormData({ ...formData, subscription_plan: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors appearance-none">
-                                                            <option value="Trial">Trial</option>
-                                                            <option value="Basic">Basic</option>
-                                                            <option value="Premium">Premium</option>
-                                                        </select>
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent font-medium text-indigo-700 dark:text-indigo-400">
-                                                            {selectedOrg.subscription_plan}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted flex items-center gap-1.5"><Calendar size={14} /> Expiry Date</label>
-                                                    {isEditing ? (
-                                                        <input type="date" value={formData.subscription_expiry} onChange={(e) => setFormData({ ...formData, subscription_expiry: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text">
-                                                            {selectedOrg.subscription_expiry ? new Date(selectedOrg.subscription_expiry).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Lifetime / Processing'}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted flex items-center gap-1.5"><Clock size={14} /> Grace Period (Days)</label>
-                                                    {isEditing ? (
-                                                        <input type="number" min="0" value={formData.grace_period_days} onChange={(e) => setFormData({ ...formData, grace_period_days: parseInt(e.target.value) || 0 })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text font-mono">
-                                                            {selectedOrg.grace_period_days} Days
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
-                                        </section>
 
-                                        {/* User Metrics Section */}
-                                        <section>
-                                            <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider mb-4 border-b border-slate-200 dark:border-github-dark-border pb-2">Usage & Capacity</h3>
-                                            <div className="grid grid-cols-2 gap-6 relative">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted flex items-center gap-1.5"><Users size={14} /> Max Users Allowed</label>
-                                                    {isEditing ? (
-                                                        <input type="number" min="0" value={formData.max_users} onChange={(e) => setFormData({ ...formData, max_users: parseInt(e.target.value) || 0 })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors" />
-                                                    ) : (
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent text-slate-800 dark:text-github-dark-text font-mono">
-                                                            {selectedOrg.max_users} Users
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {!isEditing && (
+                                            {/* Card 2: Subscription & Account Settings */}
+                                            <div className="bg-slate-50/50 dark:bg-github-dark-subtle/20 border border-slate-100 dark:border-github-dark-border p-6 rounded-2xl space-y-6">
+                                                <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider pb-2 border-b border-slate-200 dark:border-github-dark-border flex items-center gap-2">
+                                                    <Shield size={16} className="text-indigo-500" /> Subscription & Settings
+                                                </h3>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                     <div className="space-y-1.5">
-                                                        <label className="text-sm font-medium text-slate-600 dark:text-github-dark-muted flex items-center gap-1.5"><Activity size={14} /> Current Usage Stats</label>
-                                                        <div className="px-4 py-2.5 bg-slate-50 dark:bg-github-dark-subtle/30 rounded-lg border border-transparent flex gap-4">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-xs text-slate-500 dark:text-github-dark-muted uppercase">Total User Accounts</span>
-                                                                <span className="font-mono font-medium text-slate-900 dark:text-github-dark-text">{selectedOrg.total_users || 0}</span>
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider flex items-center gap-1"><Activity size={12} className="text-slate-400" /> Account Status</label>
+                                                        {isEditing ? (
+                                                            <div className="relative">
+                                                                <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm appearance-none bg-transparent">
+                                                                    <option value="active">Active</option>
+                                                                    <option value="inactive">Inactive</option>
+                                                                    <option value="suspended">Suspended</option>
+                                                                </select>
                                                             </div>
-                                                            <div className="w-px bg-slate-200 dark:bg-slate-700"></div>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-xs text-slate-500 dark:text-github-dark-muted uppercase">Active Logins</span>
-                                                                <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">{selectedOrg.active_users || 0}</span>
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg flex items-center shadow-sm">
+                                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedOrg.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                                                    <span className={`w-1.5 h-1.5 rounded-full ${selectedOrg.status === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                                                                    {selectedOrg.status}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider flex items-center gap-1"><Shield size={12} className="text-slate-400" /> Subscription Plan</label>
+                                                        {isEditing ? (
+                                                            <div className="relative">
+                                                                <select value={formData.subscription_plan} onChange={(e) => setFormData({ ...formData, subscription_plan: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm appearance-none bg-transparent">
+                                                                    <option value="Trial">Trial</option>
+                                                                    <option value="Basic">Basic</option>
+                                                                    <option value="Premium">Premium</option>
+                                                                </select>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg font-semibold text-indigo-600 dark:text-indigo-400 text-sm shadow-sm">
+                                                                {selectedOrg.subscription_plan}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider flex items-center gap-1"><Calendar size={12} className="text-slate-400" /> Expiry Date</label>
+                                                        {isEditing ? (
+                                                            <input type="date" value={formData.subscription_expiry} onChange={(e) => setFormData({ ...formData, subscription_expiry: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" />
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text text-sm shadow-sm">
+                                                                {selectedOrg.subscription_expiry ? new Date(selectedOrg.subscription_expiry).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Lifetime / Processing'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider flex items-center gap-1"><Clock size={12} className="text-slate-400" /> Grace Period</label>
+                                                        {isEditing ? (
+                                                            <input type="number" min="0" value={formData.grace_period_days} onChange={(e) => setFormData({ ...formData, grace_period_days: parseInt(e.target.value) || 0 })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" />
+                                                        ) : (
+                                                            <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-mono text-sm shadow-sm">
+                                                                {selectedOrg.grace_period_days} Days
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {isEditing && (
+                                                        <div className="space-y-1.5 sm:col-span-2">
+                                                            <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider flex items-center gap-1"><Users size={12} className="text-slate-400" /> Max Users Allowed</label>
+                                                            <input type="number" min="0" value={formData.max_users} onChange={(e) => setFormData({ ...formData, max_users: parseInt(e.target.value) || 0 })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Card 3: Usage & Capacity Metrics (View Mode Only) */}
+                                            {!isEditing && (
+                                                <div className="bg-slate-50/50 dark:bg-github-dark-subtle/20 border border-slate-100 dark:border-github-dark-border p-6 rounded-2xl space-y-4 lg:col-span-2">
+                                                    <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider pb-2 border-b border-slate-200 dark:border-github-dark-border flex items-center gap-2">
+                                                        <Activity size={16} className="text-indigo-500" /> Usage & Capacity
+                                                    </h3>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 p-4 rounded-xl text-center shadow-sm">
+                                                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-github-dark-muted">Max Capacity</span>
+                                                            <div className="text-xl font-black text-slate-900 dark:text-github-dark-text mt-1">{selectedOrg.max_users} <span className="text-xs font-normal">Users</span></div>
+                                                        </div>
+                                                        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 p-4 rounded-xl text-center shadow-sm">
+                                                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-github-dark-muted">Total Accounts</span>
+                                                            <div className="text-xl font-black text-slate-900 dark:text-github-dark-text mt-1">{selectedOrg.total_users || 0}</div>
+                                                        </div>
+                                                        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 p-4 rounded-xl text-center shadow-sm animate-pulse-subtle">
+                                                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-github-dark-muted">Active Logins</span>
+                                                            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 flex items-center justify-center gap-1.5">
+                                                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                {selectedOrg.active_users || 0}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                )}
-                                            </div>
-                                        </section>
+                                                </div>
+                                            )}
+
+                                            {/* Card 4: Initial Admin Setup (Create Mode Only) */}
+                                            {isEditing && !selectedOrg && (
+                                                <div className="bg-indigo-50/20 dark:bg-indigo-950/10 border border-indigo-100/50 dark:border-indigo-900/30 p-6 rounded-2xl space-y-4 lg:col-span-2 shadow-sm shadow-indigo-500/5">
+                                                    <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider pb-2 border-b border-indigo-100 dark:border-indigo-900/30 flex items-center gap-2">
+                                                        <Shield size={16} /> Initial Admin Setup
+                                                    </h3>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5 sm:col-span-2">
+                                                            <label className="text-xs font-bold text-indigo-900/80 dark:text-indigo-400 uppercase tracking-wider">Admin Name</label>
+                                                            <input value={formData.admin_name} onChange={(e) => setFormData({ ...formData, admin_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="e.g. Admin Supervisor" />
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-xs font-bold text-indigo-900/80 dark:text-indigo-400 uppercase tracking-wider">Admin Email Address <span className="text-red-500">*</span></label>
+                                                            <input type="email" required value={formData.admin_email} onChange={(e) => setFormData({ ...formData, admin_email: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="admin@example.com" />
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-xs font-bold text-indigo-900/80 dark:text-indigo-400 uppercase tracking-wider">Admin Phone Number</label>
+                                                            <input type="tel" value={formData.admin_phone} onChange={(e) => setFormData({ ...formData, admin_phone: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="+1 234 567 8900" />
+                                                        </div>
+
+                                                        <div className="space-y-1.5 sm:col-span-2">
+                                                            <label className="text-xs font-bold text-indigo-900/80 dark:text-indigo-400 uppercase tracking-wider">Initial Admin Password <span className="text-red-500">*</span></label>
+                                                            <input type="text" required value={formData.admin_password} onChange={(e) => setFormData({ ...formData, admin_password: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors font-mono text-sm" placeholder="Set a secure password for the first admin login" />
+                                                            <p className="text-[11px] text-indigo-600/70 dark:text-indigo-400/50 mt-1">This user will be created as the organization's primary administrator.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
 
                                         {/* Admins Table Section (View Mode Only) */}
                                         {!isEditing && selectedOrg && (
-                                            <section>
-                                                <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider mb-4 border-b border-slate-200 dark:border-github-dark-border pb-2 flex justify-between items-center">
-                                                    <span>Organization Admins</span>
-                                                    <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400 text-xs px-2 py-0.5 rounded-full">{orgAdmins.length}</span>
+                                            <div className="bg-slate-50/50 dark:bg-github-dark-subtle/20 border border-slate-100 dark:border-github-dark-border p-6 rounded-2xl space-y-4">
+                                                <h3 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text uppercase tracking-wider pb-2 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-center">
+                                                    <span className="flex items-center gap-2"><Shield size={16} className="text-indigo-500" /> Organization Admins</span>
+                                                    <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400 text-xs px-2.5 py-0.5 rounded-full font-bold">{orgAdmins.length}</span>
                                                 </h3>
                                                 <div className="bg-white dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden shadow-sm">
                                                     {loadingAdmins ? (
@@ -651,68 +665,73 @@ const OrganizationList = () => {
                                                     ) : orgAdmins.length === 0 ? (
                                                         <div className="p-8 text-center text-slate-500 text-sm">No admin users found.</div>
                                                     ) : (
-                                                        <table className="w-full text-left text-sm whitespace-nowrap">
-                                                            <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted">
-                                                                <tr>
-                                                                    <th className="px-4 py-3 font-medium">Name</th>
-                                                                    <th className="px-4 py-3 font-medium">Email</th>
-                                                                    <th className="px-4 py-3 font-medium">Phone</th>
-                                                                    <th className="px-4 py-3 font-medium">Status / Password</th>
-                                                                    <th className="px-4 py-3 font-medium text-right">Actions</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-slate-800 dark:text-github-dark-text">
-                                                                {orgAdmins.map(admin => (
-                                                                    <tr key={admin.user_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                                                                        {editingAdminId === admin.user_id ? (
-                                                                            <>
-                                                                                <td className="px-4 py-2">
-                                                                                    <input className="w-full px-2 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs" value={adminFormData.user_name} onChange={e => setAdminFormData({ ...adminFormData, user_name: e.target.value })} placeholder="Name" />
-                                                                                </td>
-                                                                                <td className="px-4 py-2">
-                                                                                    <input type="email" className="w-full px-2 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs" value={adminFormData.email} onChange={e => setAdminFormData({ ...adminFormData, email: e.target.value })} placeholder="Email" />
-                                                                                </td>
-                                                                                <td className="px-4 py-2">
-                                                                                    <input type="tel" className="w-full px-2 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs" value={adminFormData.phone_no} onChange={e => setAdminFormData({ ...adminFormData, phone_no: e.target.value })} placeholder="Phone" />
-                                                                                </td>
-                                                                                <td className="px-4 py-2 flex gap-2">
-                                                                                    <select className="px-2 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs appearance-none" value={adminFormData.is_active ? '1' : '0'} onChange={e => setAdminFormData({ ...adminFormData, is_active: e.target.value === '1' })}>
-                                                                                        <option value="1">Active</option>
-                                                                                        <option value="0">Disabled</option>
-                                                                                    </select>
-                                                                                    <input type="text" className="w-24 px-2 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs" value={adminFormData.password} onChange={e => setAdminFormData({ ...adminFormData, password: e.target.value })} placeholder="New Pwd?" />
-                                                                                </td>
-                                                                                <td className="px-4 py-2 text-right">
-                                                                                    <div className="flex items-center justify-end gap-2">
-                                                                                        <button type="button" onClick={() => handleSaveAdmin(admin.user_id)} className="text-emerald-600 hover:text-emerald-700 font-medium text-xs">Save</button>
-                                                                                        <button type="button" onClick={() => setEditingAdminId(null)} className="text-slate-500 hover:text-slate-700 text-xs text-xs">Cancel</button>
-                                                                                    </div>
-                                                                                </td>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <td className="px-4 py-3 font-medium">{admin.user_name} <span className="text-[10px] text-slate-400 font-mono ml-1">{admin.user_code}</span></td>
-                                                                                <td className="px-4 py-3">{admin.email}</td>
-                                                                                <td className="px-4 py-3 font-mono text-xs">{admin.phone_no || '-'}</td>
-                                                                                <td className="px-4 py-3">
-                                                                                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase font-bold ${admin.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                                                                        {admin.is_active ? 'Active' : 'Disabled'}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td className="px-4 py-3 text-right">
-                                                                                    <button type="button" onClick={() => handleEditAdmin(admin)} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium text-xs transition-colors">
-                                                                                        Edit
-                                                                                    </button>
-                                                                                </td>
-                                                                            </>
-                                                                        )}
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                                                <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted font-bold text-xs uppercase tracking-wider">
+                                                                    <tr>
+                                                                        <th className="px-6 py-3.5 font-semibold">Name</th>
+                                                                        <th className="px-6 py-3.5 font-semibold">Email</th>
+                                                                        <th className="px-6 py-3.5 font-semibold">Phone</th>
+                                                                        <th className="px-6 py-3.5 font-semibold">Status / Password</th>
+                                                                        <th className="px-6 py-3.5 font-semibold text-right">Actions</th>
                                                                     </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-slate-800 dark:text-github-dark-text">
+                                                                    {orgAdmins.map(admin => (
+                                                                        <tr key={admin.user_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                                                            {editingAdminId === admin.user_id ? (
+                                                                                <>
+                                                                                    <td className="px-6 py-3">
+                                                                                        <input className="w-full px-3 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={adminFormData.user_name} onChange={e => setAdminFormData({ ...adminFormData, user_name: e.target.value })} placeholder="Name" />
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3">
+                                                                                        <input type="email" className="w-full px-3 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={adminFormData.email} onChange={e => setAdminFormData({ ...adminFormData, email: e.target.value })} placeholder="Email" />
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3">
+                                                                                        <input type="tel" className="w-full px-3 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={adminFormData.phone_no} onChange={e => setAdminFormData({ ...adminFormData, phone_no: e.target.value })} placeholder="Phone" />
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3 flex gap-2">
+                                                                                        <select className="px-3 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs appearance-none focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" value={adminFormData.is_active ? '1' : '0'} onChange={e => setAdminFormData({ ...adminFormData, is_active: e.target.value === '1' })}>
+                                                                                            <option value="1">Active</option>
+                                                                                            <option value="0">Disabled</option>
+                                                                                        </select>
+                                                                                        <input type="text" className="w-28 px-3 py-1.5 border border-slate-300 dark:border-github-dark-border rounded bg-white dark:bg-github-dark-subtle text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono" value={adminFormData.password} onChange={e => setAdminFormData({ ...adminFormData, password: e.target.value })} placeholder="New Pwd?" />
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3 text-right">
+                                                                                        <div className="flex items-center justify-end gap-3 font-semibold text-xs">
+                                                                                            <button type="button" onClick={() => handleSaveAdmin(admin.user_id)} className="text-emerald-600 hover:text-emerald-700 transition-colors">Save</button>
+                                                                                            <button type="button" onClick={() => setEditingAdminId(null)} className="text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <td className="px-6 py-3.5 font-medium">
+                                                                                        <span className="text-slate-900 dark:text-github-dark-text">{admin.user_name}</span>
+                                                                                        <span className="text-[10px] text-slate-400 font-mono ml-2 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{admin.user_code}</span>
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3.5 text-slate-600 dark:text-github-dark-muted">{admin.email}</td>
+                                                                                    <td className="px-6 py-3.5 font-mono text-xs text-slate-600 dark:text-github-dark-muted">{admin.phone_no || '-'}</td>
+                                                                                    <td className="px-6 py-3.5">
+                                                                                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${admin.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                                                                            {admin.is_active ? 'Active' : 'Disabled'}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-6 py-3.5 text-right">
+                                                                                        <button type="button" onClick={() => handleEditAdmin(admin)} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-xs transition-colors">
+                                                                                            Edit
+                                                                                        </button>
+                                                                                    </td>
+                                                                                </>
+                                                                            )}
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
                                                     )}
                                                 </div>
-                                            </section>
+                                            </div>
                                         )}
                                     </div>
                                 </div>

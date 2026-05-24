@@ -3,6 +3,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { ShieldAlert, Search, Loader2, CheckCircle, Clock } from 'lucide-react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import LoadingScreen from '../../components/LoadingScreen';
 
 const SecurityAlerts = () => {
     const [alerts, setAlerts] = useState([]);
@@ -71,9 +72,12 @@ const SecurityAlerts = () => {
                 </div>
 
                 {/* List Content */}
-                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
-                    <div className="flex-1 overflow-x-auto">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
+                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col relative min-h-[300px]">
+                    {loading ? (
+                        <LoadingScreen message="Fetching security alerts..." isSuperAdmin={true} fullScreen={false} />
+                    ) : (
+                        <div className="flex-1 overflow-x-auto">
+                            <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted">
                                 <tr>
                                     <th className="px-6 py-4 font-semibold">Severity / Type</th>
@@ -138,6 +142,7 @@ const SecurityAlerts = () => {
                             </tbody>
                         </table>
                     </div>
+                    )}
                 </div>
             </div>
         </DashboardLayout>

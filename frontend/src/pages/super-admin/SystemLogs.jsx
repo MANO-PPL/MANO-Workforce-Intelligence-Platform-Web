@@ -3,6 +3,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { Activity, AlertTriangle, Code, Search, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import LoadingScreen from '../../components/LoadingScreen';
 
 const SystemLogs = () => {
     const [activeTab, setActiveTab] = useState('activity'); // 'activity' or 'errors'
@@ -57,48 +58,51 @@ const SystemLogs = () => {
         <DashboardLayout title="System Logs">
             <div className="flex flex-col flex-1 space-y-4 min-h-0">
                 {/* Action Bar (Search & Tabs) */}
-                <div className="flex justify-end items-center shrink-0">
-                    <div className="flex items-center gap-4">
-                        {/* Tabs */}
-                        <div className="flex bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-lg">
-                            <button
-                                onClick={() => setActiveTab('activity')}
-                                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                                    activeTab === 'activity' 
-                                    ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' 
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
-                                }`}
-                            >
-                                <Activity size={16} /> User Activity
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('errors')}
-                                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                                    activeTab === 'errors' 
-                                    ? 'bg-white dark:bg-slate-700 shadow-sm text-red-600 dark:text-red-400' 
-                                    : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
-                                }`}
-                            >
-                                <AlertTriangle size={16} /> Application Errors
-                            </button>
-                        </div>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input 
-                                type="text" 
-                                placeholder="Search logs..." 
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-64 pl-9 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                            />
-                        </div>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+                    {/* Tabs on Left */}
+                    <div className="flex bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-lg">
+                        <button
+                            onClick={() => setActiveTab('activity')}
+                            className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                activeTab === 'activity' 
+                                ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' 
+                                : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
+                            }`}
+                        >
+                            <Activity size={16} /> User Activity
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('errors')}
+                            className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                activeTab === 'errors' 
+                                ? 'bg-white dark:bg-slate-700 shadow-sm text-red-600 dark:text-red-400' 
+                                : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200'
+                            }`}
+                        >
+                            <AlertTriangle size={16} /> Application Errors
+                        </button>
+                    </div>
+
+                    {/* Search on Right */}
+                    <div className="relative w-full sm:w-auto">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Search logs..." 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-900 dark:text-github-dark-text"
+                        />
                     </div>
                 </div>
 
                 {/* List Content */}
-                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
-                    <div className="flex-1 overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
+                <div className="flex-1 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col relative min-h-[300px]">
+                    {loading ? (
+                        <LoadingScreen message="Fetching system logs..." isSuperAdmin={true} fullScreen={false} />
+                    ) : (
+                        <div className="flex-1 overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-slate-50 dark:bg-github-dark-subtle/80 border-b border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted sticky top-0 z-10 shadow-sm">
                                 {activeTab === 'activity' ? (
                                     <tr>
@@ -177,6 +181,7 @@ const SystemLogs = () => {
                             </tbody>
                         </table>
                     </div>
+                    )}
                 </div>
             </div>
         </DashboardLayout>
