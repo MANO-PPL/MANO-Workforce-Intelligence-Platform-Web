@@ -1,4 +1,5 @@
 import EventBus from '../utils/EventBus.js';
+import { getEventSource } from '../utils/clientInfo.js';
 
 const errorHandler = (err, req, res, next) => {
     err.statusCode = err.statusCode || 500;
@@ -8,13 +9,14 @@ const errorHandler = (err, req, res, next) => {
     if (err.statusCode === 500) {
         EventBus.emitError({
             level: 'ERROR',
-            user_id: req.user?.user_id || null,
+            user_id: req.user?.user_id || req.user?.id || null,
             org_id: req.user?.org_id || null,
             error_message: err.message,
             stack_trace: err.stack,
             request_method: req.method,
             request_path: req.originalUrl,
-            client_ip: req.clientIp || req.ip
+            client_ip: req.clientIp || req.ip,
+            extra_context: { platform: getEventSource(req) }
         });
     }
 

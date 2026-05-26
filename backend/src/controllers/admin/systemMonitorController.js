@@ -117,6 +117,66 @@ export const updateFeedbackStatus = async (req, res, next) => {
     }
 };
 
+// Helper to classify Express route path to specific application module
+const getModuleFromPath = (path) => {
+    if (!path) return 'General';
+    const lowerPath = path.toLowerCase();
+    
+    // Normalize path by stripping the global /api prefix if present
+    let apiPath = lowerPath;
+    if (apiPath.startsWith('/api')) {
+        apiPath = apiPath.slice(4);
+    }
+    if (!apiPath.startsWith('/')) {
+        apiPath = '/' + apiPath;
+    }
+
+    if (apiPath.startsWith('/auth')) return 'Authentication';
+    
+    if (apiPath.startsWith('/attendance')) {
+        if (apiPath.includes('monitor') || apiPath.includes('realtime') || apiPath.includes('live')) {
+            return 'Live Attendance';
+        }
+        return 'Attendance';
+    }
+    
+    if (apiPath.startsWith('/leaves')) return 'Leaves';
+    if (apiPath.startsWith('/holiday')) return 'Holidays';
+    if (apiPath.startsWith('/policies')) return 'Shift Policies';
+    if (apiPath.startsWith('/notifications')) return 'Notifications';
+    
+    if (apiPath.startsWith('/dar')) {
+        if (apiPath.includes('report')) return 'DAR Reports & AI';
+        return 'DAR (Daily Activity)';
+    }
+    
+    if (apiPath.startsWith('/organizations')) return 'Organizations';
+    if (apiPath.startsWith('/employee')) return 'Employees';
+    if (apiPath.startsWith('/profile')) return 'Profile';
+    if (apiPath.startsWith('/feedback')) return 'Feedback';
+    if (apiPath.startsWith('/payment')) return 'Payments';
+    if (apiPath.startsWith('/website-chatbot') || apiPath.startsWith('/chatbot')) return 'Chatbot';
+    if (apiPath.startsWith('/locations')) return 'Work Locations';
+    
+    if (apiPath.startsWith('/admin/reports') || apiPath.startsWith('/reports')) {
+        return 'Reports & Summaries';
+    }
+    
+    if (apiPath.startsWith('/super-admin/monitor')) {
+        return 'System Monitor';
+    }
+    
+    if (apiPath.startsWith('/super-admin')) {
+        return 'Super Admin';
+    }
+    
+    if (apiPath.startsWith('/admin')) {
+        return 'Admin Portal';
+    }
+    
+    return 'General';
+};
+
 // --- System Logs ---
 export const getErrorLogs = async (req, res, next) => {
     try {
@@ -131,7 +191,28 @@ export const getErrorLogs = async (req, res, next) => {
             .orderBy('application_error_logs.occurred_at', 'desc')
             .limit(1000); // Prevent massive payloads
 
-        res.status(200).json({ status: 'success', data: logs });
+        const normalizedLogs = logs.map(log => {
+            let platform = 'UNKNOWN';
+            try {
+                let context = log.extra_context;
+                if (typeof context === 'string') {
+                    context = JSON.parse(context);
+                }
+                if (context && context.platform) {
+                    platform = context.platform;
+                }
+            } catch (e) {}
+            if (platform === 'UNKNOWN') {
+                platform = 'WEB'; // default fallback
+            }
+            return {
+                ...log,
+                platform,
+                module: getModuleFromPath(log.request_path)
+            };
+        });
+
+        res.status(200).json({ status: 'success', data: normalizedLogs });
     } catch (error) {
         next(error);
     }
@@ -150,7 +231,59 @@ export const getActivityLogs = async (req, res, next) => {
             .orderBy('user_activity_logs.occurred_at', 'desc')
             .limit(1000);
 
-        res.status(200).json({ status: 'success', data: logs });
+        const normalizedLogs = logs.map(log => {
+            let platform = 'UNKNOWN';
+            let moduleName = 'General';
+
+            if (log.event_type === 'API_CALL') {
+                platform = log.event_source || 'UNKNOWN';
+                moduleName = log.object_type || 'General';
+                if (moduleName === 'API_ENDPOINT') moduleName = 'General';
+            } else {
+                // Manual log classification
+                platform = log.event_source || 'UNKNOWN';
+                if (platform !== 'WEB' && platform !== 'MOBILE_APP' && platform !== 'API_CLIENT') {
+                    const ua = (log.user_agent || '').toLowerCase();
+                    if (ua.includes('dart') || ua.includes('flutter')) platform = 'MOBILE_APP';
+                    else platform = 'WEB';
+                }
+
+                // Map manual events to module names
+                const lowerType = (log.event_type || '').toLowerCase();
+                const lowerObj = (log.object_type || '').toLowerCase();
+                const lowerDesc = (log.description || '').toLowerCase();
+
+                if (lowerType === 'login' || lowerType === 'logout') {
+                    moduleName = 'Authentication';
+                } else if (lowerType.startsWith('attendance') || lowerObj === 'attendance' || lowerDesc.includes('check in') || lowerDesc.includes('checked in') || lowerDesc.includes('check out') || lowerDesc.includes('checked out')) {
+                    moduleName = 'Attendance';
+                } else if (lowerObj === 'leave' || lowerObj === 'leaves' || lowerType.includes('leave')) {
+                    moduleName = 'Leaves';
+                } else if (lowerObj === 'holiday' || lowerType.includes('holiday')) {
+                    moduleName = 'Holidays';
+                } else if (lowerObj === 'policy' || lowerObj === 'policies') {
+                    moduleName = 'Shift Policies';
+                } else if (lowerObj === 'notification' || lowerType.includes('notification')) {
+                    moduleName = 'Notifications';
+                } else if (lowerObj === 'dar' || lowerType.includes('dar')) {
+                    moduleName = 'DAR (Daily Activity)';
+                } else if (lowerObj === 'employee' || lowerType.includes('employee')) {
+                    moduleName = 'Employees';
+                } else if (lowerObj === 'organization' || lowerType.includes('organization')) {
+                    moduleName = 'Organizations';
+                } else {
+                    moduleName = log.object_type || 'General';
+                }
+            }
+
+            return {
+                ...log,
+                platform,
+                module: moduleName
+            };
+        });
+
+        res.status(200).json({ status: 'success', data: normalizedLogs });
     } catch (error) {
         next(error);
     }

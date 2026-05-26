@@ -7,6 +7,7 @@ import requestIp from 'request-ip';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import errorHandler from './middleware/errorHandler.js';
 import AppError from './utils/AppError.js';
+import { apiMonitor } from './middleware/apiMonitor.js';
 
 // Import route definitions
 import routes from './routes/index.js';
@@ -51,6 +52,7 @@ app.use(helmet());
 app.use(requestIp.mw());
 app.use(generalLimiter);
 app.use(express.json());
+app.use(apiMonitor);
 
 // Main API Router
 app.use('/', routes);

@@ -13,5 +13,7 @@ router.delete('/:id', orgController.deleteOrganization);
 router.post('/:id/cancel-deletion', orgController.cancelOrgDeletion);
 router.get('/:id/admins', orgController.getOrgAdmins);
 router.put('/:id/admins/:adminId', orgController.updateOrgAdmin);
+router.get('/:id/analytics', orgController.getOrgAnalytics);
+router.get('/:id/logs', orgController.getOrgLogs);
 
 export default router;
