@@ -676,43 +676,13 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
 
         const baseHeaders = ["SR No.", "Name", "Position", "Dept"];
         const timeHeaders = ["Time In", "Time Out", "Late Hours"];
+        const gridHeaders = dateHeaders.map(d => `${d.getDate()}\n${d.toLocaleDateString('en-US', { weekday: 'short' })}`);
         const summaryHeaders = ["Present Days", "Total Hrs", "Late Count", "Late Mins"];
 
-        // Add Row 1
-        const row1 = [...baseHeaders, ...timeHeaders];
-        dateHeaders.forEach(d => {
-            const datePrefix = `${d.getDate()} ${d.toLocaleDateString('en-US', { weekday: 'short' })}`;
-            row1.push(datePrefix, "", "", ""); // horizontal merge padding cells
-        });
-        row1.push(...summaryHeaders);
-        worksheet.addRow(row1);
-
-        // Add Row 2
-        const row2 = ["", "", "", "", "", "", ""]; // 7 vertically merged placeholders
-        dateHeaders.forEach(() => {
-            row2.push("In Time", "Out Time", "In Location", "Out Location");
-        });
-        row2.push("", "", "", ""); // 4 vertically merged placeholders
-        worksheet.addRow(row2);
-
-        // Apply Excel merges:
-        // 1. Vertically merge base & time headers (Columns 1 to 7)
-        for (let col = 1; col <= 7; col++) {
-            worksheet.mergeCells(1, col, 2, col);
-        }
-
-        // 2. Horizontally merge dates in Row 1
-        for (let dIdx = 0; dIdx < dateHeaders.length; dIdx++) {
-            const startCol = 8 + 4 * dIdx;
-            const endCol = startCol + 3;
-            worksheet.mergeCells(1, startCol, 1, endCol);
-        }
-
-        // 3. Vertically merge summary headers at the end
-        const summaryStartCol = 8 + 4 * dateHeaders.length;
-        for (let col = summaryStartCol; col < summaryStartCol + 4; col++) {
-            worksheet.mergeCells(1, col, 2, col);
-        }
+        worksheet.addRow([...baseHeaders, ...timeHeaders, ...gridHeaders, ...summaryHeaders]);
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
         users.forEach((u, index) => {
             const userRecs = records.filter(r => r.user_id === u.user_id);
@@ -740,12 +710,7 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                 const dateStr = d.toISOString().split('T')[0];
                 const rec = userRecs.find(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                 if (rec) {
-                    const checkInTime = rec.time_in ? new Date(rec.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
-                    const checkOutTime = rec.time_out ? new Date(rec.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
-                    const locationIn = rec.time_in_address || "-";
-                    const locationOut = rec.time_out_address || "-";
-                    userRow.push(checkInTime, checkOutTime, locationIn, locationOut);
-
+                    userRow.push("1.0");
                     totalHrs += parseFloat(reportsService.calculateWorkHours(rec.time_in, rec.time_out));
                     if (rec.late_minutes > 0) {
                         lateCount++;
@@ -753,61 +718,17 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                     }
                 } else {
                     const day = d.getDay();
-                    const statusStr = day === 0 ? "Sun" : day === 6 ? "Sat" : "Absent";
-                    userRow.push(statusStr, "-", "-", "-");
+                    userRow.push(day === 0 ? "Sun" : day === 6 ? "Sat" : "0.0");
                 }
             });
 
             userRow.push(userRecs.length, totalHrs.toFixed(2), lateCount, lateMins);
             const row = worksheet.addRow(userRow);
             row.eachCell((cell) => {
-                if (cell.value === "Absent") cell.font = { color: { argb: 'FFFF0000' } };
+                if (cell.value === "0.0") cell.font = { color: { argb: 'FFFF0000' } };
                 if (cell.value === "Sun" || cell.value === "Sat") cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
             });
         });
-
-        const lastRow = worksheet.rowCount;
-        const totalRowValues = [];
-        totalRowValues[0] = "TOTALS";
-        totalRowValues[1] = "";
-        totalRowValues[2] = "";
-        totalRowValues[3] = "";
-        totalRowValues[4] = "";
-        totalRowValues[5] = "";
-        
-        // Late Hours sum (Col G / Col 7, data starts at Row 3)
-        totalRowValues[6] = { formula: `SUM(G3:G${lastRow})` };
-
-        // For date columns (base offset is col 8, 1-based, starts at Row 3)
-        for (let dIdx = 0; dIdx < dateHeaders.length; dIdx++) {
-            const baseColIdx = 8 + 4 * dIdx;
-            const letter = getColLetter(baseColIdx);
-            
-            // Present count formula for In Time column of the date
-            totalRowValues[baseColIdx - 1] = { 
-                formula: `COUNTIFS(${letter}3:${letter}${lastRow}, "<>-", ${letter}3:${letter}${lastRow}, "<>Absent", ${letter}3:${letter}${lastRow}, "<>Sun", ${letter}3:${letter}${lastRow}, "<>Sat")` 
-            };
-            
-            // Blank columns in Out Time, In Location, and Out Location for the totals row
-            totalRowValues[baseColIdx] = "";
-            totalRowValues[baseColIdx + 1] = "";
-            totalRowValues[baseColIdx + 2] = "";
-        }
-
-        // Summary columns (starts at Row 3)
-        const presCol = summaryStartCol;
-        totalRowValues[presCol - 1] = { formula: `SUM(${getColLetter(presCol)}3:${getColLetter(presCol)}${lastRow})` };
-
-        const hrsCol = summaryStartCol + 1;
-        totalRowValues[hrsCol - 1] = { formula: `SUM(${getColLetter(hrsCol)}3:${getColLetter(hrsCol)}${lastRow})` };
-
-        const countCol = summaryStartCol + 2;
-        totalRowValues[countCol - 1] = { formula: `SUM(${getColLetter(countCol)}3:${getColLetter(countCol)}${lastRow})` };
-
-        const minsCol = summaryStartCol + 3;
-        totalRowValues[minsCol - 1] = { formula: `SUM(${getColLetter(minsCol)}3:${getColLetter(minsCol)}${lastRow})` };
-
-        worksheet.addRow(totalRowValues);
     }
 
     if (format === "xlsx") {
@@ -829,6 +750,10 @@ export const downloadReport = catchAsync(async (req, res) => {
     const org_id = req.user.org_id;
     const isUserReport = req.originalUrl.includes("/attendance/");
     const targetUserId = isUserReport ? req.user.user_id : req.query.user_id;
+
+    if (!isUserReport && req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+        return res.status(403).json({ ok: false, message: "Access denied" });
+    }
 
     if (!type) {
         return res.status(400).json({ ok: false, message: "Report Type is required" });
@@ -854,6 +779,8 @@ export const downloadReport = catchAsync(async (req, res) => {
         status: 'pending'
     });
 
+    const filename = `Report_${type}_${month || date}.${format}`;
+
     // 2. Add job to BullMQ
     await reportQueue.add('generate-report', {
         reportId,
@@ -863,7 +790,8 @@ export const downloadReport = catchAsync(async (req, res) => {
         month,
         date,
         type,
-        format
+        format,
+        filename
     }, {
         attempts: 3,
         backoff: 5000
@@ -886,6 +814,10 @@ export const getReportStatus = catchAsync(async (req, res) => {
 
     if (!report) {
         return res.status(404).json({ ok: false, message: "Report not found" });
+    }
+
+    if (req.user.user_type !== "admin" && req.user.user_type !== "hr" && report.user_id !== req.user.user_id) {
+        return res.status(403).json({ ok: false, message: "Access denied" });
     }
 
     res.json({ ok: true, data: report });

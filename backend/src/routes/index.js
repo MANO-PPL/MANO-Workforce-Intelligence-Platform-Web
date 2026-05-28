@@ -38,6 +38,7 @@ router.use('/attendance', attendanceRoutes);
 router.use('/organizations', orgRoutes);
 router.use('/super-admin', superAdminRoutes);
 router.use('/admin/reports', reportsRoutes);
+router.use('/attendance/reports', reportsRoutes);
 router.use('/super-admin/monitor', systemMonitorRoutes); // Moved from /admin/monitor
 router.use('/locations', workLocationsRoutes); // For work location management
 router.use('/dar/activities', darActivityRoutes); // For DAR activities
