@@ -12,4 +12,7 @@ router.get("/preview", reportsController.previewReport);
 // GET /admin/reports/download OR /attendance/reports/download
 router.get("/download", reportsController.downloadReport);
 
+// GET /admin/reports/status/:reportId
+router.get("/status/:reportId", reportsController.getReportStatus);
+
 export default router;

@@ -6,6 +6,7 @@ import { initAttendanceProcessor } from './src/cron/AttendanceProcessor.js';
 import { initCleanupScheduler } from './src/cron/cleanupScheduler.js';
 import { initDARReportScheduler } from './src/cron/DARReportScheduler.js';
 import EventBus from './src/utils/EventBus.js';
+import './src/workers/reportWorker.js';
 
 const PORT = Number(process.env.PORT) || 5003;
 

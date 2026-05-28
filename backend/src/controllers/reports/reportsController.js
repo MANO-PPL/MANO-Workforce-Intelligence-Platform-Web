@@ -2,6 +2,7 @@ import catchAsync from '../../utils/catchAsync.js';
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import * as reportsService from '../../services/reports/reportsServices.js';
+import { attendanceDB } from '../../config/database.js';
 
 // Helper: Generate PDF using PDFKit with a professional grid/table design
 export const generatePdf = (title, columns, rows) => {
@@ -415,24 +416,7 @@ export const previewReport = catchAsync(async (req, res) => {
     res.json({ ok: true, data });
 });
 
-export const downloadReport = catchAsync(async (req, res) => {
-    const { month, date, type, format = "xlsx" } = req.query;
-    const org_id = req.user.org_id;
-    const isUserReport = req.originalUrl.includes("/attendance/");
-    const targetUserId = isUserReport ? req.user.user_id : req.query.user_id;
-
-    if (!type) {
-        return res.status(400).json({ ok: false, message: "Report Type is required" });
-    }
-
-    if (["matrix_monthly", "attendance_summary", "attendance_detailed"].includes(type) && !month) {
-        return res.status(400).json({ ok: false, message: "Month is required" });
-    }
-
-    if (["matrix_weekly", "matrix_daily"].includes(type) && !date) {
-        return res.status(400).json({ ok: false, message: "Date is required" });
-    }
-
+export const compileReportBuffer = async ({ org_id, targetUserId, month, date, type, format }) => {
     const { startDate, endDate } = reportsService.resolveDateRange({ type, month, date });
 
     const users = await reportsService.getUsers({ org_id, targetUserId });
@@ -517,11 +501,13 @@ export const downloadReport = catchAsync(async (req, res) => {
         }
 
         const pdfDoc = generatePdf(pdfTitle, pdfCols, pdfRows);
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", "attachment; filename=report.pdf");
-        pdfDoc.pipe(res);
-        pdfDoc.end();
-        return;
+        return new Promise((resolve, reject) => {
+            const chunks = [];
+            pdfDoc.on('data', chunk => chunks.push(chunk));
+            pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
+            pdfDoc.on('error', err => reject(err));
+            pdfDoc.end();
+        });
     }
 
     // Excel / CSV
@@ -828,9 +814,79 @@ export const downloadReport = catchAsync(async (req, res) => {
         styleExcelWorksheet(worksheet, type);
     }
 
-    res.setHeader("Content-Type", format === "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename=Report_${type}.${format}`);
-    if (format === "csv") await workbook.csv.write(res);
-    else await workbook.xlsx.write(res);
-    res.end();
+    if (format === "csv") {
+        return await workbook.csv.writeBuffer();
+    } else {
+        return await workbook.xlsx.writeBuffer();
+    }
+};
+
+import { reportQueue } from '../../config/queues.js';
+import crypto from 'crypto';
+
+export const downloadReport = catchAsync(async (req, res) => {
+    const { month, date, type, format = "xlsx" } = req.query;
+    const org_id = req.user.org_id;
+    const isUserReport = req.originalUrl.includes("/attendance/");
+    const targetUserId = isUserReport ? req.user.user_id : req.query.user_id;
+
+    if (!type) {
+        return res.status(400).json({ ok: false, message: "Report Type is required" });
+    }
+
+    if (["matrix_monthly", "attendance_summary", "attendance_detailed"].includes(type) && !month) {
+        return res.status(400).json({ ok: false, message: "Month is required" });
+    }
+
+    if (["matrix_weekly", "matrix_daily"].includes(type) && !date) {
+        return res.status(400).json({ ok: false, message: "Date is required" });
+    }
+
+    const reportId = crypto.randomUUID();
+
+    // 1. Write status entry to generated_reports table
+    await attendanceDB('generated_reports').insert({
+        report_id: reportId,
+        user_id: req.user.user_id,
+        org_id,
+        report_type: type,
+        format,
+        status: 'pending'
+    });
+
+    // 2. Add job to BullMQ
+    await reportQueue.add('generate-report', {
+        reportId,
+        org_id,
+        user_id: req.user.user_id,
+        targetUserId,
+        month,
+        date,
+        type,
+        format
+    }, {
+        attempts: 3,
+        backoff: 5000
+    });
+
+    res.status(202).json({
+        ok: true,
+        message: "Report queued successfully",
+        reportId
+    });
+});
+
+export const getReportStatus = catchAsync(async (req, res) => {
+    const { reportId } = req.params;
+    const org_id = req.user.org_id;
+
+    const report = await attendanceDB('generated_reports')
+        .where({ report_id: reportId, org_id })
+        .first();
+
+    if (!report) {
+        return res.status(404).json({ ok: false, message: "Report not found" });
+    }
+
+    res.json({ ok: true, data: report });
 });
