@@ -330,6 +330,8 @@ export const permanentlyDeleteUser = async (userId) => {
         await trx('notifications').where('user_id', userId).del();
         await trx('user_activity_logs').where('user_id', userId).del();
         await trx('application_error_logs').where('user_id', userId).del();
+        await trx('attendance_correction_requests').where('user_id', userId).del();
+        await trx('user_work_locations').where('user_id', userId).del();
 
         const leaveRequests = await trx('leave_requests').where('user_id', userId).select('lr_id');
         const leaveIds = leaveRequests.map(lr => lr.lr_id);
