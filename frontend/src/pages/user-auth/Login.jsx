@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, ArrowRight, Loader2, Eye, EyeOff, Shield, Activity, Zap, Cpu, Sun, Moon } from "lucide-react";
 import ReCAPTCHA from "react-google-recaptcha";
+import LoadingScreen from "../../components/LoadingScreen";
 
 const Login = () => {
     const isCaptchaEnabled = String(import.meta.env.VITE_ENABLE_CAPTCHA).toLowerCase().trim() !== 'false';
@@ -19,7 +20,14 @@ const Login = () => {
     const [rememberMe, setRememberMe] = useState(false);
     const [captchaToken, setCaptchaToken] = useState(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-    const [isDark, setIsDark] = useState(true);
+    const [isDark, setIsDark] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) return savedTheme === 'dark';
+            return window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+        return true;
+    });
 
     useEffect(() => {
         console.log("🔒 [Vite Env Check] VITE_ENABLE_CAPTCHA:", import.meta.env.VITE_ENABLE_CAPTCHA);
@@ -27,11 +35,13 @@ const Login = () => {
         const handleResize = () => setIsMobile(window.innerWidth < 1024);
         window.addEventListener("resize", handleResize);
 
-        // Sync theme with HTML element
+        // Sync theme with HTML element & save preference
         if (isDark) {
             document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
         } else {
             document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
         }
 
         return () => window.removeEventListener("resize", handleResize);
@@ -44,8 +54,8 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Skip captcha for mobile OR if not set in env (for dev convenience) OR if captcha is disabled via env
-        if (isCaptchaEnabled && !isMobile && !captchaToken && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+        // Skip captcha check if not set in env (for dev convenience) OR if captcha is disabled via env
+        if (isCaptchaEnabled && !captchaToken && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
             toast.error("Please complete the security check.");
             return;
         }
@@ -65,6 +75,11 @@ const Login = () => {
 
     return (
         <div className="relative min-h-screen bg-slate-50 dark:bg-[#010404] font-poppins selection:bg-indigo-500/30 overflow-hidden transition-colors duration-500">
+            <AnimatePresence>
+                {loading && (
+                    <LoadingScreen message="Establishing secure session..." />
+                )}
+            </AnimatePresence>
 
             {/* Background Visuals (Global - Not Scaled) */}
             <div className="fixed inset-0 z-0 opacity-100 dark:opacity-100 transition-opacity duration-500 pointer-events-none">
@@ -257,9 +272,9 @@ const Login = () => {
                                 </label>
                             </div>
 
-                            {/* ReCAPTCHA (Desktop only) */}
-                            {isCaptchaEnabled && !isMobile && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
-                                <div className="flex justify-center scale-[0.8] -my-2 transform transition-all opacity-90 translate-x-[-15px]">
+                            {/* ReCAPTCHA */}
+                            {isCaptchaEnabled && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
+                                <div className={`flex justify-center scale-[0.8] -my-2 transform transition-all opacity-90 ${isMobile ? '' : 'translate-x-[-15px]'}`}>
                                     <ReCAPTCHA
                                         sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
                                         onChange={setCaptchaToken}

@@ -1,5 +1,6 @@
 import catchAsync from '../../utils/catchAsync.js';
 import * as DarEventService from '../../services/darServices/eventsServices.js';
+import { handleMentions } from '../../services/collaboration/mentionService.js';
 
 export const createEvent = catchAsync(async (req, res) => {
     const { title, description, event_date, start_time, end_time, location, type } = req.body;
@@ -10,6 +11,18 @@ export const createEvent = catchAsync(async (req, res) => {
         event_date, // Trust frontend YYYY-MM-DD, avoid timezone shifts from re-parsing
         start_time, end_time, location, type
     });
+
+    const io = req.app.get('io');
+    if (description && (type === 'MEETING' || type === 'EVENT')) {
+        await handleMentions({
+            org_id,
+            sender_id: user_id,
+            text: description,
+            context_type: 'dar_meeting',
+            context_id: event_id,
+            io
+        });
+    }
 
     res.json({ ok: true, message: "Created successfully", event_id });
 });
@@ -24,10 +37,23 @@ export const listEvents = catchAsync(async (req, res) => {
 
 export const updateEvent = catchAsync(async (req, res) => {
     const event_id = req.params.id;
-    const { org_id } = req.user;
+    const { org_id, user_id } = req.user;
     const updates = { ...req.body };
 
     await DarEventService.updateEvent({ event_id, org_id, updates });
+
+    const io = req.app.get('io');
+    if (updates.description && (updates.type === 'MEETING' || updates.type === 'EVENT')) {
+        await handleMentions({
+            org_id,
+            sender_id: user_id,
+            text: updates.description,
+            context_type: 'dar_meeting',
+            context_id: event_id,
+            io
+        });
+    }
+
     res.json({ ok: true, message: "Updated successfully" });
 });
 

@@ -7,11 +7,14 @@ import requestIp from 'request-ip';
 import { generalLimiter } from './middleware/rateLimiter.js';
 import errorHandler from './middleware/errorHandler.js';
 import AppError from './utils/AppError.js';
+import { apiMonitor } from './middleware/apiMonitor.js';
 
 // Import route definitions
 import routes from './routes/index.js';
 
 const app = express();
+
+app.set('trust proxy', 1); // Trust reverse proxy (Nginx) for secure cookies
 
 const allowedOrigins = [
     'http://localhost:5173',
@@ -51,6 +54,7 @@ app.use(helmet());
 app.use(requestIp.mw());
 app.use(generalLimiter);
 app.use(express.json());
+app.use(apiMonitor);
 
 // Main API Router
 app.use('/', routes);

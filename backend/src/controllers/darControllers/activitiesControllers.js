@@ -1,5 +1,6 @@
 import catchAsync from '../../utils/catchAsync.js';
 import * as DarActivityService from '../../services/darServices/activitiesServices.js';
+import { handleMentions } from '../../services/collaboration/mentionService.js';
 
 export const createActivity = catchAsync(async (req, res) => {
     const { activity_date, start_time, end_time, title, description, activity_type } = req.body;
@@ -15,6 +16,18 @@ export const createActivity = catchAsync(async (req, res) => {
     const activity_id = await DarActivityService.createActivity({
         org_id, user_id, activity_date, start_time, end_time, title, description, activity_type, status
     });
+
+    const io = req.app.get('io');
+    if (description) {
+        await handleMentions({
+            org_id,
+            sender_id: user_id,
+            text: description,
+            context_type: 'dar_activity',
+            context_id: activity_id,
+            io
+        });
+    }
 
     res.json({ ok: true, message: "Activity logged successfully", activity_id, status });
 });
@@ -34,6 +47,18 @@ export const updateActivity = catchAsync(async (req, res) => {
     await DarActivityService.updateActivity({
         activity_id, org_id, user_id, activity_date, start_time, end_time, title, description, activity_type, status
     });
+
+    const io = req.app.get('io');
+    if (description) {
+        await handleMentions({
+            org_id,
+            sender_id: user_id,
+            text: description,
+            context_type: 'dar_activity',
+            context_id: activity_id,
+            io
+        });
+    }
 
     res.json({ ok: true, message: "Activity updated successfully", status });
 });

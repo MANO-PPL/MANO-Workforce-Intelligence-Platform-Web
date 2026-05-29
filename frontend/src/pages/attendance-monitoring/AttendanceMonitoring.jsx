@@ -255,10 +255,21 @@ const AttendanceMonitoring = () => {
 
 
     const { avatarTimestamp } = useAuth();
-    const [activeTab, setActiveTab] = useState('live'); // 'live' | 'requests'
+    const [activeTab, setActiveTab] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('tab') || 'live';
+    });
     const [activeView, setActiveView] = useState('cards'); // 'cards' | 'graph' | 'table' | 'map'
     const [activeTheme, setActiveTheme] = useState('voyager');
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+            setActiveTab(tab);
+        }
+    }, [window.location.search]);
 
     const MAP_THEMES = {
         dark: { name: 'Night Mode', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
@@ -306,8 +317,19 @@ const AttendanceMonitoring = () => {
     // Filters & Search
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('All');
+    const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
     const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split("T")[0]);
     const [lastSynced, setLastSynced] = React.useState(new Date());
+
+    const DEPARTMENTS = [
+        { value: 'All', label: 'All Departments' },
+        { value: 'Sales', label: 'Sales' },
+        { value: 'Retail', label: 'Retail' },
+        { value: 'Logistics', label: 'Logistics' },
+        { value: 'Operations', label: 'Operations' },
+        { value: 'IT', label: 'IT' },
+        { value: 'HR', label: 'HR' }
+    ];
 
     // Data Fetching
     const fetchData = async (silent = false) => {
@@ -341,19 +363,24 @@ const AttendanceMonitoring = () => {
                         const inStr = formatTime(inTime);
                         let outStr = '-';
                         let isActive = true;
+                        let durationMin = 0;
 
                         if (r.time_out) {
                             const outTime = new Date(r.time_out);
                             outStr = formatTime(outTime);
                             isActive = false;
-                            totalMin += Math.max(0, (outTime - inTime) / 60000);
+                            durationMin = Math.max(0, (outTime - inTime) / 60000);
+                            totalMin += durationMin;
                         } else {
-                            totalMin += Math.max(0, (new Date() - inTime) / 60000);
+                            durationMin = Math.max(0, (new Date() - inTime) / 60000);
+                            totalMin += durationMin;
                         }
 
                         // Locations
                         const inLoc = r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Unknown');
                         const outLoc = r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : null);
+
+                        const sessionHours = `${(durationMin / 60).toFixed(1)} hrs`;
 
                         return {
                             rawIn: inTime,
@@ -372,7 +399,8 @@ const AttendanceMonitoring = () => {
                             inLat: r.time_in_lat,
                             inLng: r.time_in_lng,
                             outLat: r.time_out_lat,
-                            outLng: r.time_out_lng
+                            outLng: r.time_out_lng,
+                            hours: sessionHours
                         };
                     });
 
@@ -673,8 +701,8 @@ const AttendanceMonitoring = () => {
 
     const getTimelineData = () => {
         const hourlyData = {};
-        // Initialize hours from 6 AM to 10 PM
-        for (let i = 6; i <= 22; i++) {
+        // Initialize hours from 12 AM (0) to 11 PM (23)
+        for (let i = 0; i <= 23; i++) {
             hourlyData[i] = { checkins: 0, repeats: 0, active: 0 };
         }
 
@@ -692,7 +720,7 @@ const AttendanceMonitoring = () => {
                 }
 
                 const outTime = session.rawOut;
-                for (let h = 6; h <= 22; h++) {
+                for (let h = 0; h <= 23; h++) {
                     const hourStart = h;
                     if (inHour <= hourStart) {
                         if (!outTime || outTime.getHours() > hourStart) {
@@ -705,7 +733,7 @@ const AttendanceMonitoring = () => {
 
         return Object.keys(hourlyData).map(hour => {
             const h = parseInt(hour);
-            const label = h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`;
+            const label = h === 0 ? '12 AM' : h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`;
             return {
                 time: label,
                 checkins: hourlyData[hour].checkins,
@@ -820,11 +848,18 @@ const AttendanceMonitoring = () => {
                     color: #f0f6fc !important;
                     background: #30363d !important;
                 }
+                .no-scrollbar::-webkit-scrollbar {
+                    display: none !important;
+                }
+                .no-scrollbar {
+                    -ms-overflow-style: none !important;
+                    scrollbar-width: none !important;
+                }
                 `}
             </style>
 
-            <DashboardLayout title="Live Attendance">
-            <div className="space-y-6">
+            <DashboardLayout title="Live Attendance" noPadding={activeTab === 'requests'}>
+            <div className={activeTab === 'requests' ? "h-[calc(125vh-5rem)] overflow-hidden flex flex-col p-6 space-y-4" : "space-y-6"} style={{ zoom: 0.8 }}>
 
                 {/* Tabs */}
                 <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
@@ -890,7 +925,7 @@ const AttendanceMonitoring = () => {
                                     </div>
 
                                     <div className="flex items-center gap-3 bg-slate-50 dark:bg-github-dark-subtle/30 p-1.5 rounded-lg border border-slate-100 dark:border-github-dark-border">
-                                        <div className="flex items-center gap-3 w-48">
+                                        <div className="flex items-center gap-3 w-64">
                                             <DatePicker
                                                 value={selectedDate}
                                                 onChange={(date) => setSelectedDate(date)}
@@ -919,21 +954,57 @@ const AttendanceMonitoring = () => {
                                             />
                                         </div>
                                         <div className="relative">
-                                            <select
-                                                value={departmentFilter}
-                                                onChange={(e) => setDepartmentFilter(e.target.value)}
-                                                className="pl-10 pr-8 py-2.5 text-xs rounded-lg border border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20 text-slate-700 dark:text-github-dark-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner appearance-none min-w-[140px] font-bold"
+                                            <button
+                                                onClick={() => setIsDeptDropdownOpen(!isDeptDropdownOpen)}
+                                                className="pl-10 pr-8 py-2.5 text-xs rounded-lg border border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20 text-slate-700 dark:text-github-dark-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner min-w-[155px] font-bold text-left flex items-center justify-between gap-2"
                                             >
-                                                <option value="All">All Departments</option>
-                                                <option value="Sales">Sales</option>
-                                                <option value="Retail">Retail</option>
-                                                <option value="Logistics">Logistics</option>
-                                                <option value="Operations">Operations</option>
-                                                <option value="IT">IT</option>
-                                                <option value="HR">HR</option>
-                                            </select>
-                                            <Filter size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                                <span className="truncate">
+                                                    {DEPARTMENTS.find(d => d.value === departmentFilter)?.label || 'All Departments'}
+                                                </span>
+                                                <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 shrink-0 ${isDeptDropdownOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            <Filter size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+
+                                            <AnimatePresence>
+                                                {isDeptDropdownOpen && (
+                                                    <>
+                                                        <div 
+                                                            className="fixed inset-0 z-[80]" 
+                                                            onClick={() => setIsDeptDropdownOpen(false)} 
+                                                        />
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                                                            transition={{ duration: 0.15 }}
+                                                            className="absolute top-full left-0 mt-1.5 w-full min-w-[180px] bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-github-dark-border rounded-xl shadow-2xl overflow-hidden z-[90]"
+                                                        >
+                                                            <div className="py-1 max-h-60 overflow-y-auto custom-scrollbar">
+                                                                {DEPARTMENTS.map((dept) => {
+                                                                    const isSelected = departmentFilter === dept.value;
+                                                                    return (
+                                                                        <button
+                                                                            key={dept.value}
+                                                                            onClick={() => {
+                                                                                setDepartmentFilter(dept.value);
+                                                                                setIsDeptDropdownOpen(false);
+                                                                            }}
+                                                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-colors text-left ${
+                                                                                isSelected
+                                                                                    ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
+                                                                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                                            }`}
+                                                                        >
+                                                                            <span>{dept.label}</span>
+                                                                            {isSelected && <Check size={12} className="text-indigo-500" />}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </motion.div>
+                                                    </>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
                                     </div>
 
@@ -967,16 +1038,16 @@ const AttendanceMonitoring = () => {
                                 {activeView === 'table' ? (
                                     <div className="bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-500">
                                         <div className="overflow-x-auto custom-scrollbar">
-                                            <div className="min-w-[1200px]">
+                                            <div className="min-w-[2000px]">
                                                 {/* Timeline Header */}
-                                                <div className="flex bg-slate-50 dark:bg-github-dark-subtle/50 border-b border-slate-200 dark:border-github-dark-border">
-                                                    <div className="w-[300px] shrink-0 px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-slate-50 dark:bg-github-dark-subtle/50 z-20">
+                                                <div className="flex bg-slate-50 dark:bg-github-dark-subtle border-b border-slate-200 dark:border-github-dark-border">
+                                                    <div className="w-[300px] shrink-0 px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-slate-50 dark:bg-github-dark-subtle z-30">
                                                         Employee Details
                                                     </div>
                                                     <div className="flex-1 flex">
-                                                        {Array.from({ length: 16 }, (_, i) => i + 6).map(hour => (
+                                                        {Array.from({ length: 24 }, (_, i) => i).map(hour => (
                                                             <div key={hour} className="flex-1 py-4 text-center text-[10px] font-bold text-slate-400 border-r border-slate-200 dark:border-github-dark-border/30 last:border-r-0">
-                                                                {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+                                                                {hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -990,8 +1061,8 @@ const AttendanceMonitoring = () => {
                                                         <div className="p-10 text-center text-slate-400">No employees found.</div>
                                                     ) : (
                                                         filteredData.map((item) => {
-                                                            const startHour = 6;
-                                                            const totalHours = 16;
+                                                            const startHour = 0;
+                                                            const totalHours = 24;
                                                             const timeToPct = (date) => {
                                                                 if (!date) return null;
                                                                 const h = date.getHours();
@@ -1003,7 +1074,7 @@ const AttendanceMonitoring = () => {
                                                             return (
                                                                 <div key={item.id} className="flex hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors group cursor-pointer" onClick={() => setSelectedLiveUser(item)}>
                                                                     {/* Employee Info (Sticky) */}
-                                                                    <div className="w-[300px] shrink-0 px-6 py-4 flex items-center gap-3 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-github-dark-subtle/30 z-10">
+                                                                    <div className="w-[300px] shrink-0 px-6 py-4 flex items-center gap-3 border-r border-slate-200 dark:border-github-dark-border sticky left-0 bg-white dark:bg-dark-card group-hover:bg-slate-50 dark:group-hover:bg-github-dark-subtle z-20">
                                                                         <div className="flex items-center gap-4">
                                                                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm overflow-hidden ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle dark:text-github-dark-muted' : 'bg-gradient-to-br from-indigo-500/10 to-purple-600/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20'}`}>
                                                                                 {item.avatar.startsWith('http') ? (
@@ -1018,7 +1089,9 @@ const AttendanceMonitoring = () => {
                                                                                     <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter ${item.status === 'Absent' ? 'bg-slate-100 text-slate-400 dark:bg-github-dark-subtle' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30'}`}>
                                                                                         {item.status.split(' ')[0]}
                                                                                     </span>
-                                                                                    <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-mono font-bold">{item.totalHours} Hrs</span>
+                                                                                    <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-mono font-bold">
+                                                                                        {item.totalHours && item.totalHours.toLowerCase().includes('hrs') ? item.totalHours : `${item.totalHours} Hrs`}
+                                                                                    </span>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -1028,7 +1101,7 @@ const AttendanceMonitoring = () => {
                                                                     <div className="flex-1 relative flex h-20 items-center">
                                                                         {/* Hour Grid Lines */}
                                                                         <div className="absolute inset-0 flex">
-                                                                            {Array.from({ length: 16 }).map((_, i) => (
+                                                                            {Array.from({ length: 24 }).map((_, i) => (
                                                                                 <div key={i} className="flex-1 border-r border-slate-100 dark:border-github-dark-border/30 last:border-r-0"></div>
                                                                             ))}
                                                                         </div>
@@ -1701,7 +1774,7 @@ const AttendanceMonitoring = () => {
                     </>
                 ) : (
                     // Approvals Tab Content
-                    <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-14rem)]">
+                    <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
 
                         <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
                             {/* Header and Search */}
@@ -1727,7 +1800,7 @@ const AttendanceMonitoring = () => {
                                 {/* Date Navigation */}
                                 { /* Date Navigation Removed */}
                             </div>
-                            <div className="overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-700">
+                            <div className="overflow-y-auto no-scrollbar flex-1 divide-y divide-slate-100 dark:divide-slate-700">
                                 {requestsLoading ? (
                                     <div className="p-10 text-center text-slate-400">Loading...</div>
                                 ) : filteredRequests.length === 0 ? (
@@ -1782,20 +1855,30 @@ const AttendanceMonitoring = () => {
                                                 By {selectedRequestData.user_name} ({selectedRequestData.designation})
                                             </p>
                                         </div>
-                                        <div className="flex gap-3">
-                                            <button
-                                                onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
-                                                className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                                            >
-                                                <XCircle size={16} /> Reject
-                                            </button>
-                                            <button
-                                                onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
-                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-md transition-colors flex items-center gap-2"
-                                            >
-                                                <CheckCircle size={16} /> Approve
-                                            </button>
-                                        </div>
+                                        {selectedRequestData.status === 'pending' ? (
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
+                                                    className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                                >
+                                                    <XCircle size={16} /> Reject
+                                                </button>
+                                                <button
+                                                    onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
+                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-md transition-colors flex items-center gap-2"
+                                                >
+                                                    <CheckCircle size={16} /> Approve
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className={`text-xs font-bold uppercase px-3 py-1.5 rounded-lg border ${
+                                                selectedRequestData.status === 'approved' 
+                                                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/30' 
+                                                    : 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/30'
+                                            }`}>
+                                                {selectedRequestData.status}
+                                            </span>
+                                        )}
 
                                     </div>
 
@@ -2131,17 +2214,28 @@ const AttendanceMonitoring = () => {
                                                                     </p>
                                                                 </div>
 
-                                                                <div>
-                                                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Auditor Comments</h4>
-                                                                    <div className="bg-white dark:bg-[#13151f] p-1 rounded-xl border border-slate-200 dark:border-github-dark-border focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                                                                        <textarea
-                                                                            value={reviewComment}
-                                                                            onChange={(e) => setReviewComment(e.target.value)}
-                                                                            placeholder="Add a review comment or explanation..."
-                                                                            className="w-full p-3 text-sm bg-transparent border-none focus:ring-0 outline-none min-h-[100px] text-slate-800 dark:text-github-dark-text resize-none"
-                                                                        ></textarea>
+                                                                {selectedRequestData.status === 'pending' ? (
+                                                                    <div>
+                                                                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Auditor Comments</h4>
+                                                                        <div className="bg-white dark:bg-[#13151f] p-1 rounded-xl border border-slate-200 dark:border-github-dark-border focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                                                                            <textarea
+                                                                                value={reviewComment}
+                                                                                onChange={(e) => setReviewComment(e.target.value)}
+                                                                                placeholder="Add a review comment or explanation..."
+                                                                                className="w-full p-3 text-sm bg-transparent border-none focus:ring-0 outline-none min-h-[100px] text-slate-800 dark:text-github-dark-text resize-none"
+                                                                            ></textarea>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
+                                                                ) : (
+                                                                    reviewComment && (
+                                                                        <div className="bg-slate-50 dark:bg-[#1e202e] p-5 rounded-xl border border-slate-200 dark:border-github-dark-border">
+                                                                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Auditor Comments</h4>
+                                                                            <p className="text-sm text-slate-600 dark:text-github-dark-muted italic">
+                                                                                "{reviewComment}"
+                                                                            </p>
+                                                                        </div>
+                                                                    )
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </>
@@ -2263,7 +2357,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                 {user.status}
                             </span>
                             <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-github-dark-muted bg-slate-100 dark:bg-github-dark-subtle/50 px-2 py-0.5 rounded border border-slate-200 dark:border-github-dark-border">
-                                {user.totalHours} Hrs
+                                {user.totalHours && user.totalHours.toLowerCase().includes('hrs') ? user.totalHours : `${user.totalHours} Hrs`}
                             </span>
                         </div>
                     </div>
@@ -2312,7 +2406,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                             </div>
                                             <div className="text-right bg-slate-50 dark:bg-github-dark-subtle/30 p-2 rounded-lg border border-slate-100 dark:border-github-dark-border">
                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block leading-none mb-1">Duration</span>
-                                                <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">{session.isActive ? '-' : (session.hours || '-')}</span>
+                                                <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">{session.hours || '-'}</span>
                                             </div>
                                         </div>
 
@@ -2379,7 +2473,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                 <div className="p-4 border-t border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
                     <button
                         onClick={onClose}
-                        className="w-full py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold shadow-lg shadow-slate-200 dark:shadow-none hover:opacity-90 transition-all uppercase tracking-widest"
+                        className="w-full py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg text-xs font-bold shadow-lg shadow-slate-200 dark:shadow-none hover:opacity-90 transition-all uppercase tracking-widest"
                     >
                         Close Details
                     </button>

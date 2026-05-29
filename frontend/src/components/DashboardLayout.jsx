@@ -8,12 +8,14 @@ import {
     LogOut,
     User,
     ChevronDown,
-    Settings
+    Settings,
+    MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import NotificationSidebar from './NotificationSidebar';
 import Sidebar from './Sidebar';
+import InternalChatbotWidget from './InternalChatbotWidget';
 
 const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) => {
     const { unreadCount } = useNotification();
@@ -22,10 +24,12 @@ const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) =
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const { logout, user, avatarTimestamp } = useAuth();
 
-    // Initialize theme from localStorage or default to 'light'
+    // Initialize theme from localStorage or system preference
     const [theme, setTheme] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('theme') || 'light';
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) return savedTheme;
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         return 'light';
     });
@@ -66,6 +70,17 @@ const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) =
                     </div>
 
                     <div className="flex items-center gap-4 sm:gap-6">
+
+                        {/* Chat & Collab */}
+                        {['admin', 'hr', 'employee'].includes(user?.user_type) && (
+                            <Link
+                                to="/collaboration"
+                                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-github-dark-muted hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                title="Chat & Collab"
+                            >
+                                <MessageSquare size={20} />
+                            </Link>
+                        )}
 
                         {/* Theme Toggle */}
                         <button
@@ -163,6 +178,7 @@ const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) =
                     {children}
                 </main>
             </div>
+            <InternalChatbotWidget />
         </div>
     );
 };

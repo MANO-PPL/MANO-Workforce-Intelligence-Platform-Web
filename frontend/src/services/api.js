@@ -31,6 +31,8 @@ export const setAccessToken = (token) => {
     accessToken = token;
 };
 
+export const getAccessToken = () => accessToken;
+
 api.interceptors.request.use(
     (config) => {
         if (accessToken) {
@@ -57,7 +59,7 @@ api.interceptors.response.use(
             }
 
             // Don't try to refresh if the login attempt itself failed
-            if (originalRequest.url.includes('/auth/login')) {
+            if (originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/super-admin/login')) {
                 return Promise.reject(error);
             }
 

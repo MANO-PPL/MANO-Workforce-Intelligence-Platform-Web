@@ -21,6 +21,7 @@ import orgRoutes from './organizations/orgRoutes.js';
 import systemMonitorRoutes from './admin/systemMonitorRoutes.js';
 import superAdminRoutes from './superAdmin/superAdminRoutes.js';
 import chatbotRoutes from './chatbot/chatbotRoutes.js';
+import chatRoutes from './collaboration/chatRoutes.js';
 
 import { requireActiveOrg } from '../middleware/auth.js';
 
@@ -38,6 +39,7 @@ router.use('/attendance', attendanceRoutes);
 router.use('/organizations', orgRoutes);
 router.use('/super-admin', superAdminRoutes);
 router.use('/admin/reports', reportsRoutes);
+router.use('/attendance/reports', reportsRoutes);
 router.use('/super-admin/monitor', systemMonitorRoutes); // Moved from /admin/monitor
 router.use('/locations', workLocationsRoutes); // For work location management
 router.use('/dar/activities', darActivityRoutes); // For DAR activities
@@ -49,6 +51,7 @@ router.use('/feedback', feedbackRoutes); // For feedback/bug reports
 router.use('/payment', paymentRoutes); // For Razorpay payments
 router.use('/profile', profileRoutes); // For user profile management
 router.use('/website-chatbot', chatbotRoutes); // Public website chatbot endpoint
+router.use('/collaboration', chatRoutes); // Real-time chat & messaging
 
 router.get('/health', (req, res) => {
     res.json({ message: 'API is working' });

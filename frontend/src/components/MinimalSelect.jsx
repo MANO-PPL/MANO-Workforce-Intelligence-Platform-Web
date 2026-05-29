@@ -58,9 +58,26 @@ const MinimalSelect = ({
         };
     }, [isOpen]);
 
+    const getOptionLabel = (opt) => {
+        if (opt && typeof opt === 'object' && opt.label !== undefined) {
+            return opt.label;
+        }
+        return opt;
+    };
+
+    const getOptionValue = (opt) => {
+        if (opt && typeof opt === 'object' && opt.value !== undefined) {
+            return opt.value;
+        }
+        return opt;
+    };
+
     const filteredOptions = searchable
-        ? options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()))
+        ? options.filter(opt => getOptionLabel(opt).toLowerCase().includes(search.toLowerCase()))
         : options;
+
+    const selectedOption = options.find(opt => String(getOptionValue(opt)) === String(value));
+    const displayValue = selectedOption ? getOptionLabel(selectedOption) : placeholder;
 
     return (
         <>
@@ -78,7 +95,7 @@ const MinimalSelect = ({
                         <Icon size={size === 'sm' ? 14 : 16} />
                     </span>
                 )}
-                <span className="truncate">{value || placeholder}</span>
+                <span className="truncate">{displayValue}</span>
                 <ChevronDown
                     size={size === 'sm' ? 12 : 14}
                     className={`transition-transform duration-200 opacity-50 ${isOpen ? 'rotate-180 text-indigo-500' : ''}`}
@@ -114,22 +131,27 @@ const MinimalSelect = ({
 
                     <div className="overflow-y-auto p-1 custom-scrollbar flex-1">
                         {filteredOptions.length > 0 ? (
-                            filteredOptions.map((opt, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => {
-                                        onChange(opt);
-                                        setIsOpen(false);
-                                    }}
-                                    className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between group transition-colors ${size === 'sm' ? 'text-xs' : 'text-sm'} ${String(value) === String(opt)
-                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold'
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                                        }`}
-                                >
-                                    <span className="truncate">{opt}</span>
-                                    {String(value) === String(opt) && <Check size={size === 'sm' ? 12 : 14} className="text-indigo-500" />}
-                                </button>
-                            ))
+                            filteredOptions.map((opt, i) => {
+                                const optVal = getOptionValue(opt);
+                                const optLabel = getOptionLabel(opt);
+                                const isSelected = String(value) === String(optVal);
+                                return (
+                                    <button
+                                        key={i}
+                                        onClick={() => {
+                                            onChange(optVal);
+                                            setIsOpen(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between group transition-colors ${size === 'sm' ? 'text-xs' : 'text-sm'} ${isSelected
+                                                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold'
+                                                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                            }`}
+                                    >
+                                        <span className="truncate">{optLabel}</span>
+                                        {isSelected && <Check size={size === 'sm' ? 12 : 14} className="text-indigo-500" />}
+                                    </button>
+                                );
+                            })
                         ) : (
                             <div className="px-3 py-4 text-center text-xs text-slate-400 italic">
                                 No results found.

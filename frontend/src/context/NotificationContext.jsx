@@ -1,8 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { notificationService } from '../services/notificationService';
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext';
 
-const NotificationContext = createContext();
+const NotificationContext = createContext({
+    notifications: [],
+    unreadCount: 0,
+    fetchNotifications: () => {},
+    markAsRead: () => {},
+    markAllAsRead: () => {}
+});
 
 export const NotificationProvider = ({ children }) => {
     const { user } = useAuth();
@@ -59,14 +66,34 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
-    // Initial fetch and polling
+    const socket = useSocket();
+
+    // Listen to real-time notifications via WebSocket connection
+    useEffect(() => {
+        if (user && socket) {
+            const handleNewNotification = (notif) => {
+                setNotifications(prev => {
+                    if (prev.some(n => n.notification_id === notif.notification_id)) {
+                        return prev;
+                    }
+                    return [notif, ...prev];
+                });
+                setUnreadCount(prev => prev + 1);
+            };
+
+            socket.on('new_notification', handleNewNotification);
+            socket.on('new-notification', handleNewNotification);
+            return () => {
+                socket.off('new_notification', handleNewNotification);
+                socket.off('new-notification', handleNewNotification);
+            };
+        }
+    }, [user, socket]);
+
+    // Initial fetch
     useEffect(() => {
         if (user) {
             fetchNotifications();
-            
-            // Poll every 30 seconds
-            const intervalId = setInterval(fetchNotifications, 30000);
-            return () => clearInterval(intervalId);
         } else {
             setNotifications([]);
             setUnreadCount(0);

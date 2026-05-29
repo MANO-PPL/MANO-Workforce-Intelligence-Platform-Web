@@ -1,10 +1,12 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
+
 import ErrorBoundary from "./ErrorBoundary";
 import ResponsiveRoute from "./components/ResponsiveRoute";
 import { AuthProvider } from "./context/AuthContext";
+import { SocketProvider } from "./context/SocketContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import ProtectedRoute from "./context/protection";
 import PublicRoute from "./context/publicRoute";
@@ -33,6 +35,7 @@ import VisualScripting from "./pages/test/VisualScripting"
 import DailyActivity from "./pages/dar/DailyActivity"
 import DARAdmin from "./pages/dar/DARAdmin"
 import LeaveApplication from "./pages/holidays/LeaveApplication"
+import ChatPage from "./pages/collaboration/ChatPage";
 
 // Organization Pages Imports
 
@@ -45,6 +48,7 @@ import SystemLogs from "./pages/super-admin/SystemLogs"
 
 import MobileLogin from "./pages/user-auth/Login-mv";
 import MobileForgotPassword from "./pages/user-auth/ForgotPassword-mv";
+import SuperAdminLoginMobile from "./pages/user-auth/SuperAdminLogin-mv";
 import MobileAdminDashboard from "./pages/dashboard/AdminDashboard-mv";
 import MobileEmployeeDashboard from "./pages/dashboard/EmployeeDashboard-mv";
 import MobileAttendance from "./pages/attendance/MobileAttendancePage";
@@ -62,6 +66,11 @@ import MobileFeedback from "./pages/feedback/Feedback-mv";
 import DailyActivityMobile from "./pages/dar/DailyActivity-mv";
 import MobileBulkHolidayImport from "./pages/holidays/BulkHolidayImport-mv";
 import MobileBulkUpload from "./pages/employees/BulkUpload-mv";
+import SuperAdminDashboardMobile from "./pages/dashboard/SuperAdminDashboard-mv";
+import OrganizationListMobile from "./pages/organizations/OrganizationList-mv";
+import SecurityAlertsMobile from "./pages/super-admin/SecurityAlerts-mv";
+import UserFeedbackMobile from "./pages/super-admin/UserFeedback-mv";
+import SystemLogsMobile from "./pages/super-admin/SystemLogs-mv";
 
 
 import SuperAdminDashboard from "./pages/dashboard/SuperAdminDashboard";
@@ -155,7 +164,7 @@ const DashboardHandler = () => {
     return <ResponsiveRoute DesktopComponent={EmployeeDashboard} MobileComponent={MobileEmployeeDashboard} />;
   }
   if (user?.user_type === 'super_admin') {
-    return <SuperAdminDashboard />;
+    return <ResponsiveRoute DesktopComponent={SuperAdminDashboard} MobileComponent={SuperAdminDashboardMobile} />;
   }
   return <ResponsiveRoute DesktopComponent={AdminDashboard} MobileComponent={MobileAdminDashboard} />;
 };
@@ -174,16 +183,38 @@ function ShowcaseScrollToTop() {
 
 const ShowcaseShell = ({ children }) => {
   const { device } = useDeviceType();
+  const [theme, setTheme] = useState(() => localStorage.getItem("showcase-theme") || "dark");
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      localStorage.setItem("showcase-theme", next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (theme === "light") {
+      document.documentElement.classList.add("light-mode");
+      document.documentElement.classList.remove("dark-mode");
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark-mode");
+      document.documentElement.classList.remove("light-mode");
+      document.documentElement.classList.add("dark");
+    }
+  }, [theme]);
+
   const NavComp = device === "mobile" ? ShowcaseMobileNavbar : device === "tablet" ? ShowcaseTabletNavbar : ShowcaseNavbar;
   const FootComp = device === "mobile" ? ShowcaseMobileFooter : device === "tablet" ? ShowcaseTabletFooter : ShowcaseFooter;
 
   return (
-    <div className="showcase-root site-bg">
+    <div className={`showcase-root site-bg ${theme}-mode`}>
       <ShowcaseScrollToTop />
-      <NavComp />
+      <NavComp theme={theme} toggleTheme={toggleTheme} />
       <main>{children}</main>
-      <WebsiteChatbotWidget />
-      <FootComp />
+      <WebsiteChatbotWidget theme={theme} />
+      <FootComp theme={theme} />
     </div>
   );
 };
@@ -227,10 +258,11 @@ const MobileDashboardHandler = () => {
 function App() {
   return (
     <AuthProvider>
-      <NotificationProvider>
-        <SeoManager />
-        <ScaleManager />
-        <ToastContainer position="top-right" autoClose={3000} />
+      <SocketProvider>
+        <NotificationProvider>
+          <SeoManager />
+          <ScaleManager />
+        <ToastContainer position="bottom-center" autoClose={3000} limit={1} hideProgressBar={true} pauseOnHover={false} pauseOnFocusLoss={false} closeOnClick={true} />
         <Routes>
 
           {/* Website Landing (shown first when not logged in) */}
@@ -240,7 +272,7 @@ function App() {
           {/* Public Route: Login */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<ResponsiveRoute DesktopComponent={Login} MobileComponent={MobileLogin} />} />
-            <Route path="/org-login" element={<SuperAdminLogin />} />
+            <Route path="/org-login" element={<ResponsiveRoute DesktopComponent={SuperAdminLogin} MobileComponent={SuperAdminLoginMobile} />} />
             <Route path="/forgot-password" element={<ResponsiveRoute DesktopComponent={ForgotPassword} MobileComponent={MobileForgotPassword} />} />
           </Route>
 
@@ -261,6 +293,7 @@ function App() {
               <Route path="/profile" element={<ResponsiveRoute DesktopComponent={Profile} MobileComponent={MobileProfile} />} />
               <Route path="/daily-activity" element={<ResponsiveRoute DesktopComponent={DailyActivity} MobileComponent={DailyActivityMobile} />} />
               <Route path="/apply-leave" element={<ResponsiveRoute DesktopComponent={LeaveApplication} MobileComponent={MobileLeaveApplication} />} />
+              <Route path="/collaboration" element={<ChatPage />} />
 
               {/* Mobile-Only Pages fallback */}
               <Route path="/notifications" element={<MobileNotifications />} />
@@ -288,16 +321,17 @@ function App() {
 
             {/* Super Admin Only Routes */}
             <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>
-              <Route path="/organizations" element={<OrganizationList />} />
-              <Route path="/super-admin/alerts" element={<SecurityAlerts />} />
-              <Route path="/super-admin/feedback" element={<UserFeedback />} />
-              <Route path="/super-admin/logs" element={<SystemLogs />} />
+              <Route path="/organizations" element={<ResponsiveRoute DesktopComponent={OrganizationList} MobileComponent={OrganizationListMobile} />} />
+              <Route path="/super-admin/alerts" element={<ResponsiveRoute DesktopComponent={SecurityAlerts} MobileComponent={SecurityAlertsMobile} />} />
+              <Route path="/super-admin/feedback" element={<ResponsiveRoute DesktopComponent={UserFeedback} MobileComponent={UserFeedbackMobile} />} />
+              <Route path="/super-admin/logs" element={<ResponsiveRoute DesktopComponent={SystemLogs} MobileComponent={SystemLogsMobile} />} />
             </Route>
           </Route>
 
         </Routes>
       </NotificationProvider>
-    </AuthProvider>
+    </SocketProvider>
+  </AuthProvider>
   )
 }
 

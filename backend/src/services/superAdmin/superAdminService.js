@@ -5,18 +5,77 @@ export const getDashboardStats = async () => {
         totalOrgsRes,
         totalUsersRes,
         pendingFeedbackRes,
-        openAlertsRes
+        openAlertsRes,
+        totalApiCountRes,
+        totalErrorsRes,
+        moduleDistribution,
+        orgStatusDistribution
     ] = await Promise.all([
         attendanceDB('organizations').count('* as count').first(),
         attendanceDB('users').count('* as count').where('is_deleted', 0).first(),
-        attendanceDB('feedback').count('* as count').where('status', 'pending').first(),
-        attendanceDB('security_alerts').count('* as count').where('status', 'open').first()
+        attendanceDB('feedback')
+            .count('* as count')
+            .whereIn('status', ['pending', 'open', 'OPEN', 'PENDING', ''])
+            .orWhereNull('status')
+            .first(),
+        attendanceDB('security_alerts')
+            .count('* as count')
+            .whereIn('status', ['open', 'unseen', 'OPEN', 'UNSEEN'])
+            .first(),
+        attendanceDB('user_activity_logs').where({ event_type: 'API_CALL' }).count('activity_id as count').first(),
+        attendanceDB('application_error_logs').count('error_id as count').first(),
+        attendanceDB('user_activity_logs').where({ event_type: 'API_CALL' }).select('object_type as module').count('activity_id as count').groupBy('object_type'),
+        attendanceDB('organizations').select('status').count('* as count').groupBy('status')
     ]);
+
+    // Clean module distribution names
+    const cleanedModuleDistribution = (moduleDistribution || [])
+        .map(item => {
+            let name = item.module || 'General';
+            if (name === 'API_ENDPOINT' || name === 'API') name = 'General';
+            return {
+                module: name,
+                count: Number(item.count) || 0
+            };
+        })
+        .reduce((acc, curr) => {
+            const existing = acc.find(item => item.module === curr.module);
+            if (existing) {
+                existing.count += curr.count;
+            } else {
+                acc.push(curr);
+            }
+            return acc;
+        }, []);
+
+    // Clean organization status names
+    const cleanedOrgStatusDistribution = (orgStatusDistribution || [])
+        .map(item => {
+            let status = item.status || 'active';
+            if (!status || status === '') status = 'active';
+            return {
+                status,
+                count: Number(item.count) || 0
+            };
+        })
+        .reduce((acc, curr) => {
+            const existing = acc.find(item => item.status === curr.status);
+            if (existing) {
+                existing.count += curr.count;
+            } else {
+                acc.push(curr);
+            }
+            return acc;
+        }, []);
 
     return {
         totalOrgs: Number(totalOrgsRes?.count) || 0,
         totalUsers: Number(totalUsersRes?.count) || 0,
         pendingFeedback: Number(pendingFeedbackRes?.count) || 0,
         openAlerts: Number(openAlertsRes?.count) || 0,
+        totalApiCalls: Number(totalApiCountRes?.count) || 0,
+        totalErrors: Number(totalErrorsRes?.count) || 0,
+        moduleDistribution: cleanedModuleDistribution,
+        orgStatusDistribution: cleanedOrgStatusDistribution
     };
 };
