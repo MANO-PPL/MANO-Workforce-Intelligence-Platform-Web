@@ -1,0 +1,86 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-assets:
+    name: Build & Verify (CI)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install Root Dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm install --no-audit --no-fund
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install --no-audit --no-fund
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Upload Frontend Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+
+  deploy-to-ec2:
+    name: Deploy via Self-Hosted Runner
+    needs: build-assets
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Frontend Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+
+      - name: Deploy Backend & Restart PM2
+        run: |
+          echo "⚙ Setting up Backend..."
+          cd backend
+          npm install --production --no-audit --no-fund
+          
+          # Restart backend process using PM2
+          if pm2 describe "ATTENDANCE-BACKEND" > /dev/null 2>&1; then
+            echo "🔄 Reloading backend with PM2..."
+            pm2 reload "ATTENDANCE-BACKEND" --update-env
+          else
+            echo "🚀 Starting new backend process under PM2..."
+            pm2 start server.js --name "ATTENDANCE-BACKEND" --update-env
+          fi
+
+      - name: Deploy Frontend to Nginx Target
+        run: |
+          echo "📁 Copying pre-built assets to Nginx target..."
+          sudo cp -r frontend/dist/* /var/www/attendance/
+          echo "🎉 Deployment successfully completed!"
