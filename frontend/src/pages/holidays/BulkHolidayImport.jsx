@@ -162,7 +162,7 @@ const BulkHolidayImport = () => {
 
     return (
         <DashboardLayout title="Bulk Holiday Import">
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="w-full space-y-8">
 
                 {/* Back Button */}
                 <button

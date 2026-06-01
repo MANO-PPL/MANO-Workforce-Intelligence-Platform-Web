@@ -28,6 +28,7 @@ import {
     ArrowLeft
 } from 'lucide-react';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
+import MobileSelect from '../../components/MobileSelect';
 import { AnimatePresence } from 'framer-motion';
 
 const AttachmentModal = ({ file, onClose }) => {
@@ -83,7 +84,7 @@ const AttachmentModal = ({ file, onClose }) => {
 };
 
 const LeaveApplication = () => {
-    const { user } = useAuth();
+    const { user, avatarTimestamp } = useAuth();
     const [leaves, setLeaves] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedLeave, setSelectedLeave] = useState(null); // For Detail View
@@ -346,7 +347,7 @@ const LeaveApplication = () => {
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="px-2 py-2 text-xs bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                className="px-3 py-2 text-xs bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none text-slate-700 dark:text-github-dark-text font-semibold cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800"
                             >
                                 <option value="all">All</option>
                                 <option value="pending">Pending</option>
@@ -369,8 +370,12 @@ const LeaveApplication = () => {
                                 >
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300">
-                                                {(request.user_name || 'U').charAt(0).toUpperCase()}
+                                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                {request.profile_image_url && request.profile_image_url.startsWith('http') ? (
+                                                    <img src={`${request.profile_image_url}?t=${avatarTimestamp}`} alt={request.user_name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    (request.user_name || 'U').charAt(0).toUpperCase()
+                                                )}
                                             </div>
                                             <div>
                                                 <p className="text-sm font-bold text-slate-800 dark:text-github-dark-text">{request.user_name}</p>
@@ -387,7 +392,7 @@ const LeaveApplication = () => {
                                     <div className="flex justify-between items-center text-xs text-slate-500 dark:text-github-dark-muted mt-3 pt-3 border-t border-slate-50 dark:border-github-dark-border">
                                         <div className="flex items-center gap-1">
                                             <Calendar size={12} />
-                                            {new Date(request.start_date).toLocaleDateString()}
+                                            {new Date(request.start_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
                                         </div>
                                         <span>{request.leave_type}</span>
                                     </div>
@@ -414,11 +419,20 @@ const LeaveApplication = () => {
                     <div className="bg-white dark:bg-github-dark-subtle rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden shadow-sm">
                         <div className="p-5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/10">
                             <div className="flex justify-between items-start">
-                                <div>
-                                    <h2 className="text-lg font-bold text-slate-900 dark:text-github-dark-text">{selectedLeave.leave_type}</h2>
-                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-1">
-                                        By {selectedLeave.user_name}
-                                    </p>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                        {selectedLeave.profile_image_url && selectedLeave.profile_image_url.startsWith('http') ? (
+                                            <img src={`${selectedLeave.profile_image_url}?t=${avatarTimestamp}`} alt={selectedLeave.user_name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            (selectedLeave.user_name || 'U').charAt(0).toUpperCase()
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-bold text-slate-900 dark:text-github-dark-text">{selectedLeave.leave_type}</h2>
+                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-1">
+                                            By <span className="font-bold text-slate-700 dark:text-slate-300">{selectedLeave.user_name}</span>
+                                        </p>
+                                    </div>
                                 </div>
                                 <div className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${selectedLeave.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
                                     selectedLeave.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
@@ -432,11 +446,11 @@ const LeaveApplication = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-3 rounded-lg border border-slate-100 dark:border-github-dark-border">
                                     <span className="text-xs text-slate-500 dark:text-github-dark-muted block mb-1">From</span>
-                                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-github-dark-text">{new Date(selectedLeave.start_date).toLocaleDateString()}</span>
+                                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-github-dark-text">{new Date(selectedLeave.start_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                 </div>
                                 <div className="bg-slate-50 dark:bg-github-dark-subtle/50 p-3 rounded-lg border border-slate-100 dark:border-github-dark-border">
                                     <span className="text-xs text-slate-500 dark:text-github-dark-muted block mb-1">To</span>
-                                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-github-dark-text">{new Date(selectedLeave.end_date).toLocaleDateString()}</span>
+                                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-github-dark-text">{new Date(selectedLeave.end_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                 </div>
                             </div>
 
@@ -618,17 +632,15 @@ const LeaveApplication = () => {
                 <div>
                     <div className="flex justify-between items-center px-2 mb-3">
                         <h3 className="font-bold text-slate-700 dark:text-github-dark-text">My History</h3>
-                        <div className="bg-white dark:bg-github-dark-subtle rounded-lg border p-1 flex gap-1">
-                            <select
-                                value={selectedMonth}
-                                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                                className="bg-transparent text-xs font-bold outline-none"
-                            >
-                                {Array.from({ length: 12 }, (_, i) => (
-                                    <option key={i} value={i}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>
-                                ))}
-                            </select>
-                        </div>
+                        <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                            className="px-3 py-1.5 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-xs font-bold text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-sm cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800"
+                        >
+                            {Array.from({ length: 12 }, (_, i) => (
+                                <option key={i} value={i}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div className="space-y-3">
@@ -646,7 +658,7 @@ const LeaveApplication = () => {
                                             <h4 className="font-bold text-slate-800 dark:text-github-dark-text">{leave.leave_type}</h4>
                                             <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
                                                 <Calendar size={12} />
-                                                <span>{new Date(leave.start_date).toLocaleDateString()} - {new Date(leave.end_date).toLocaleDateString()}</span>
+                                                <span>{new Date(leave.start_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(leave.end_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                             </div>
                                         </div>
                                         <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${leave.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :

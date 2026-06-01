@@ -30,6 +30,8 @@ const HolidayManagement = () => {
 
     const { user } = useAuth();
     const [holidays, setHolidays] = useState([]);
+    const [leaves, setLeaves] = useState([]);
+    const [activeRange, setActiveRange] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState(() => {
@@ -306,44 +308,41 @@ const HolidayManagement = () => {
         );
     };
 
-    // Check if we should hide side calendar: Only if Admin AND on Leave Application tab
-    const isLeaveAppAdmin = activeTab === 'leave_application' && user?.user_type === 'admin';
-
     return (
         <DashboardLayout title="Holiday Management" noPadding={true}>
-            <div className="h-[calc(100vh-64px)] p-6 space-y-6 overflow-hidden flex flex-col">
+            <div className="h-[calc(100vh-64px)] p-4 space-y-4 overflow-hidden flex flex-col">
 
-                <div className="flex flex-col xl:flex-row gap-6 flex-1 min-h-0">
+                {/* Tabs */}
+                <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
+                    <button
+                        onClick={() => setActiveTab('holidays')}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'holidays'
+                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        <Calendar size={16} className={`${activeTab === 'holidays' ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
+                        <span className="leading-none">Holidays List</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('leave_application')}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'leave_application'
+                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        <FileText size={16} className={`${activeTab === 'leave_application' ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
+                        <span className="leading-none">Leave Application</span>
+                    </button>
+                </div>
+
+                <div className="flex flex-col xl:flex-row gap-3 flex-1 min-h-0">
 
                     {/* Left Content Area (Shared) */}
-                    <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl border border-slate-200 dark:border-github-dark-border p-1 transition-all duration-300">
-
-                        {/* Tabs */}
-                        <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit mb-4 mx-4 mt-4">
-                            <button
-                                onClick={() => setActiveTab('holidays')}
-                                className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 ${activeTab === 'holidays'
-                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                    : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
-                                    }`}
-                            >
-                                <Calendar size={16} className={`${activeTab === 'holidays' ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
-                                <span className="leading-none">Holidays List</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('leave_application')}
-                                className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all duration-200 ${activeTab === 'leave_application'
-                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                    : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
-                                    }`}
-                            >
-                                <FileText size={16} className={`${activeTab === 'leave_application' ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
-                                <span className="leading-none">Leave Application</span>
-                            </button>
-                        </div>
+                    <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
 
                         {/* Content Area */}
-                        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-4">
+                        <div className="flex-1 overflow-y-auto no-scrollbar">
                             {activeTab === 'holidays' ? (
                                 <div className="space-y-6">
                                     {/* Header Actions */}
@@ -406,126 +405,158 @@ const HolidayManagement = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <LeaveApplication onSelectLeave={handleSelectLeave} />
+                                <LeaveApplication 
+                                    onSelectLeave={handleSelectLeave}
+                                    onLeavesChange={setLeaves}
+                                    onActiveRangeChange={setActiveRange}
+                                />
                             )}
                         </div>
                     </div>
 
-                    {/* Calendar Sidebar (Always Visible) */}
-                    <div className="w-full xl:w-2/5 overflow-hidden animate-in fade-in slide-in-from-right-10 duration-500">
-                        <HolidayCalendarView
-                            holidays={filteredHolidays}
-                            selectedLeave={selectedLeave}
-                            onDelete={handleDeleteClick}
-                            isAdmin={['admin', 'hr'].includes(user?.user_type)}
-                            currentDate={calendarDate}
-                            onDateChange={setCalendarDate}
-                        />
-                    </div>
+                    {/* Calendar Sidebar */}
+                    <div className="w-full xl:w-[350px] shrink-0 overflow-hidden animate-in fade-in slide-in-from-right-10 duration-500">
+                            <HolidayCalendarView
+                                holidays={holidays}
+                                leaves={activeTab === 'leave_application' ? leaves : []}
+                                selectedLeave={activeTab === 'leave_application' ? (selectedLeave || activeRange) : null}
+                                onDelete={handleDeleteClick}
+                                isAdmin={['admin', 'hr'].includes(user?.user_type)}
+                                currentDate={calendarDate}
+                                onDateChange={setCalendarDate}
+                            />
+                        </div>
                 </div>
 
-                {/* --- ADD HOLIDAY MODAL --- */}
-                {isAddModalOpen && createPortal(
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md transition-all duration-200 animate-in fade-in">
-                        <div className="w-full max-w-4xl bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                            <div className="flex justify-between items-center p-8 border-b border-slate-100 dark:border-white/10">
-                                <h3 className="font-bold text-2xl text-slate-900 dark:text-github-dark-text tracking-tight">Add New Holiday</h3>
-                                <button
-                                    onClick={() => setIsAddModalOpen(false)}
-                                    className="p-2 rounded-full text-slate-400 hover:text-slate-600 dark:text-github-dark-text/60 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-                                >
-                                    <X size={28} />
-                                </button>
-                            </div>
-                            <form onSubmit={handleAddHoliday} className="p-8 space-y-8">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Holiday Name</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newHoliday.name}
-                                        onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all font-medium"
-                                        placeholder="e.g. Independence Day"
-                                    />
+                {/* --- ADD HOLIDAY DRAWER --- */}
+                <AnimatePresence>
+                    {isAddModalOpen && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsAddModalOpen(false)}
+                                className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px]"
+                            />
+
+                            {/* Sidebar Drawer */}
+                            <motion.div
+                                initial={{ x: '100%', opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: '100%', opacity: 0 }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className="fixed right-0 top-0 h-full w-full max-w-[460px] z-50 bg-white dark:bg-dark-card border-l border-slate-200 dark:border-github-dark-border shadow-2xl flex flex-col overflow-hidden"
+                            >
+                                {/* Header */}
+                                <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                                            <Calendar size={20} />
+                                        </div>
+                                        <h3 className="text-sm font-black text-slate-800 dark:text-github-dark-text">Add New Holiday</h3>
+                                    </div>
+                                    <button
+                                        onClick={() => setIsAddModalOpen(false)}
+                                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                    >
+                                        <X size={20} />
+                                    </button>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="relative z-50">
-                                        <DatePicker
-                                            label="Date"
-                                            value={newHoliday.date}
-                                            onChange={(val) => setNewHoliday({ ...newHoliday, date: val })}
+
+                                {/* Body */}
+                                <form onSubmit={handleAddHoliday} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                                    <div className="space-y-1.5">
+                                        <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-300">Holiday Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={newHoliday.name}
+                                            onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
+                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-slate-900 dark:text-github-dark-text placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm"
+                                            placeholder="e.g. Independence Day"
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Type</label>
-                                        <div className="relative">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsAddTypeOpen(!isAddTypeOpen)}
-                                                className="w-full px-4 py-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all font-medium text-left flex items-center justify-between"
-                                            >
-                                                <span>{newHoliday.type}</span>
-                                                <ChevronDown size={16} className={`text-slate-400 transition-transform ${isAddTypeOpen ? 'rotate-180' : ''}`} />
-                                            </button>
 
-                                            <AnimatePresence>
-                                                {isAddTypeOpen && (
-                                                    <>
-                                                        <div className="fixed inset-0 z-[100]" onClick={() => setIsAddTypeOpen(false)} />
-                                                        <motion.div
-                                                            initial={{ opacity: 0, y: -10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -10 }}
-                                                            className="absolute left-0 right-0 mt-2 bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-[#30363d] rounded-lg shadow-2xl overflow-hidden z-[110]"
-                                                        >
-                                                            <div className="py-1">
-                                                                {['Public', 'Optional', 'Observance'].map((opt) => {
-                                                                    const isSelected = newHoliday.type === opt;
-                                                                    return (
-                                                                        <button
-                                                                            key={opt}
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setNewHoliday({ ...newHoliday, type: opt });
-                                                                                setIsAddTypeOpen(false);
-                                                                            }}
-                                                                            className={`w-full px-4 py-2.5 text-sm text-left font-medium transition-colors flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                                                                        >
-                                                                            <span>{opt}</span>
-                                                                            {isSelected && <Check size={14} className="text-indigo-500" />}
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </motion.div>
-                                                    </>
-                                                )}
-                                            </AnimatePresence>
+                                    <div className="space-y-6">
+                                        <div className="relative z-50">
+                                            <DatePicker
+                                                label="Date"
+                                                value={newHoliday.date}
+                                                onChange={(val) => setNewHoliday({ ...newHoliday, date: val })}
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-300">Type</label>
+                                            <div className="relative">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsAddTypeOpen(!isAddTypeOpen)}
+                                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm text-left flex items-center justify-between"
+                                                >
+                                                    <span>{newHoliday.type}</span>
+                                                    <ChevronDown size={16} className={`text-slate-400 transition-transform ${isAddTypeOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                <AnimatePresence>
+                                                    {isAddTypeOpen && (
+                                                        <>
+                                                            <div className="fixed inset-0 z-[100]" onClick={() => setIsAddTypeOpen(false)} />
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: -10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                className="absolute left-0 right-0 mt-2 bg-white dark:bg-[#0d1117] border border-slate-200 dark:border-[#30363d] rounded-lg shadow-2xl overflow-hidden z-[110]"
+                                                            >
+                                                                <div className="py-1">
+                                                                    {['Public', 'Optional', 'Observance'].map((opt) => {
+                                                                        const isSelected = newHoliday.type === opt;
+                                                                        return (
+                                                                            <button
+                                                                                key={opt}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setNewHoliday({ ...newHoliday, type: opt });
+                                                                                    setIsAddTypeOpen(false);
+                                                                                }}
+                                                                                className={`w-full px-4 py-2.5 text-sm text-left font-medium transition-colors flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                                                            >
+                                                                                <span>{opt}</span>
+                                                                                {isSelected && <Check size={14} className="text-indigo-500" />}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </motion.div>
+                                                        </>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="pt-6 flex gap-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsAddModalOpen(false)}
-                                        className="flex-1 px-6 py-3.5 rounded-lg bg-slate-100 dark:bg-github-dark-subtle/50 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-github-dark-text border border-transparent dark:border-white/10 font-semibold transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="flex-1 px-6 py-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.02] active:scale-95"
-                                    >
-                                        Add Holiday
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>,
-                    document.body
-                )}
+                                    {/* Footer Actions */}
+                                    <div className="pt-6 border-t border-slate-100 dark:border-github-dark-border/50 flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsAddModalOpen(false)}
+                                            className="flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-all"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="flex-[2] px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center justify-center gap-2 active:scale-95"
+                                        >
+                                            Add Holiday
+                                        </button>
+                                    </div>
+                                </form>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
 
             </div>
 
@@ -555,7 +586,7 @@ const HolidayManagement = () => {
                                     <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
                                         <Calendar size={20} />
                                     </div>
-                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-800 dark:text-github-dark-text">Edit Holiday</h3>
+                                    <h3 className="text-sm font-black text-slate-800 dark:text-github-dark-text">Edit Holiday</h3>
                                 </div>
                                 <button
                                     onClick={() => setIsEditModalOpen(false)}

@@ -28,7 +28,8 @@ import {
     ArrowLeft
 } from 'lucide-react';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
-import { AnimatePresence } from 'framer-motion';
+import MinimalSelect from '../../components/MinimalSelect';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const AttachmentModal = ({ file, onClose }) => {
     if (!file) return null;
@@ -81,11 +82,11 @@ const AttachmentModal = ({ file, onClose }) => {
     );
 };
 
-const LeaveApplication = ({ onSelectLeave }) => {
+const LeaveApplication = ({ onSelectLeave, onLeavesChange, onActiveRangeChange }) => {
     const navigate = useNavigate();
 
 
-    const { user } = useAuth();
+    const { user, avatarTimestamp } = useAuth();
     const [leaves, setLeaves] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedLeave, setSelectedLeave] = useState(null); // For Detail View
@@ -136,6 +137,16 @@ const LeaveApplication = ({ onSelectLeave }) => {
         }
     }, [selectedLeave, onSelectLeave]);
 
+    useEffect(() => {
+        if (onActiveRangeChange) {
+            onActiveRangeChange(
+                formData.start_date && formData.end_date
+                    ? { start_date: formData.start_date, end_date: formData.end_date }
+                    : null
+            );
+        }
+    }, [formData.start_date, formData.end_date, onActiveRangeChange]);
+
     const [showForm, setShowForm] = useState(false);
     const [isCustomType, setIsCustomType] = useState(false);
 
@@ -180,6 +191,16 @@ const LeaveApplication = ({ onSelectLeave }) => {
 
     const isAdmin = user?.user_type === 'admin' || user?.user_type === 'hr';
 
+    // --- ADMIN FILTERED LEAVES ---
+    const adminFilteredLeaves = React.useMemo(() => {
+        if (!isAdmin) return [];
+        return leaves.filter(leaf => {
+            const matchesSearch = (leaf.user_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesStatus = statusFilter === 'all' || leaf.status === statusFilter;
+            return matchesSearch && matchesStatus;
+        });
+    }, [leaves, isAdmin, searchTerm, statusFilter]);
+
     useEffect(() => {
         if (user) {
             fetchLeaves();
@@ -200,6 +221,9 @@ const LeaveApplication = ({ onSelectLeave }) => {
                     : (res.data.leaves || []);
 
                 setLeaves(fetched);
+                if (onLeavesChange) {
+                    onLeavesChange(fetched);
+                }
                 // Select first item by default for admin
                 if (isAdmin && fetched.length > 0) setSelectedLeave(fetched[0]);
             }
@@ -347,576 +371,604 @@ const LeaveApplication = ({ onSelectLeave }) => {
         );
     }
 
-    // --- ADMIN VIEW (New Split Layout) ---
-    if (isAdmin && !showForm) {
-        const filteredLeaves = leaves.filter(leaf => {
-            const matchesSearch = leaf.user_name.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesStatus = statusFilter === 'all' || leaf.status === statusFilter;
-            return matchesSearch && matchesStatus;
-        });
 
-        return (
-            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-14rem)] min-h-[600px]">
+    // --- MAIN RENDER ---
+    return (
+        <>
+            {isAdmin ? (
+                <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-14rem)] min-h-[600px]">
 
-                {/* LEFT PANEL: LIST */}
-                <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
-                    {/* Header & Search */}
-                    <div className="p-4 border-b border-slate-200 dark:border-github-dark-border space-y-4">
-                        <div className="flex justify-between items-center px-1">
-                            <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text uppercase tracking-wider">Leave Requests</h3>
-                            <button
-                                onClick={() => setShowForm(true)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-xs font-bold"
-                            >
-                                <Plus size={14} />
-                                Apply
-                            </button>
-                        </div>
+                    {/* LEFT PANEL: LIST */}
+                    <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
+                        {/* Header & Search */}
+                        <div className="p-4 border-b border-slate-200 dark:border-github-dark-border space-y-4">
+                            <div className="flex justify-between items-center px-1">
+                                <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text uppercase tracking-wider">Leave Requests</h3>
+                                <button
+                                    onClick={() => setShowForm(true)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-xs font-bold"
+                                >
+                                    <Plus size={14} />
+                                    Apply
+                                </button>
+                            </div>
 
-                        <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                                <input
-                                    type="text"
-                                    placeholder="Search by name..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by name..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                    />
+                                </div>
+                                <MinimalSelect
+                                    options={[
+                                        { value: 'all', label: 'All' },
+                                        { value: 'pending', label: 'Pending' },
+                                        { value: 'approved', label: 'Approved' },
+                                        { value: 'rejected', label: 'Rejected' }
+                                    ]}
+                                    value={statusFilter}
+                                    onChange={(val) => setStatusFilter(val)}
+                                    size="sm"
+                                    triggerClassName="bg-slate-50 dark:bg-[#161b22] border-slate-200 dark:border-github-dark-border text-xs"
+                                    menuWidth={110}
                                 />
                             </div>
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="px-2 py-2 text-xs bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                            >
-                                <option value="all">All</option>
-                                <option value="pending">Pending</option>
-                                <option value="approved">Approved</option>
-                                <option value="rejected">Rejected</option>
-                            </select>
+                        </div>
+
+                        {/* List */}
+                        <div className="overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-700 no-scrollbar">
+                            {adminFilteredLeaves.length === 0 ? (
+                                <div className="p-10 text-center text-slate-400 text-sm">No requests found.</div>
+                            ) : (
+                                adminFilteredLeaves.map((request) => (
+                                    <div
+                                        key={request.lr_id}
+                                        onClick={() => setSelectedLeave(request)}
+                                        className={`p-4 cursor-pointer transition-colors ${selectedLeave?.lr_id === request.lr_id ? 'bg-indigo-50 dark:bg-indigo-900/10 border-l-4 border-indigo-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'}`}
+                                    >
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                    {request.profile_image_url && request.profile_image_url.startsWith('http') ? (
+                                                        <img src={`${request.profile_image_url}?t=${avatarTimestamp}`} alt={request.user_name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        (request.user_name || 'U').charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <p className={`text-sm font-semibold ${selectedLeave?.lr_id === request.lr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{request.user_name}</p>
+                                                    <p className="text-xs text-slate-500 dark:text-github-dark-muted">{request.email}</p>
+                                                </div>
+                                            </div>
+                                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-slate-600 bg-slate-50 dark:text-github-dark-muted dark:bg-github-dark-subtle`}>
+                                                {request.leave_type}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs text-slate-500 dark:text-github-dark-muted mt-3">
+                                            <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                                                <Calendar size={12} />
+                                                {new Date(request.start_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </div>
+                                            <div className={`flex items-center gap-1 font-medium capitalize ${request.status === 'approved' ? 'text-emerald-600' :
+                                                request.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
+                                                }`}>
+                                                {request.status}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
 
-                    {/* List */}
-                    <div className="overflow-y-auto flex-1 divide-y divide-slate-100 dark:divide-slate-700 no-scrollbar">
-                        {filteredLeaves.length === 0 ? (
-                            <div className="p-10 text-center text-slate-400 text-sm">No requests found.</div>
-                        ) : (
-                            filteredLeaves.map((request) => (
-                                <div
-                                    key={request.lr_id}
-                                    onClick={() => setSelectedLeave(request)}
-                                    className={`p-4 cursor-pointer transition-colors ${selectedLeave?.lr_id === request.lr_id ? 'bg-indigo-50 dark:bg-indigo-900/10 border-l-4 border-indigo-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'}`}
-                                >
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300">
-                                                {(request.user_name || 'U').charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className={`text-sm font-semibold ${selectedLeave?.lr_id === request.lr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{request.user_name}</p>
-                                                <p className="text-xs text-slate-500 dark:text-github-dark-muted">{request.email}</p>
-                                            </div>
+                    {/* RIGHT PANEL: DETAILS */}
+                    <div className="w-full lg:w-2/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+                        {selectedLeave ? (
+                            <>
+                                {/* Detail Header */}
+                                <div className="p-6 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-start bg-slate-50/50 dark:bg-github-dark-subtle/10">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                            {selectedLeave.profile_image_url && selectedLeave.profile_image_url.startsWith('http') ? (
+                                                <img src={`${selectedLeave.profile_image_url}?t=${avatarTimestamp}`} alt={selectedLeave.user_name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                (selectedLeave.user_name || 'U').charAt(0).toUpperCase()
+                                            )}
                                         </div>
-                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-slate-600 bg-slate-50 dark:text-github-dark-muted dark:bg-github-dark-subtle`}>
-                                            {request.leave_type}
-                                        </span>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-900 dark:text-github-dark-text mb-0.5">Leave Request #{selectedLeave.lr_id}</h2>
+                                            <p className="text-sm text-slate-500 dark:text-github-dark-muted">
+                                                By <span className="font-bold text-slate-700 dark:text-slate-300">{selectedLeave.user_name}</span>
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-between items-center text-xs text-slate-500 dark:text-github-dark-muted mt-3">
-                                        <div className="flex items-center gap-1">
-                                            <Calendar size={12} />
-                                            {new Date(request.start_date).toLocaleDateString()}
-                                        </div>
-                                        <div className={`flex items-center gap-1 font-medium capitalize ${request.status === 'approved' ? 'text-emerald-600' :
-                                            request.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
+                                    <div className="text-right">
+                                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${selectedLeave.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                                            selectedLeave.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                                             }`}>
-                                            {request.status}
+                                            <span className={`w-2 h-2 rounded-full ${selectedLeave.status === 'approved' ? 'bg-emerald-500' :
+                                                selectedLeave.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500 animate-pulse'
+                                                }`}></span>
+                                            {selectedLeave.status}
+                                        </div>
+                                        <div className='text-xs text-slate-400 mt-2'>Applied: {new Date(selectedLeave.applied_at || Date.now()).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6 no-scrollbar">
+                                    <div className="flex flex-col gap-6 mb-8">
+                                        {/* Consolidated Leave Details Card */}
+                                        <div className="bg-slate-50 dark:bg-[#0d1117] p-6 rounded-xl border border-slate-200/80 dark:border-[#30363d] w-full space-y-5 shadow-sm">
+                                            <div>
+                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">Leave Type</span>
+                                                <span className="font-semibold text-slate-800 dark:text-github-dark-text text-sm">{selectedLeave.leave_type}</span>
+                                            </div>
+                                            
+                                            <div className="flex gap-10">
+                                                <div>
+                                                    <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">From</span>
+                                                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">{new Date(selectedLeave.start_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">To</span>
+                                                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">{new Date(selectedLeave.end_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">Duration</span>
+                                                <span className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">{calculateDays(selectedLeave.start_date, selectedLeave.end_date)} Days</span>
+                                            </div>
+
+                                            <div>
+                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">Reason</span>
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 italic mt-0.5">"{selectedLeave.reason}"</p>
+                                            </div>
+
+                                            {/* Attachments Section - Condensed with Inline Expansion */}
+                                            {selectedLeave.attachments && selectedLeave.attachments.length > 0 && (
+                                                <div className="border-t border-slate-200/60 dark:border-[#30363d] pt-4">
+                                                    <div
+                                                        className="flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 p-2 -mx-2 rounded-lg transition-colors gap-10"
+                                                        onClick={() => setAttachmentsExpanded(!attachmentsExpanded)}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <Paperclip size={18} className="text-slate-400" />
+                                                            <span className="text-sm font-medium text-slate-700 dark:text-github-dark-text">
+                                                                {selectedLeave.attachments.length} Attachments
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1"
+                                                        >
+                                                            {attachmentsExpanded ? 'Hide' : 'View All'}
+                                                            <ChevronDown size={14} className={`transform transition-transform ${attachmentsExpanded ? 'rotate-180' : ''}`} />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Expanded Content */}
+                                                    {attachmentsExpanded && (
+                                                        <div className="mt-3 space-y-2">
+                                                            {selectedLeave.attachments.map((file, index) => (
+                                                                <div
+                                                                    key={index}
+                                                                    onClick={() => setViewingAttachment(file)}
+                                                                    className="flex items-center gap-3 p-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-[#30363d] rounded-lg hover:border-indigo-200 dark:hover:border-indigo-900/50 hover:shadow-sm transition-all group cursor-pointer"
+                                                                >
+                                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                                                        <FileText size={16} />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-medium text-slate-700 dark:text-github-dark-text truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                                                            {file.file_key.split('/').pop()}
+                                                                        </p>
+                                                                        <p className="text-[10px] text-slate-400 uppercase font-bold">
+                                                                            {file.file_type ? file.file_type.split('/')[1]?.toUpperCase() : 'FILE'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="text-slate-300 group-hover:text-indigo-500 transition-colors">
+                                                                        <ExternalLink size={14} />
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Action / Remarks Section */}
+                                            {selectedLeave.status === 'pending' ? (
+                                                <div className="border-t border-slate-200/60 dark:border-[#30363d] pt-4">
+                                                    <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-2">Admin Action</span>
+                                                    <textarea
+                                                        ref={adminRemarksRef}
+                                                        value={adminAction.remarks}
+                                                        onChange={(e) => setAdminAction({ ...adminAction, remarks: e.target.value })}
+                                                        rows="1"
+                                                        placeholder="Add remarks (required for rejection)..."
+                                                        className="w-full p-3 text-sm bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border text-slate-800 dark:text-github-dark-text rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none overflow-hidden min-h-[42px] mb-3"
+                                                    ></textarea>
+
+                                                    <div className="flex gap-3 max-w-xs">
+                                                        <button
+                                                            onClick={() => handleAdminAction('approved')}
+                                                            className="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-md hover:bg-emerald-700 cursor-pointer active:scale-95"
+                                                        >
+                                                            <CheckCircle size={14} /> Approve
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleAdminAction('rejected')}
+                                                            className="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 bg-red-600 text-white shadow-md hover:bg-red-700 cursor-pointer active:scale-95"
+                                                        >
+                                                            <XCircle size={14} /> Reject
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="border-t border-slate-200/60 dark:border-[#30363d] pt-4">
+                                                    <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">
+                                                        Admin Remarks
+                                                    </span>
+                                                    <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mt-0.5">
+                                                        {selectedLeave.admin_comment || "No remarks provided."}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
-                            ))
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                                <FileText size={48} className="mb-4 opacity-50" />
+                                <p>Select a request to view details</p>
+                            </div>
                         )}
                     </div>
                 </div>
-
-                {/* RIGHT PANEL: DETAILS */}
-                <div className="w-full lg:w-2/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
-                    {selectedLeave ? (
-                        <>
-                            {/* Detail Header */}
-                            <div className="p-6 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-start bg-slate-50/50 dark:bg-github-dark-subtle/10">
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-900 dark:text-github-dark-text mb-1">Leave Request #{selectedLeave.lr_id}</h2>
-                                    <p className="text-sm text-slate-500 dark:text-github-dark-muted flex items-center gap-2">
-                                        By {selectedLeave.user_name}
-                                    </p>
-                                </div>
-                                <div className="text-right">
-                                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${selectedLeave.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                                        selectedLeave.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                                        }`}>
-                                        <span className={`w-2 h-2 rounded-full ${selectedLeave.status === 'approved' ? 'bg-emerald-500' :
-                                            selectedLeave.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500 animate-pulse'
-                                            }`}></span>
-                                        {selectedLeave.status}
-                                    </div>
-                                    <div className='text-xs text-slate-400 mt-2'>Applied: {new Date(selectedLeave.applied_at || Date.now()).toLocaleDateString()}</div>
-                                </div>
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto p-6 no-scrollbar">
-                                <div className="flex flex-col gap-6 mb-8">
-                                    {/* Consolidated Leave Details Card */}
-                                    <div className="bg-slate-50 dark:bg-[#0d1117] p-6 rounded-xl border border-slate-200/80 dark:border-[#30363d] w-full space-y-5 shadow-sm">
-                                        <div>
-                                            <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">Leave Type</span>
-                                            <span className="font-semibold text-slate-800 dark:text-github-dark-text text-sm">{selectedLeave.leave_type}</span>
-                                        </div>
-                                        
-                                        <div className="flex gap-10">
-                                            <div>
-                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">From</span>
-                                                <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 text-sm">{new Date(selectedLeave.start_date).toLocaleDateString()}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">To</span>
-                                                <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 text-sm">{new Date(selectedLeave.end_date).toLocaleDateString()}</span>
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">Duration</span>
-                                            <span className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">{calculateDays(selectedLeave.start_date, selectedLeave.end_date)} Days</span>
-                                        </div>
-
-                                        <div>
-                                            <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">Reason</span>
-                                            <p className="text-sm text-slate-700 dark:text-slate-300 italic mt-0.5">"{selectedLeave.reason}"</p>
-                                        </div>
-
-                                        {/* Attachments Section - Condensed with Inline Expansion */}
-                                        {selectedLeave.attachments && selectedLeave.attachments.length > 0 && (
-                                            <div className="border-t border-slate-200/60 dark:border-[#30363d] pt-4">
-                                                <div
-                                                    className="flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 p-2 -mx-2 rounded-lg transition-colors gap-10"
-                                                    onClick={() => setAttachmentsExpanded(!attachmentsExpanded)}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <Paperclip size={18} className="text-slate-400" />
-                                                        <span className="text-sm font-medium text-slate-700 dark:text-github-dark-text">
-                                                            {selectedLeave.attachments.length} Attachments
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1"
-                                                    >
-                                                        {attachmentsExpanded ? 'Hide' : 'View All'}
-                                                        <ChevronDown size={14} className={`transform transition-transform ${attachmentsExpanded ? 'rotate-180' : ''}`} />
-                                                    </div>
-                                                </div>
-
-                                                {/* Expanded Content */}
-                                                {attachmentsExpanded && (
-                                                    <div className="mt-3 space-y-2">
-                                                        {selectedLeave.attachments.map((file, index) => (
-                                                            <div
-                                                                key={index}
-                                                                onClick={() => setViewingAttachment(file)}
-                                                                className="flex items-center gap-3 p-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-[#30363d] rounded-lg hover:border-indigo-200 dark:hover:border-indigo-900/50 hover:shadow-sm transition-all group cursor-pointer"
-                                                            >
-                                                                <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                                                    <FileText size={16} />
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-medium text-slate-700 dark:text-github-dark-text truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                                                                        {file.file_key.split('/').pop()}
-                                                                    </p>
-                                                                    <p className="text-[10px] text-slate-400 uppercase font-bold">
-                                                                        {file.file_type ? file.file_type.split('/')[1]?.toUpperCase() : 'FILE'}
-                                                                    </p>
-                                                                </div>
-                                                                <div className="text-slate-300 group-hover:text-indigo-500 transition-colors">
-                                                                    <ExternalLink size={14} />
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Action / Remarks Section */}
-                                        {selectedLeave.status === 'pending' ? (
-                                            <div className="border-t border-slate-200/60 dark:border-[#30363d] pt-4">
-                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-2">Admin Action</span>
-                                                <textarea
-                                                    ref={adminRemarksRef}
-                                                    value={adminAction.remarks}
-                                                    onChange={(e) => setAdminAction({ ...adminAction, remarks: e.target.value })}
-                                                    rows="1"
-                                                    placeholder="Add remarks (required for rejection)..."
-                                                    className="w-full p-3 text-sm bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border text-slate-800 dark:text-github-dark-text rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none overflow-hidden min-h-[42px] mb-3"
-                                                ></textarea>
-
-                                                <div className="flex gap-3 max-w-xs">
-                                                    <button
-                                                        onClick={() => handleAdminAction('approved')}
-                                                        className="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-md hover:bg-emerald-700 cursor-pointer active:scale-95"
-                                                    >
-                                                        <CheckCircle size={14} /> Approve
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleAdminAction('rejected')}
-                                                        className="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 bg-red-600 text-white shadow-md hover:bg-red-700 cursor-pointer active:scale-95"
-                                                    >
-                                                        <XCircle size={14} /> Reject
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="border-t border-slate-200/60 dark:border-[#30363d] pt-4">
-                                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.12em] block mb-1">
-                                                    Admin Remarks
-                                                </span>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mt-0.5">
-                                                    {selectedLeave.admin_comment || "No remarks provided."}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                            <FileText size={48} className="mb-4 opacity-50" />
-                            <p>Select a request to view details</p>
-                        </div>
-                    )}
-                </div>
-                {viewingAttachment && (
-                    <AttachmentModal
-                        file={viewingAttachment}
-                        onClose={() => setViewingAttachment(null)}
-                    />
-                )}
-            </div>
-        );
-    }
-
-
-
-    // --- USER VIEW ---
-    return (
-        <>
-            <div className="w-full space-y-8">
-            <div className="flex flex-col gap-8 items-start">
-
-                {/* --- TOP: APPLY FORM --- */}
+            ) : (
                 <div className="w-full">
-                    <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-6">
-                        <div className="flex items-center gap-2 mb-6 border-b border-slate-100 dark:border-github-dark-border pb-4">
-                            {isAdmin && (
-                                <button
-                                    onClick={() => setShowForm(false)}
-                                    className="mr-2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                >
-                                    <ArrowLeft size={20} className="text-slate-500" />
-                                </button>
-                            )}
-                            <Plus className="text-indigo-600 dark:text-indigo-400" size={20} />
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Apply for Leave</h3>
+                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col h-full min-h-[500px]">
+
+                    {/* --- LIST HEADER WITH FILTERS --- */}
+                    <div className="px-6 py-5 border-b border-slate-200 dark:border-github-dark-border flex flex-wrap gap-4 justify-between items-center bg-slate-50/50 dark:bg-github-dark-subtle/10">
+                        <div>
+                            <h3 className="font-bold text-slate-800 dark:text-github-dark-text">Leave History</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                                <div className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-github-dark-subtle px-2 py-1 rounded-md">
+                                    {filteredLeaves.length} Records
+                                </div>
+                                <div className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/20 dark:text-indigo-200 px-3 py-1.5 rounded-md border border-indigo-100 dark:border-indigo-500/30">
+                                    Total Approved: {totalApprovedDays} Days
+                                </div>
+                            </div>
                         </div>
 
-                        <form onSubmit={handleApply} className="space-y-5">
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">Leave Type</label>
-                                <div className="relative">
-                                    <select
-                                        value={['Casual Leave', 'Sick Leave'].includes(formData.leave_type) ? formData.leave_type : 'Other'}
-                                        onChange={(e) => {
-                                            if (e.target.value === 'Other') {
-                                                setIsCustomType(true);
-                                                setFormData({ ...formData, leave_type: '' });
-                                            } else {
-                                                setIsCustomType(false);
-                                                setFormData({ ...formData, leave_type: e.target.value });
-                                            }
-                                        }}
-                                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-github-dark-text font-medium cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-900"
-                                    >
-                                        <option>Casual Leave</option>
-                                        <option>Sick Leave</option>
-                                        <option>Other</option>
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-                                </div>
-                                {isCustomType && (
-                                    <input
-                                        type="text"
-                                        placeholder="Enter custom leave type"
-                                        value={formData.leave_type}
-                                        onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
-                                        className="w-full px-3 py-2.5 mt-3 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-github-dark-text"
-                                    />
-                                )}
-                            </div>
+                        <div className="flex items-center gap-3">
+                            {/* Apply Button */}
+                            <button
+                                onClick={() => setShowForm(true)}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-md text-xs font-bold active:scale-95 cursor-pointer mr-2"
+                            >
+                                <Plus size={14} />
+                                Apply for Leave
+                            </button>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <DatePicker
-                                        label="Start Date"
-                                        value={formData.start_date}
-                                        onChange={(date) => setFormData({ ...formData, start_date: date })}
-                                        placeholder="Select date"
-                                    />
-                                </div>
-                                <div>
-                                    <DatePicker
-                                        label="End Date"
-                                        value={formData.end_date}
-                                        onChange={(date) => setFormData({ ...formData, end_date: date })}
-                                        placeholder="Select date"
-                                    />
-                                </div>
-                            </div>
+                            {/* Month Picker */}
+                            <MinimalSelect
+                                options={Array.from({ length: 12 }, (_, i) => ({
+                                    value: i,
+                                    label: new Date(0, i).toLocaleString('default', { month: 'long' })
+                                }))}
+                                value={selectedMonth}
+                                onChange={(val) => setSelectedMonth(val)}
+                                size="sm"
+                                triggerClassName="bg-white dark:bg-[#161b22] border-slate-200 dark:border-github-dark-border shadow-sm font-semibold"
+                                menuWidth={130}
+                            />
 
-                            {formData.start_date && formData.end_date && (
-                                <div className="bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 rounded-lg text-xs text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center gap-2">
-                                    <Clock size={14} />
-                                    Total Duration: {calculateDays(formData.start_date, formData.end_date)} Days
-                                </div>
-                            )}
+                            {/* Year Picker */}
+                            <MinimalSelect
+                                options={Array.from({ length: 5 }, (_, i) => {
+                                    const y = new Date().getFullYear() - 2 + i;
+                                    return { value: y, label: String(y) };
+                                })}
+                                value={selectedYear}
+                                onChange={(val) => setSelectedYear(val)}
+                                size="sm"
+                                triggerClassName="bg-white dark:bg-[#161b22] border-slate-200 dark:border-github-dark-border shadow-sm font-semibold"
+                                menuWidth={90}
+                            />
+                        </div>
+                    </div>
 
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">Reason</label>
-                                <textarea
-                                    required
-                                    rows="1"
-                                    value={formData.reason}
-                                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                                    onInput={handleTextareaInput}
-                                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-github-dark-text resize-none placeholder-slate-400 overflow-hidden min-h-[42px]"
-                                    placeholder="Why do you need leave?"
-                                ></textarea>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">Attachments (Optional)</label>
-                                <div className="space-y-3">
-                                    {/* Upload Area */}
-                                    <div className="relative group">
-                                        <input
-                                            type="file"
-                                            id="leave-attachment"
-                                            className="hidden"
-                                            multiple
-                                            accept=".jpg,.jpeg,.png,.pdf"
-                                            onChange={handleFileChange}
-                                        />
-                                        <label
-                                            htmlFor="leave-attachment"
-                                            className="w-full flex flex-col items-center gap-2 px-4 py-6 bg-slate-50 dark:bg-github-dark-subtle border-2 border-dashed border-slate-300 dark:border-github-dark-border rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all group-hover:scale-[1.01]"
+                    {filteredLeaves.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400">
+                            <FileText size={48} className="mx-auto mb-4 opacity-20" />
+                            <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No Leave Records</h3>
+                            <p className="max-w-sm mx-auto text-sm">No leave requests found for {new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 dark:bg-github-dark-subtle/50 text-[11px] uppercase text-slate-500 font-bold tracking-wider">
+                                    <tr>
+                                        <th className="px-6 py-4">Type</th>
+                                        <th className="px-6 py-4">Current Status</th>
+                                        <th className="px-6 py-4">Duration</th>
+                                        <th className="px-6 py-4">Reason</th>
+                                        <th className="px-6 py-4">Date Applied</th>
+                                        <th className="px-6 py-4 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                    {filteredLeaves.map((leave) => (
+                                        <tr 
+                                            key={leave.lr_id} 
+                                            onClick={() => setSelectedLeave(selectedLeave?.lr_id === leave.lr_id ? null : leave)}
+                                            className={`hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group cursor-pointer ${selectedLeave?.lr_id === leave.lr_id ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
                                         >
-                                            <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                                <Paperclip size={18} />
-                                            </div>
-                                            <div className="text-center">
-                                                <span className="text-sm font-medium text-slate-700 dark:text-github-dark-text">
-                                                    Click to upload documents
+                                            <td className="px-6 py-4">
+                                                <div className="font-semibold text-sm text-slate-800 dark:text-github-dark-text">{leave.leave_type}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide ${leave.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                                                    leave.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
+                                                        'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                                                    }`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${leave.status === 'approved' ? 'bg-emerald-500' :
+                                                        leave.status === 'rejected' ? 'bg-red-500' :
+                                                            'bg-amber-500'
+                                                        }`}></span>
+                                                    {leave.status}
                                                 </span>
-                                                <p className="text-xs text-slate-400 mt-1">
-                                                    JPG, PNG, PDF (Max 5MB)
+                                                {leave.admin_comment && (
+                                                    <p className="text-[10px] text-slate-500 mt-1 max-w-[120px] truncate" title={leave.admin_comment}>
+                                                        Note: {leave.admin_comment}
+                                                    </p>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{calculateDays(leave.start_date, leave.end_date)} Days</span>
+                                                    <span className="text-[10px] text-slate-400 mt-0.5">
+                                                        {new Date(leave.start_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(leave.end_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 max-w-[200px]">
+                                                <p className="text-sm text-slate-600 dark:text-github-dark-muted truncate" title={leave.reason}>
+                                                    {leave.reason}
                                                 </p>
-                                            </div>
-                                        </label>
-                                    </div>
-
-                                    {/* Selected Files List */}
-                                    {formData.attachments && formData.attachments.length > 0 && (
-                                        <div className="grid grid-cols-1 gap-2">
-                                            {formData.attachments.map((file, index) => (
-                                                <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <div className="w-8 h-8 rounded bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-                                                            <FileText size={16} />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-medium text-slate-700 dark:text-github-dark-text truncate">
-                                                                {file.name}
-                                                            </p>
-                                                            <p className="text-[10px] text-slate-400 uppercase font-bold">
-                                                                {(file.size / 1024).toFixed(1)} KB
-                                                            </p>
-                                                        </div>
-                                                    </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-slate-500">
+                                                {new Date(leave.applied_at || Date.now()).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {leave.status === 'pending' && (
                                                     <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            removeFile(index);
-                                                        }}
-                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
-                                                        title="Remove file"
+                                                        onClick={() => handleWithdraw(leave.lr_id)}
+                                                        className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100"
+                                                        title="Withdraw Request"
                                                     >
                                                         <Trash2 size={16} />
                                                     </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
-                            >
-                                <CheckCircle size={18} />
-                                Submit Request
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                {/* --- BOTTOM: HISTORY LIST --- */}
-                <div className="w-full">
-                    <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col h-full min-h-[500px]">
-
-                        {/* --- LIST HEADER WITH FILTERS --- */}
-                        <div className="px-6 py-5 border-b border-slate-200 dark:border-github-dark-border flex flex-wrap gap-4 justify-between items-center bg-slate-50/50 dark:bg-github-dark-subtle/10">
-                            <div>
-                                <h3 className="font-bold text-slate-800 dark:text-github-dark-text">Leave History</h3>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-github-dark-subtle px-2 py-1 rounded-md">
-                                        {filteredLeaves.length} Records
-                                    </div>
-                                    <div className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/20 dark:text-indigo-200 px-3 py-1.5 rounded-md border border-indigo-100 dark:border-indigo-500/30">
-                                        Total Approved: {totalApprovedDays} Days
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                {/* Month Picker */}
-                                <div className="relative">
-                                    <select
-                                        value={selectedMonth}
-                                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                                        className="pl-3 pr-8 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm font-medium text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-sm appearance-none cursor-pointer"
-                                    >
-                                        {Array.from({ length: 12 }, (_, i) => (
-                                            <option key={i} value={i}>
-                                                {new Date(0, i).toLocaleString('default', { month: 'long' })}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-                                </div>
-
-                                {/* Year Picker */}
-                                <div className="relative">
-                                    <select
-                                        value={selectedYear}
-                                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                                        className="pl-3 pr-8 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm font-medium text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-sm appearance-none cursor-pointer"
-                                    >
-                                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
-                                            <option key={year} value={year}>{year}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {filteredLeaves.length === 0 ? (
-                            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400">
-                                <FileText size={48} className="mx-auto mb-4 opacity-20" />
-                                <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No Leave Records</h3>
-                                <p className="max-w-sm mx-auto text-sm">No leave requests found for {new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}.</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                    <thead className="bg-slate-50 dark:bg-github-dark-subtle/50 text-[11px] uppercase text-slate-500 font-bold tracking-wider">
-                                        <tr>
-                                            <th className="px-6 py-4">Type</th>
-                                            <th className="px-6 py-4">Current Status</th>
-                                            <th className="px-6 py-4">Duration</th>
-                                            <th className="px-6 py-4">Reason</th>
-                                            <th className="px-6 py-4">Date Applied</th>
-                                            <th className="px-6 py-4 text-right">Action</th>
+                                                )}
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                                        {filteredLeaves.map((leave) => (
-                                            <tr key={leave.lr_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <div className="font-semibold text-sm text-slate-800 dark:text-github-dark-text">{leave.leave_type}</div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide ${leave.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                                                        leave.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' :
-                                                            'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
-                                                        }`}>
-                                                        <span className={`w-1.5 h-1.5 rounded-full ${leave.status === 'approved' ? 'bg-emerald-500' :
-                                                            leave.status === 'rejected' ? 'bg-red-500' :
-                                                                'bg-amber-500'
-                                                            }`}></span>
-                                                        {leave.status}
-                                                    </span>
-                                                    {leave.admin_comment && (
-                                                        <p className="text-[10px] text-slate-500 mt-1 max-w-[120px] truncate" title={leave.admin_comment}>
-                                                            Note: {leave.admin_comment}
-                                                        </p>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{calculateDays(leave.start_date, leave.end_date)} Days</span>
-                                                        <span className="text-[10px] text-slate-400 mt-0.5">
-                                                            {new Date(leave.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(leave.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 max-w-[200px]">
-                                                    <p className="text-sm text-slate-600 dark:text-github-dark-muted truncate" title={leave.reason}>
-                                                        {leave.reason}
-                                                    </p>
-                                                </td>
-                                                <td className="px-6 py-4 text-xs text-slate-500 font-mono">
-                                                    {new Date(leave.applied_at || Date.now()).toLocaleDateString()}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    {leave.status === 'pending' && (
-                                                        <button
-                                                            onClick={() => handleWithdraw(leave.lr_id)}
-                                                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100"
-                                                            title="Withdraw Request"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
-        <AnimatePresence>
-            {confirmModal.isOpen && (
-                <ConfirmationModal
-                    {...confirmModal}
-                    isSubmitting={isWithdrawing}
-                    onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-                />
             )}
+
+            {/* --- APPLY FOR LEAVE DRAWER --- */}
+            <AnimatePresence>
+                {showForm && (
+                    <>
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowForm(false)}
+                            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px]"
+                        />
+
+                        {/* Sidebar Drawer */}
+                        <motion.div
+                            initial={{ x: '100%', opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: '100%', opacity: 0 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed right-0 top-0 h-full w-full max-w-[460px] z-50 bg-white dark:bg-dark-card border-l border-slate-200 dark:border-github-dark-border shadow-2xl flex flex-col overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                                        <Plus size={20} />
+                                    </div>
+                                    <h3 className="text-sm font-black text-slate-800 dark:text-github-dark-text">Apply for Leave</h3>
+                                </div>
+                                <button
+                                    onClick={() => setShowForm(false)}
+                                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <form onSubmit={handleApply} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">Leave Type</label>
+                                    <div className="relative">
+                                        <select
+                                            value={['Casual Leave', 'Sick Leave'].includes(formData.leave_type) ? formData.leave_type : 'Other'}
+                                            onChange={(e) => {
+                                                if (e.target.value === 'Other') {
+                                                    setIsCustomType(true);
+                                                    setFormData({ ...formData, leave_type: '' });
+                                                } else {
+                                                    setIsCustomType(false);
+                                                    setFormData({ ...formData, leave_type: e.target.value });
+                                                }
+                                            }}
+                                            className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-github-dark-text font-medium cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-900"
+                                        >
+                                            <option>Casual Leave</option>
+                                            <option>Sick Leave</option>
+                                            <option>Other</option>
+                                        </select>
+                                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                                    </div>
+                                    {isCustomType && (
+                                        <input
+                                            type="text"
+                                            placeholder="Enter custom leave type"
+                                            value={formData.leave_type}
+                                            onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
+                                            className="w-full px-3 py-2.5 mt-3 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-github-dark-text"
+                                        />
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <DatePicker
+                                            label="Start Date"
+                                            value={formData.start_date}
+                                            onChange={(date) => setFormData({ ...formData, start_date: date })}
+                                            placeholder="Select date"
+                                        />
+                                    </div>
+                                    <div>
+                                        <DatePicker
+                                            label="End Date"
+                                            value={formData.end_date}
+                                            onChange={(date) => setFormData({ ...formData, end_date: date })}
+                                            placeholder="Select date"
+                                        />
+                                    </div>
+                                </div>
+
+                                {formData.start_date && formData.end_date && (
+                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3 rounded-lg text-xs text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center gap-2">
+                                        <Clock size={14} />
+                                        Total Duration: {calculateDays(formData.start_date, formData.end_date)} Days
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">Reason</label>
+                                    <textarea
+                                        required
+                                        rows="1"
+                                        value={formData.reason}
+                                        onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                                        onInput={handleTextareaInput}
+                                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-700 dark:text-github-dark-text resize-none placeholder-slate-400 overflow-hidden min-h-[42px]"
+                                        placeholder="Why do you need leave?"
+                                    ></textarea>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">Attachments (Optional)</label>
+                                    <div className="space-y-3">
+                                         {/* Upload Area */}
+                                         <div className="relative group">
+                                             <input
+                                                 type="file"
+                                                 id="leave-attachment"
+                                                 className="hidden"
+                                                 multiple
+                                                 accept=".jpg,.jpeg,.png,.pdf"
+                                                 onChange={handleFileChange}
+                                             />
+                                             <label
+                                                 htmlFor="leave-attachment"
+                                                 className="w-full flex flex-col items-center gap-2 px-4 py-6 bg-slate-50 dark:bg-github-dark-subtle border-2 border-dashed border-slate-300 dark:border-github-dark-border rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all group-hover:scale-[1.01]"
+                                             >
+                                                 <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                                     <Paperclip size={18} />
+                                                 </div>
+                                                 <div className="text-center">
+                                                     <span className="text-sm font-medium text-slate-700 dark:text-github-dark-text">
+                                                         Click to upload documents
+                                                     </span>
+                                                     <p className="text-xs text-slate-400 mt-1">
+                                                         JPG, PNG, PDF (Max 5MB)
+                                                     </p>
+                                                 </div>
+                                             </label>
+                                         </div>
+
+                                         {/* Selected Files List */}
+                                         {formData.attachments && formData.attachments.length > 0 && (
+                                             <div className="grid grid-cols-1 gap-2">
+                                                 {formData.attachments.map((file, index) => (
+                                                     <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                                                         <div className="flex items-center gap-3 overflow-hidden">
+                                                             <div className="w-8 h-8 rounded bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                                                                 <FileText size={16} />
+                                                             </div>
+                                                             <div className="min-w-0">
+                                                                 <p className="text-sm font-medium text-slate-700 dark:text-github-dark-text truncate">
+                                                                     {file.name}
+                                                                 </p>
+                                                                 <p className="text-[10px] text-slate-400 uppercase font-bold">
+                                                                     {(file.size / 1024).toFixed(1)} KB
+                                                                 </p>
+                                                             </div>
+                                                         </div>
+                                                         <button
+                                                             type="button"
+                                                             onClick={(e) => {
+                                                                 e.preventDefault();
+                                                                 removeFile(index);
+                                                             }}
+                                                             className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+                                                             title="Remove file"
+                                                         >
+                                                             <Trash2 size={16} />
+                                                         </button>
+                                                     </div>
+                                                 ))}
+                                             </div>
+                                         )}
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                                >
+                                    <CheckCircle size={18} />
+                                    Submit Request
+                                </button>
+                            </form>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {confirmModal.isOpen && (
+                    <ConfirmationModal
+                        {...confirmModal}
+                        isSubmitting={isWithdrawing}
+                        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                    />
+                )}
             </AnimatePresence>
         </>
     );
