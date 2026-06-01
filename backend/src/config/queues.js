@@ -93,7 +93,11 @@ redisConnection.on('error', (err) => {
   }
 });
 
-export const reportQueue = new Queue('ReportQueue', { connection: redisConnection });
+redisConnection.on('connect', () => {
+  console.log('⚡ [Queue] Connected to Redis Queue instance');
+});
+
+export const reportQueue = new Queue('{ReportQueue}', { connection: redisConnection });
 
 // Handle BullMQ Queue error events to avoid process crashes
 reportQueue.on('error', (err) => {
