@@ -11,7 +11,7 @@ const api = axios.create({
 });
 
 // Request Interceptor
-let accessToken = null;
+let accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -29,6 +29,13 @@ const processQueue = (error, token = null) => {
 
 export const setAccessToken = (token) => {
     accessToken = token;
+    if (typeof window !== 'undefined') {
+        if (token) {
+            localStorage.setItem('accessToken', token);
+        } else {
+            localStorage.removeItem('accessToken');
+        }
+    }
 };
 
 export const getAccessToken = () => accessToken;

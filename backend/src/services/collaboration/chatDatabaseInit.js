@@ -36,11 +36,20 @@ export const initChatDatabase = async () => {
                 table.text('member_ids').notNullable(); // JSON array of user IDs
                 table.text('messages', 'longtext').notNullable(); // JSON array of message objects
                 table.text('last_read_times').notNullable(); // JSON mapping user_id -> timestamp
+                table.text('removed_members').nullable(); // JSON mapping user_id -> { removed_at: timestamp }
                 table.timestamps(true, true); // created_at, updated_at
 
                 table.index(['org_id']);
             });
             console.log('Optimized table "chat_rooms" created successfully.');
+        } else {
+            const hasRemovedMembers = await db.schema.hasColumn('chat_rooms', 'removed_members');
+            if (!hasRemovedMembers) {
+                await db.schema.table('chat_rooms', (table) => {
+                    table.text('removed_members').nullable();
+                });
+                console.log('Column "removed_members" added to "chat_rooms" successfully.');
+            }
         }
 
         // Collaboration / Chat database tables verified.

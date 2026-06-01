@@ -28,6 +28,9 @@ router.post('/rooms/:roomId/upload', upload.single('file'), chatController.uploa
 // Message read marker updates
 router.put('/rooms/:roomId/read', chatController.markAsRead);
 
+// Update group members
+router.put('/rooms/:roomId/members', chatController.updateRoomMembers);
+
 // Delete room (clears the entire conversation row)
 router.delete('/rooms/:roomId', chatController.deleteRoom);
 

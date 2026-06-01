@@ -59,11 +59,22 @@ export const getRooms = catchAsync(async (req, res, next) => {
     }
     const allRooms = await query;
 
-    // Filter in memory for rooms containing current user in member_ids JSON array
+    // Filter in memory for rooms containing current user in member_ids JSON array OR removed_members JSON
     const userRooms = allRooms.filter(room => {
         try {
             const memberIds = typeof room.member_ids === 'string' ? JSON.parse(room.member_ids) : room.member_ids;
-            return Array.isArray(memberIds) && memberIds.map(Number).includes(Number(userId));
+            if (Array.isArray(memberIds) && memberIds.map(Number).includes(Number(userId))) {
+                return true;
+            }
+            if (room.removed_members) {
+                const removedMembers = typeof room.removed_members === 'string' ? JSON.parse(room.removed_members) : room.removed_members;
+                if (Array.isArray(removedMembers)) {
+                    return removedMembers.some(rm => Number(rm.user_id) === Number(userId));
+                } else if (removedMembers && typeof removedMembers === 'object') {
+                    return Object.keys(removedMembers).map(Number).includes(Number(userId));
+                }
+            }
+            return false;
         } catch (e) {
             return false;
         }
@@ -73,21 +84,44 @@ export const getRooms = catchAsync(async (req, res, next) => {
         return res.json({ success: true, data: [] });
     }
 
-    // Get all unique member user IDs across all user rooms
-    const allMemberIds = Array.from(new Set(userRooms.flatMap(room => {
+    // Get all unique user IDs across all user rooms (active members, removed members, last message senders)
+    const allUserIdsToQuery = new Set();
+    userRooms.forEach(room => {
         try {
             const memberIds = typeof room.member_ids === 'string' ? JSON.parse(room.member_ids) : room.member_ids;
-            return Array.isArray(memberIds) ? memberIds.map(Number) : [];
-        } catch (e) {
-            return [];
-        }
-    })));
+            if (Array.isArray(memberIds)) {
+                memberIds.forEach(id => allUserIdsToQuery.add(Number(id)));
+            }
+        } catch (e) {}
 
-    // Fetch details of all room members in a single query
+        try {
+            if (room.removed_members) {
+                const removedMembers = typeof room.removed_members === 'string' ? JSON.parse(room.removed_members) : room.removed_members;
+                if (Array.isArray(removedMembers)) {
+                    removedMembers.forEach(rm => allUserIdsToQuery.add(Number(rm.user_id)));
+                } else if (removedMembers && typeof removedMembers === 'object') {
+                    Object.keys(removedMembers).forEach(id => allUserIdsToQuery.add(Number(id)));
+                }
+            }
+        } catch (e) {}
+
+        try {
+            const decryptedMessages = decryptText(room.messages);
+            const msgs = typeof decryptedMessages === 'string' ? JSON.parse(decryptedMessages || '[]') : (decryptedMessages || []);
+            if (msgs.length > 0) {
+                const lastMsg = msgs[msgs.length - 1];
+                if (lastMsg && lastMsg.sender_id) {
+                    allUserIdsToQuery.add(Number(lastMsg.sender_id));
+                }
+            }
+        } catch (e) {}
+    });
+
+    // Fetch details of all room members & senders in a single query
     const membersList = await attendanceDB('users')
         .leftJoin('departments', 'users.dept_id', 'departments.dept_id')
         .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
-        .whereIn('users.user_id', allMemberIds)
+        .whereIn('users.user_id', Array.from(allUserIdsToQuery))
         .where('users.is_deleted', 0)
         .select(
             'users.user_id',
@@ -109,6 +143,27 @@ export const getRooms = catchAsync(async (req, res, next) => {
             // Ignore
         }
 
+        // Check if current user is removed from this room
+        let isRemoved = false;
+        let removedAt = null;
+        if (room.removed_members) {
+            try {
+                const removedMembers = typeof room.removed_members === 'string' ? JSON.parse(room.removed_members) : room.removed_members;
+                if (Array.isArray(removedMembers)) {
+                    const found = removedMembers.find(rm => Number(rm.user_id) === Number(userId));
+                    if (found) {
+                        isRemoved = true;
+                        removedAt = found.removed_at;
+                    }
+                } else if (removedMembers && typeof removedMembers === 'object') {
+                    if (removedMembers[userId]) {
+                        isRemoved = true;
+                        removedAt = removedMembers[userId].removed_at;
+                    }
+                }
+            } catch (e) {}
+        }
+
         // Get user last read timestamp
         let lastReadAt = null;
         try {
@@ -127,8 +182,14 @@ export const getRooms = catchAsync(async (req, res, next) => {
             // Ignore
         }
 
+        // Filter messages for removed user
+        if (isRemoved && removedAt) {
+            const cutOff = new Date(removedAt);
+            msgs = msgs.filter(m => new Date(m.created_at) <= cutOff);
+        }
+
         // Calculate unread count
-        const unreadCount = msgs.filter(msg => 
+        const unreadCount = isRemoved ? 0 : msgs.filter(msg => 
             Number(msg.sender_id) !== Number(userId) && 
             (!lastReadAt || new Date(msg.created_at) > lastReadAt)
         ).length;
@@ -146,15 +207,27 @@ export const getRooms = catchAsync(async (req, res, next) => {
             }
         }
 
+        // Last message sender name resolution
+        let lastMsgSenderName = 'Unknown Colleague';
+        if (lastMsg) {
+            const sender = membersList.find(m => Number(m.user_id) === Number(lastMsg.sender_id));
+            if (sender) {
+                lastMsgSenderName = sender.user_name;
+            }
+        }
+
         enrichedRooms.push({
             ...room,
             room_name: customRoomName,
             avatar_url: dmAvatar,
             members: roomMembers,
+            is_removed: isRemoved,
+            removed_at: removedAt,
             last_message: lastMsg ? {
                 text: lastMsg.message_text,
                 sender_id: lastMsg.sender_id,
-                created_at: lastMsg.created_at
+                created_at: lastMsg.created_at,
+                sender_name: lastMsgSenderName
             } : null,
             unread_count: unreadCount
         });
@@ -262,6 +335,13 @@ export const createRoom = catchAsync(async (req, res, next) => {
         }
     }
 
+    const io = req.app.get('io');
+    if (io) {
+        allMemberIds.forEach(mId => {
+            io.to(`user_${mId}`).emit('room_created', newRoom);
+        });
+    }
+
     res.status(201).json({
         success: true,
         data: newRoom
@@ -288,7 +368,28 @@ export const getRoomMessages = catchAsync(async (req, res, next) => {
         // Ignore
     }
 
-    if (!Array.isArray(memberIds) || !memberIds.map(Number).includes(Number(userId))) {
+    // Check if user is removed
+    let isRemoved = false;
+    let removedAt = null;
+    if (room.removed_members) {
+        try {
+            const removedMembers = typeof room.removed_members === 'string' ? JSON.parse(room.removed_members) : room.removed_members;
+            if (Array.isArray(removedMembers)) {
+                const found = removedMembers.find(rm => Number(rm.user_id) === Number(userId));
+                if (found) {
+                    isRemoved = true;
+                    removedAt = found.removed_at;
+                }
+            } else if (removedMembers && typeof removedMembers === 'object') {
+                if (removedMembers[userId]) {
+                    isRemoved = true;
+                    removedAt = removedMembers[userId].removed_at;
+                }
+            }
+        } catch (e) {}
+    }
+
+    if (!isRemoved && (!Array.isArray(memberIds) || !memberIds.map(Number).includes(Number(userId)))) {
         throw new AppError('You are not a member of this chat room', 403);
     }
 
@@ -300,9 +401,18 @@ export const getRoomMessages = catchAsync(async (req, res, next) => {
         // Ignore
     }
 
-    // Resolve sender profiles
+    // Filter messages for removed user
+    if (isRemoved && removedAt) {
+        const cutOffTime = new Date(removedAt);
+        msgs = msgs.filter(msg => new Date(msg.created_at) <= cutOffTime);
+    }
+
+    // Resolve sender profiles for all senders in filtered messages
+    const senderIds = msgs.map(m => Number(m.sender_id)).filter(id => id > 0);
+    const allQueryIds = Array.from(new Set([...memberIds.map(Number), ...senderIds]));
+
     const members = await attendanceDB('users')
-        .whereIn('user_id', memberIds)
+        .whereIn('user_id', allQueryIds)
         .select('user_id', 'user_name', 'profile_image_url');
 
     const enrichedMessages = msgs.map(msg => {
@@ -349,6 +459,23 @@ export const sendMessage = catchAsync(async (req, res, next) => {
         memberIds = typeof room.member_ids === 'string' ? JSON.parse(room.member_ids) : room.member_ids;
     } catch (e) {
         // Ignore
+    }
+
+    // Check if user is removed
+    let isRemoved = false;
+    if (room.removed_members) {
+        try {
+            const removedMembers = typeof room.removed_members === 'string' ? JSON.parse(room.removed_members) : room.removed_members;
+            if (Array.isArray(removedMembers)) {
+                isRemoved = removedMembers.some(rm => Number(rm.user_id) === Number(userId));
+            } else if (removedMembers && typeof removedMembers === 'object') {
+                isRemoved = Object.keys(removedMembers).map(Number).includes(Number(userId));
+            }
+        } catch (e) {}
+    }
+
+    if (isRemoved) {
+        throw new AppError('You cannot send messages to this group because you have been removed', 403);
     }
 
     if (!Array.isArray(memberIds) || !memberIds.map(Number).includes(Number(userId))) {
@@ -399,6 +526,13 @@ export const sendMessage = catchAsync(async (req, res, next) => {
     const io = req.app.get('io');
     if (io) {
         io.to(`room_${roomId}`).emit('message_received', formattedResponseMsg);
+        if (Array.isArray(memberIds)) {
+            memberIds.forEach(mId => {
+                if (Number(mId) !== Number(userId)) {
+                    io.to(`user_${mId}`).emit('message_received', formattedResponseMsg);
+                }
+            });
+        }
     }
 
     if (message_text) {
@@ -442,6 +576,23 @@ export const uploadAttachment = catchAsync(async (req, res, next) => {
         memberIds = typeof room.member_ids === 'string' ? JSON.parse(room.member_ids) : room.member_ids;
     } catch (e) {
         // Ignore
+    }
+
+    // Check if user is removed
+    let isRemoved = false;
+    if (room.removed_members) {
+        try {
+            const removedMembers = typeof room.removed_members === 'string' ? JSON.parse(room.removed_members) : room.removed_members;
+            if (Array.isArray(removedMembers)) {
+                isRemoved = removedMembers.some(rm => Number(rm.user_id) === Number(userId));
+            } else if (removedMembers && typeof removedMembers === 'object') {
+                isRemoved = Object.keys(removedMembers).map(Number).includes(Number(userId));
+            }
+        } catch (e) {}
+    }
+
+    if (isRemoved) {
+        throw new AppError('You cannot upload attachments to this group because you have been removed', 403);
     }
 
     if (!Array.isArray(memberIds) || !memberIds.map(Number).includes(Number(userId))) {
@@ -540,8 +691,193 @@ export const deleteRoom = catchAsync(async (req, res, next) => {
         .where({ room_id: roomId })
         .del();
 
+    const io = req.app.get('io');
+    if (io && Array.isArray(memberIds)) {
+        memberIds.forEach(mId => {
+            io.to(`user_${mId}`).emit('room_deleted', { room_id: Number(roomId) });
+        });
+    }
+
     res.json({
         success: true,
         message: 'Chat room and all history deleted successfully'
+    });
+});
+
+// PUT update room members
+export const updateRoomMembers = catchAsync(async (req, res, next) => {
+    const userId = req.user.user_id ?? req.user.id;
+    const { roomId } = req.params;
+    const { member_ids } = req.body;
+
+    if (!Array.isArray(member_ids) || member_ids.length === 0) {
+        throw new AppError('member_ids must be a non-empty array', 400);
+    }
+
+    const room = await attendanceDB('chat_rooms')
+        .where({ room_id: roomId })
+        .first();
+
+    if (!room) {
+        throw new AppError('Chat room not found', 404);
+    }
+
+    if (room.room_type !== 'group') {
+        throw new AppError('Members can only be updated for group chats', 400);
+    }
+
+    let currentMembers = [];
+    try {
+        currentMembers = typeof room.member_ids === 'string' ? JSON.parse(room.member_ids) : room.member_ids;
+    } catch (e) {}
+
+    if (!Array.isArray(currentMembers) || !currentMembers.map(Number).includes(Number(userId))) {
+        throw new AppError('You are not a member of this chat room', 403);
+    }
+
+    const uniqueMemberIds = Array.from(new Set(member_ids.map(Number)));
+
+    // Compute changes for WhatsApp-style updates
+    const currentMemberIds = currentMembers.map(Number);
+    const addedUserIds = uniqueMemberIds.filter(id => !currentMemberIds.includes(id));
+    const removedUserIds = currentMemberIds.filter(id => !uniqueMemberIds.includes(id));
+
+    // Update removed_members in DB
+    let removedMembersMap = {};
+    if (room.removed_members) {
+        try {
+            removedMembersMap = typeof room.removed_members === 'string' ? JSON.parse(room.removed_members) : room.removed_members;
+            if (Array.isArray(removedMembersMap)) {
+                const temp = {};
+                removedMembersMap.forEach(rm => {
+                    temp[rm.user_id] = { removed_at: rm.removed_at };
+                });
+                removedMembersMap = temp;
+            }
+        } catch (e) {
+            removedMembersMap = {};
+        }
+    }
+
+    const nowStr = new Date().toISOString();
+    removedUserIds.forEach(id => {
+        removedMembersMap[id] = { removed_at: nowStr };
+    });
+
+    addedUserIds.forEach(id => {
+        delete removedMembersMap[id];
+    });
+
+    await attendanceDB('chat_rooms')
+        .where({ room_id: roomId })
+        .update({
+            member_ids: JSON.stringify(uniqueMemberIds),
+            removed_members: JSON.stringify(removedMembersMap),
+            updated_at: attendanceDB.fn.now()
+        });
+
+    const userIdsToQuery = Array.from(new Set([Number(userId), ...addedUserIds, ...removedUserIds]));
+    const usersInfo = await attendanceDB('users')
+        .whereIn('user_id', userIdsToQuery)
+        .select('user_id', 'user_name');
+
+    const actorName = usersInfo.find(u => Number(u.user_id) === Number(userId))?.user_name || 'Someone';
+    const addedNames = addedUserIds.map(id => usersInfo.find(u => Number(u.user_id) === id)?.user_name || `User #${id}`);
+    const removedNames = removedUserIds.map(id => usersInfo.find(u => Number(u.user_id) === id)?.user_name || `User #${id}`);
+
+    let updateDescription = '';
+    if (removedUserIds.length === 1 && removedUserIds[0] === Number(userId)) {
+        updateDescription = `${actorName} left the group`;
+    } else {
+        const otherRemovedNames = removedNames.filter(name => name !== actorName);
+        if (addedNames.length > 0 && otherRemovedNames.length > 0) {
+            updateDescription = `${actorName} added ${addedNames.join(', ')} and removed ${otherRemovedNames.join(', ')}`;
+        } else if (addedNames.length > 0) {
+            updateDescription = `${actorName} added ${addedNames.join(', ')}`;
+        } else if (otherRemovedNames.length > 0) {
+            updateDescription = `${actorName} removed ${otherRemovedNames.join(', ')}`;
+        } else if (removedUserIds.includes(Number(userId))) {
+            updateDescription = `${actorName} left the group`;
+        } else {
+            updateDescription = `${actorName} updated group details`;
+        }
+    }
+
+    let msgs = [];
+    try {
+        const decryptedMessages = decryptText(room.messages);
+        msgs = typeof decryptedMessages === 'string' ? JSON.parse(decryptedMessages || '[]') : (decryptedMessages || []);
+    } catch (e) {}
+
+    const messageId = Date.now();
+    const systemMsg = {
+        message_id: messageId,
+        sender_id: 0,
+        message_text: `[SYSTEM_CARD:group_update:info] ${updateDescription}`,
+        created_at: new Date().toISOString()
+    };
+
+    const updatedMessages = [...msgs, systemMsg];
+    await attendanceDB('chat_rooms')
+        .where({ room_id: roomId })
+        .update({
+            messages: encryptText(JSON.stringify(updatedMessages))
+        });
+
+    const enrichedMembersList = await attendanceDB('users')
+        .leftJoin('departments', 'users.dept_id', 'departments.dept_id')
+        .leftJoin('designations', 'users.desg_id', 'designations.desg_id')
+        .whereIn('users.user_id', uniqueMemberIds)
+        .where('users.is_deleted', 0)
+        .select(
+            'users.user_id',
+            'users.user_name',
+            'users.profile_image_url',
+            'users.email',
+            'departments.dept_name',
+            'designations.desg_name'
+        );
+
+    const formattedSystemMsgResponse = {
+        message_id: messageId,
+        room_id: Number(roomId),
+        sender_id: 0,
+        message_text: systemMsg.message_text,
+        attachment: null,
+        created_at: systemMsg.created_at,
+        user_name: 'System',
+        profile_image_url: null
+    };
+
+    const io = req.app.get('io');
+    if (io) {
+        // Emit to the active room channel
+        io.to(`room_${roomId}`).emit('group_updated', {
+            room_id: Number(roomId),
+            member_ids: uniqueMemberIds,
+            members: enrichedMembersList
+        });
+        io.to(`room_${roomId}`).emit('message_received', formattedSystemMsgResponse);
+
+        // Also emit to personal channels of all current and removed members to force real-time updates
+        const allAffectedUserIds = Array.from(new Set([...uniqueMemberIds, ...removedUserIds]));
+        allAffectedUserIds.forEach(mId => {
+            io.to(`user_${mId}`).emit('group_updated', {
+                room_id: Number(roomId),
+                member_ids: uniqueMemberIds,
+                members: enrichedMembersList
+            });
+            io.to(`user_${mId}`).emit('message_received', formattedSystemMsgResponse);
+        });
+    }
+
+    res.json({
+        success: true,
+        message: 'Group members updated successfully',
+        data: {
+            room_id: Number(roomId),
+            member_ids: uniqueMemberIds,
+            members: enrichedMembersList
+        }
     });
 });
