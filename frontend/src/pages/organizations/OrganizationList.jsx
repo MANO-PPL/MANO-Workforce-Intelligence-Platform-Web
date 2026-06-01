@@ -305,7 +305,7 @@ const OrganizationList = () => {
         ].filter(item => item.value > 0);
 
         return (
-            <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6 bg-slate-50/30 dark:bg-github-dark-subtle/5 flex flex-col">
+            <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-3 bg-slate-50/30 dark:bg-github-dark-subtle/5 flex flex-col">
                 {/* Welcome & Overview Header */}
                 <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 dark:from-indigo-600/80 dark:to-indigo-700/80 p-6 rounded-2xl text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
                      <div>
@@ -442,7 +442,7 @@ const OrganizationList = () => {
 
     return (
         <DashboardLayout title="Organization Management" noPadding={true}>
-            <div className="h-[calc(100vh-64px)] p-6 space-y-4 overflow-hidden flex flex-col min-h-0">
+            <div className="h-[calc(100vh-64px)] p-3 space-y-3 overflow-hidden flex flex-col min-h-0">
 
                 {/* Page Level Tabs — only visible if an organization is selected and not in "create new" or "edit" mode */}
                 {selectedOrg && !isEditing && (
@@ -850,7 +850,7 @@ const OrganizationList = () => {
                     </div>
                 ) : (
                     /* Main Content: Split View */
-                    <div className="flex flex-1 gap-6 overflow-hidden">
+                    <div className="flex flex-1 gap-3 overflow-hidden">
 
                     {/* Left Pane: Scrollable List */}
                     <div className="w-1/3 flex flex-col bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden shrink-0">

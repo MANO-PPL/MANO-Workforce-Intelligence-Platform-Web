@@ -108,7 +108,7 @@ const RequestManager = () => {
                             >
                                 <div className="flex justify-between items-start mb-1">
                                     <span className={`font-bold text-sm ${selectedRequest?.id === req.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{req.user}</span>
-                                    <span className="text-[10px] text-slate-400 font-mono">{req.date}</span>
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{req.date ? new Date(req.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : ''}</span>
                                 </div>
                                 <div className="text-xs text-slate-500 mb-2">{req.changes} changes proposed</div>
                                 <div className="flex items-center gap-2">

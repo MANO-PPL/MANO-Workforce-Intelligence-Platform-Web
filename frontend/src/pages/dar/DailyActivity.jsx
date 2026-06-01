@@ -240,61 +240,8 @@ const DailyActivity = () => {
 
     // --- SHIFT & TIMELINE RANGE LOGIC ---
     const { user } = useAuth(); // Get current user
-    const [timelineRange, setTimelineRange] = useState({ start: 7, end: 19 }); // Default
+    const [timelineRange, setTimelineRange] = useState({ start: 0, end: 24 }); // 24-hour timeline range
     const [showActions, setShowActions] = useState(false);
-
-    useEffect(() => {
-        const fetchShift = async () => {
-            if (!user) return;
-            try {
-                // We need to find the user's shift definition. 
-                // Since we don't have a direct "get my shift" endpoint that returns the RULES, 
-                // we fetch all shifts and match against user.shift_name (assuming it's available on user object)
-                // If user object doesn't have shift_name, we might need to fetch user profile first.
-                // For now, let's assume user.shift_name exists or we fallback to 'General'.
-
-                const res = await api.get('/admin/shifts');
-                if (res.data.success) {
-                    const shifts = res.data.shifts;
-                    // Find user's shift. Fallback to 'General' or first shift.
-                    const userShiftName = user.shift_name || user.shift || 'General';
-                    let targetShift = shifts.find(s => s.shift_name === userShiftName);
-
-                    if (!targetShift) targetShift = shifts.find(s => s.shift_name === 'General') || shifts[0];
-
-                    if (targetShift) {
-                        try {
-                            const rules = typeof targetShift.policy_rules === 'string'
-                                ? JSON.parse(targetShift.policy_rules)
-                                : targetShift.policy_rules;
-
-                            const startStr = rules?.shift_timing?.start_time || "09:00";
-                            const endStr = rules?.shift_timing?.end_time || "18:00";
-
-                            let startH = parseInt(startStr.split(':')[0]);
-                            let endH = parseInt(endStr.split(':')[0]);
-
-                            // Handle Overnight Cross-over (e.g., 18:00 to 02:00)
-                            if (endH < startH) {
-                                endH += 24;
-                            }
-
-                            setTimelineRange({
-                                start: Math.max(0, startH - 1),
-                                end: endH + 1
-                            });
-                        } catch (e) {
-                            console.error("Error parsing shift rules", e);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to fetch shift info", err);
-            }
-        };
-
-        fetchShift();
-    }, [user]);
 
 
     return (

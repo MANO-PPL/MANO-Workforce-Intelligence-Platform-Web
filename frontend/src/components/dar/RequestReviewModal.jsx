@@ -63,6 +63,18 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
     // Helper to normalize HH:MM:SS -> HH:MM
     const fmtTime = (t) => t ? t.slice(0, 5) : '';
 
+    // Helper to format date in long format Saturday, May 30, 2026
+    const formatReviewDate = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+            const d = dateStr.includes('T') ? new Date(dateStr) : new Date(dateStr + 'T00:00:00');
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
     // Identify Changes for Diff List
     const changes = useMemo(() => {
         const changesList = [];
@@ -127,7 +139,7 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                             Review Schedule Changes
                         </h2>
                         <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-0.5 flex items-center gap-2">
-                            Reviewing request from <span className="font-semibold text-slate-700 dark:text-slate-300">{data.employeeName}</span> for <span className="flex items-center gap-1 bg-slate-200 dark:bg-github-dark-subtle px-2 py-0.5 rounded text-xs"><Calendar size={12} /> {data.date}</span>
+                            Reviewing request from <span className="font-semibold text-slate-700 dark:text-slate-300">{data.employeeName}</span> for <span className="flex items-center gap-1 bg-slate-200 dark:bg-github-dark-subtle px-2 py-0.5 rounded text-xs"><Calendar size={12} /> {formatReviewDate(data.date)}</span>
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
@@ -143,7 +155,7 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                             Review Changes
                         </h2>
                         <p className="text-sm text-slate-500 dark:text-github-dark-muted mt-1 flex items-center gap-2">
-                            {data.employeeName} • <span className="flex items-center gap-1 bg-slate-100 dark:bg-github-dark-subtle px-2 py-0.5 rounded text-xs font-mono"><Calendar size={12} /> {data.date}</span>
+                            {data.employeeName} • <span className="flex items-center gap-1 bg-slate-100 dark:bg-github-dark-subtle px-2 py-0.5 rounded text-xs font-mono"><Calendar size={12} /> {formatReviewDate(data.date)}</span>
                         </p>
                     </div>
                 </div>
