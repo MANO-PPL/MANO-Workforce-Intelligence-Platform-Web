@@ -20,6 +20,7 @@ import {
     Search,
     Filter,
     Clock,
+    FileClock,
     UserCheck,
     UserX,
     AlertTriangle,
@@ -294,7 +295,9 @@ const AttendanceMonitoring = () => {
     // Correction Requests State
     const [correctionRequests, setCorrectionRequests] = useState([]);
     const [requestCount, setRequestCount] = useState(0);
+    const [selectedRequestId, setSelectedRequestId] = useState(null);
     const [selectedRequestData, setSelectedRequestData] = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
     const [reviewComment, setReviewComment] = useState('');
     const [requestsLoading, setRequestsLoading] = useState(false);
     const [correctionSearchTerm, setCorrectionSearchTerm] = useState('');
@@ -529,7 +532,7 @@ const AttendanceMonitoring = () => {
     const fetchCorrectionRequests = async () => {
         setRequestsLoading(true);
         try {
-            const params = { limit: 100 }; // Increased limit to show more recent requests
+            const params = { limit: 10000 };
             // Removed date filters as per user request
 
             const res = await attendanceService.getCorrectionRequests(params);
@@ -547,10 +550,12 @@ const AttendanceMonitoring = () => {
             // Auto-select first request if none selected or if previously selected one is gone
             if (res.data && res.data.length > 0) {
                 if (!selectedRequestData || !res.data.find(r => r.acr_id === selectedRequestData.acr_id)) {
+                    setSelectedRequestId(res.data[0].acr_id);
                     fetchRequestDetail(res.data[0].acr_id);
                 }
             } else {
                 setSelectedRequestData(null);
+                setSelectedRequestId(null);
             }
         } catch (error) {
             toast.error(error.message);
@@ -560,6 +565,7 @@ const AttendanceMonitoring = () => {
     };
 
     const fetchRequestDetail = async (acr_id) => {
+        setDetailLoading(true);
         try {
             const data = await attendanceService.getCorrectionDetails(acr_id);
             setSelectedRequestData(data);
@@ -575,6 +581,8 @@ const AttendanceMonitoring = () => {
             setOverrideOut('');
         } catch (error) {
             toast.error("Failed to fetch request details");
+        } finally {
+            setDetailLoading(false);
         }
     };
 
@@ -624,6 +632,18 @@ const AttendanceMonitoring = () => {
             return 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:bg-blue-900/20';
         }
         return 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-slate-600 bg-slate-50 dark:text-github-dark-muted dark:bg-github-dark-subtle';
+    };
+
+    const formatCorrectionDate = (dateStr) => {
+        if (!dateStr) return 'Unknown Date';
+        try {
+            const cleanStr = (dateStr.length === 10 && !dateStr.includes('T')) ? dateStr + 'T00:00:00' : dateStr;
+            const d = new Date(cleanStr);
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        } catch (e) {
+            return dateStr;
+        }
     };
 
     // Correction Date Navigation
@@ -858,8 +878,8 @@ const AttendanceMonitoring = () => {
                 `}
             </style>
 
-            <DashboardLayout title="Live Attendance" noPadding={activeTab === 'requests'}>
-            <div className={activeTab === 'requests' ? "h-[calc(125vh-5rem)] overflow-hidden flex flex-col p-6 space-y-4" : "space-y-6"} style={{ zoom: 0.8 }}>
+            <DashboardLayout title="Live Attendance" noPadding={true}>
+            <div className="p-3 space-y-3" style={{ zoom: 0.8 }}>
 
                 {/* Tabs */}
                 <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
@@ -876,7 +896,7 @@ const AttendanceMonitoring = () => {
                     >
                         <FileText size={16} className={`${activeTab === 'requests' ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
                         <span className="leading-none">Correction Requests</span>
-                        {requestCount > 0 && activeTab !== 'requests' && (
+                        {requestCount > 0 && (
                             <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full animate-pulse border-2 border-slate-100 dark:border-github-dark-subtle">
                                 {requestCount}
                             </span>
@@ -1774,9 +1794,9 @@ const AttendanceMonitoring = () => {
                     </>
                 ) : (
                     // Approvals Tab Content
-                    <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
+                    <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-                        <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col">
+                        <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col lg:sticky lg:top-6" style={{ height: 'calc(125vh - 10rem)' }}>
                             {/* Header and Search */}
                             <div className="p-4 border-b border-slate-200 dark:border-github-dark-border space-y-4">
                                 <div className="flex justify-between items-center px-1">
@@ -1800,7 +1820,7 @@ const AttendanceMonitoring = () => {
                                 {/* Date Navigation */}
                                 { /* Date Navigation Removed */}
                             </div>
-                            <div className="overflow-y-auto no-scrollbar flex-1 divide-y divide-slate-100 dark:divide-slate-700">
+                            <div className="overflow-y-auto no-scrollbar flex-1 p-3 space-y-3">
                                 {requestsLoading ? (
                                     <div className="p-10 text-center text-slate-400">Loading...</div>
                                 ) : filteredRequests.length === 0 ? (
@@ -1809,34 +1829,44 @@ const AttendanceMonitoring = () => {
                                     filteredRequests.map((request) => (
                                         <div
                                             key={request.acr_id}
-                                            onClick={() => fetchRequestDetail(request.acr_id)}
-                                            className={`p-4 cursor-pointer transition-colors ${selectedRequestData?.acr_id === request.acr_id ? 'bg-indigo-50 dark:bg-indigo-900/10 border-l-4 border-indigo-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'}`}
+                                            onClick={() => {
+                                                setSelectedRequestId(request.acr_id);
+                                                fetchRequestDetail(request.acr_id);
+                                            }}
+                                            className={`p-4 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                                                selectedRequestId === request.acr_id
+                                                    ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-400/40 dark:border-indigo-500/40 shadow-indigo-500/5'
+                                                    : 'bg-slate-50/40 dark:bg-github-dark-subtle/20 border-slate-200/60 dark:border-github-dark-border/80 hover:bg-slate-50/80 dark:hover:bg-github-dark-subtle/40 hover:border-slate-300 dark:hover:border-github-dark-border'
+                                            }`}
                                         >
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300">
-                                                        {(request.user_name || 'U').charAt(0).toUpperCase()}
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                        {request.profile_image_url && request.profile_image_url.startsWith('http') ? (
+                                                            <img src={`${request.profile_image_url}?t=${avatarTimestamp}`} alt={request.user_name} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            (request.user_name || 'U').charAt(0).toUpperCase()
+                                                        )}
                                                     </div>
                                                     <div>
-                                                        <p className={`text-sm font-semibold ${selectedRequestData?.acr_id === request.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{request.user_name}</p>
-                                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted">ID: {request.user_id}</p>
+                                                        <p className={`text-xs font-bold leading-none ${selectedRequestId === request.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{request.user_name}</p>
+                                                        <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-medium mt-1 inline-block">ID: {request.user_id}</span>
                                                     </div>
                                                 </div>
-                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${getRequestTypeStyle(request.correction_type)}`}>
-                                                    {(request.correction_type || '').replace('_', ' ')}
-                                                </span>
+                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                                    request.status === 'approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                                                    : request.status === 'rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                                }`}>{request.status}</span>
                                             </div>
-                                            <div className="flex justify-between items-center text-xs text-slate-500 dark:text-github-dark-muted mt-3">
-                                                <div className="flex items-center gap-1">
-                                                    <Calendar size={12} />
-                                                    {new Date(request.request_date).toLocaleDateString()}
-                                                </div>
-                                                <div className={`flex items-center gap-1 font-medium ${request.status === 'pending'
-                                                    ? 'text-amber-600'
-                                                    : request.status === 'approved' ? 'text-emerald-600' : 'text-red-600'
-                                                    }`}>
-                                                    {(request.status || 'unknown').charAt(0).toUpperCase() + (request.status || 'unknown').slice(1)}
-                                                </div>
+
+                                            <p className={`text-sm font-semibold mb-1 ${selectedRequestId === request.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>
+                                                {formatCorrectionDate(request.request_date)}
+                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-github-dark-muted italic line-clamp-1">"{request.reason || 'No reason provided.'}"</p>
+                                            <div className="flex justify-between items-center text-[10px] text-slate-400 mt-2.5 font-mono border-t border-slate-100/50 dark:border-github-dark-border/30 pt-2">
+                                                <span>Sub. {request.submitted_at ? formatCorrectionDate(request.submitted_at) : '—'}</span>
+                                                <span className={`font-bold text-[9px] ${getRequestTypeStyle(request.correction_type)} bg-transparent dark:bg-transparent p-0`}>{(request.correction_type || '').replace('_', ' ')}</span>
                                             </div>
                                         </div>
                                     ))
@@ -1845,29 +1875,43 @@ const AttendanceMonitoring = () => {
                         </div>
 
                         {/* Detail Panel */}
-                        <div className="w-full lg:w-2/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
-                            {selectedRequestData ? (
+                        <div className="w-full lg:w-2/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col min-h-[calc(125vh-10rem)] h-fit">
+                            {detailLoading ? (
+                                <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400 dark:text-github-dark-muted">
+                                    <RefreshCw className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
+                                    <p className="text-xs font-bold uppercase tracking-wider">Fetching details...</p>
+                                </div>
+                            ) : selectedRequestData ? (
                                 <>
-                                    <div className="p-6 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-start">
-                                        <div>
-                                            <h2 className="text-xl font-bold text-slate-900 dark:text-github-dark-text mb-1">Request #{selectedRequestData.acr_id}</h2>
-                                            <p className="text-sm text-slate-500 dark:text-github-dark-muted flex items-center gap-2">
-                                                By {selectedRequestData.user_name} ({selectedRequestData.designation})
-                                            </p>
+                                    <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-start">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                {selectedRequestData.profile_image_url && selectedRequestData.profile_image_url.startsWith('http') ? (
+                                                    <img src={`${selectedRequestData.profile_image_url}?t=${avatarTimestamp}`} alt={selectedRequestData.user_name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    (selectedRequestData.user_name || 'U').charAt(0).toUpperCase()
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg font-bold text-slate-900 dark:text-github-dark-text mb-0.5">Request #{selectedRequestData.acr_id}</h2>
+                                                <p className="text-xs text-slate-500 dark:text-github-dark-muted">
+                                                    By <span className="font-bold text-slate-700 dark:text-slate-350">{selectedRequestData.user_name}</span> ({selectedRequestData.designation || 'Employee'}) • {formatCorrectionDate(selectedRequestData.request_date)}
+                                                </p>
+                                            </div>
                                         </div>
                                         {selectedRequestData.status === 'pending' ? (
-                                            <div className="flex gap-3">
+                                            <div className="flex gap-2.5">
                                                 <button
                                                     onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'rejected')}
-                                                    className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                                    className="px-4 py-2 border border-rose-200 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
                                                 >
-                                                    <XCircle size={16} /> Reject
+                                                    <XCircle size={15} /> Reject
                                                 </button>
                                                 <button
                                                     onClick={() => handleUpdateStatus(selectedRequestData.acr_id, 'approved')}
-                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-md transition-colors flex items-center gap-2"
+                                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-emerald-600/10 hover:shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
                                                 >
-                                                    <CheckCircle size={16} /> Approve
+                                                    <CheckCircle size={15} /> Approve
                                                 </button>
                                             </div>
                                         ) : (
@@ -1879,7 +1923,6 @@ const AttendanceMonitoring = () => {
                                                 {selectedRequestData.status}
                                             </span>
                                         )}
-
                                     </div>
 
                                     {/* ADMIN OVERRIDE SECTION */}
@@ -1896,19 +1939,17 @@ const AttendanceMonitoring = () => {
                                                         if (isChecked && selectedRequestData) {
                                                             const getTime = (val) => {
                                                                 if (!val) return '';
-                                                                // Handle "YYYY-MM-DD HH:MM:SS" or "HH:MM:SS"
                                                                 const timePart = val.includes(' ') ? val.split(' ')[1] : (val.includes('T') ? val.split('T')[1] : val);
                                                                 return timePart.substring(0, 5);
                                                             };
                                                             setOverrideIn(getTime(selectedRequestData.requested_time_in));
                                                             setOverrideOut(getTime(selectedRequestData.requested_time_out));
-                                                            // Also match the method
                                                             setOverrideMethod(selectedRequestData.correction_method || 'fix');
                                                         }
                                                     }}
-                                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                                    className="w-4 h-4 text-indigo-650 rounded border-slate-350 dark:border-github-dark-border focus:ring-indigo-500"
                                                 />
-                                                <label htmlFor="overrideToggle" className="text-sm font-bold text-slate-700 dark:text-github-dark-text select-none cursor-pointer">
+                                                <label htmlFor="overrideToggle" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-github-dark-text select-none cursor-pointer">
                                                     Override Request Details
                                                 </label>
                                             </div>
@@ -1916,12 +1957,13 @@ const AttendanceMonitoring = () => {
                                             {overrideMode && (
                                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                                                     {/* Method Selector */}
-                                                    <div className="flex bg-slate-100 dark:bg-github-dark-subtle/50 p-1 rounded-lg w-fit mb-4 border border-slate-200 dark:border-github-dark-border">
+                                                    <div className="flex bg-slate-100 dark:bg-github-dark-subtle/50 p-1 rounded-xl w-fit mb-4 border border-slate-200 dark:border-github-dark-border">
                                                         {['add_session', 'reset'].map(m => (
                                                             <button
                                                                 key={m}
+                                                                type="button"
                                                                 onClick={() => setOverrideMethod(m)}
-                                                                className={`px-4 py-2 text-xs font-bold uppercase rounded-md transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
+                                                                className={`px-4 py-2 text-xs font-bold uppercase rounded-lg transition-all ${overrideMethod === m || (m === 'add_session' && overrideMethod === 'fix')
                                                                     ? 'bg-white dark:bg-[#1e202e] text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border'
                                                                     : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted dark:hover:text-slate-200 border border-transparent'
                                                                     }`}
@@ -1959,14 +2001,14 @@ const AttendanceMonitoring = () => {
                                                                             </div>
                                                                         </div>
                                                                         {overrideSessions.length > 1 && (
-                                                                            <button onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors" title="Remove session">
+                                                                            <button type="button" onClick={() => setOverrideSessions(overrideSessions.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors" title="Remove session">
                                                                                 <XCircle size={18} />
                                                                             </button>
                                                                         )}
                                                                     </div>
                                                                 ))}
                                                             </div>
-                                                            <button onClick={() => setOverrideSessions([...overrideSessions, { time_in: '', time_out: '' }])} className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1.5 px-1 pt-1 transition-colors">
+                                                            <button type="button" onClick={() => setOverrideSessions([...overrideSessions, { time_in: '', time_out: '' }])} className="text-sm font-semibold text-indigo-650 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1.5 px-1 pt-1 transition-colors">
                                                                 <span className="text-lg leading-none">+</span> Add Session
                                                             </button>
                                                         </div>
@@ -1987,285 +2029,215 @@ const AttendanceMonitoring = () => {
                                         </div>
                                     )}
 
-                                    <div className="flex-1 overflow-y-auto p-6">
+                                    <div className="flex-1">
 
-                                        {/* Visual Timeline & Changelog Area */}
-                                        <div className="space-y-8 mb-8">
+                                        {/* ── Visual Sync Timeline ── */}
+                                        {(() => {
+                                            const originalSnap = Array.isArray(selectedRequestData.original_data) ? selectedRequestData.original_data : [];
+                                            const proposedSnap = Array.isArray(selectedRequestData.proposed_data) ? selectedRequestData.proposed_data : [];
+                                            const fmtTime = (t) => t ? String(t).substring(0, 5) : '';
+                                            const originalTasks = originalSnap.map((s, i) => ({ id: `orig-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
+                                            const proposedTasks = proposedSnap.map((s, i) => ({ id: `prop-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
+                                            const allTasks = [...originalTasks, ...proposedTasks];
+                                            if (allTasks.length === 0) return null;
+                                            const getMinutes = (t) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+                                            let minMin = Math.min(...allTasks.map(t => getMinutes(t.startTime)));
+                                            let maxMin = Math.max(...allTasks.map(t => getMinutes(t.endTime)));
+                                            let startHour = Math.max(0, Math.floor((minMin - 60) / 60));
+                                            let endHour = Math.min(24, Math.ceil((maxMin + 60) / 60));
+                                            const span = Math.max(1, endHour - startHour);
+                                            const timeToPos = (time) => { if (!time) return 0; const [h, m] = time.split(':').map(Number); const mins = (h || 0) * 60 + (m || 0); return Math.max(0, Math.min(100, ((mins - startHour * 60) / (span * 60)) * 100)); };
+                                            const getDurationPct = (s, e) => Math.max(0, timeToPos(e) - timeToPos(s));
+                                            const changesList = [];
+                                            const origCopy = originalTasks.map(t => ({ ...t }));
+                                            proposedTasks.forEach(prop => {
+                                                const match = origCopy.find(o => o.startTime === prop.startTime && o.endTime === prop.endTime);
+                                                if (match) { match.matched = true; } else {
+                                                    const over = origCopy.find(o => !o.matched && (Math.abs(getMinutes(o.startTime) - getMinutes(prop.startTime)) < 120 || Math.abs(getMinutes(o.endTime) - getMinutes(prop.endTime)) < 120));
+                                                    if (over) { over.matched = true; changesList.push({ type: 'MODIFY', task: prop, original: over }); }
+                                                    else { changesList.push({ type: 'ADD', task: prop }); }
+                                                }
+                                            });
+                                            origCopy.filter(o => !o.matched).forEach(o => changesList.push({ type: 'DELETE', task: o }));
+                                            const hourStep = span > 8 ? 2 : 1;
+                                            return (
+                                                <div className="bg-slate-50 dark:bg-[#13151f] border-b border-slate-200 dark:border-github-dark-border px-6 pt-4 pb-5">
+                                                    {/* Title row */}
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Visual Sync Timeline</span>
+                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-800">
+                                                            {(selectedRequestData.correction_type || 'correction').toUpperCase()}
+                                                        </span>
+                                                        {/* Legend */}
+                                                        <div className="ml-auto flex items-center gap-3 text-[9px] font-bold uppercase text-slate-400">
+                                                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-slate-400/30 border border-slate-400/40"></span>Original</span>
+                                                            <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-emerald-500/20 border border-emerald-500/40"></span>Proposed</span>
+                                                        </div>
+                                                    </div>
 
-                                            {/* VISUAL TIMELINE SECTION */}
-                                            {(() => {
-                                                // Use stored snapshots — these NEVER change after submission
-                                                const originalSnap = Array.isArray(selectedRequestData.original_data)
-                                                    ? selectedRequestData.original_data
-                                                    : [];
-                                                const proposedSnap = Array.isArray(selectedRequestData.proposed_data)
-                                                    ? selectedRequestData.proposed_data
-                                                    : [];
-
-                                                const fmtTime = (t) => t ? String(t).substring(0, 5) : '';
-
-                                                const originalTasks = originalSnap.map((s, i) => ({
-                                                    id: `orig-${i}`,
-                                                    startTime: fmtTime(s.time_in),
-                                                    endTime: fmtTime(s.time_out)
-                                                })).filter(t => t.startTime && t.endTime);
-
-                                                const proposedTasks = proposedSnap.map((s, i) => ({
-                                                    id: `prop-${i}`,
-                                                    startTime: fmtTime(s.time_in),
-                                                    endTime: fmtTime(s.time_out)
-                                                })).filter(t => t.startTime && t.endTime);
-
-                                                const allTasks = [...originalTasks, ...proposedTasks];
-
-                                                if (allTasks.length === 0) return null;
-
-                                                const getMinutes = (t) => {
-                                                    const [h, m] = t.split(':').map(Number);
-                                                    return (h || 0) * 60 + (m || 0);
-                                                };
-
-                                                let minMin = Math.min(...allTasks.map(t => getMinutes(t.startTime)));
-                                                let maxMin = Math.max(...allTasks.map(t => getMinutes(t.endTime)));
-
-                                                let startHour = Math.max(0, Math.floor((minMin - 60) / 60));
-                                                let endHour = Math.min(24, Math.ceil((maxMin + 60) / 60));
-                                                const span = Math.max(1, endHour - startHour);
-
-                                                const timeToPos = (time) => {
-                                                    if (!time) return 0;
-                                                    const [h, m] = time.split(':').map(Number);
-                                                    const totalMinutes = (h || 0) * 60 + (m || 0);
-                                                    return Math.max(0, Math.min(100, ((totalMinutes - (startHour * 60)) / (span * 60)) * 100));
-                                                };
-
-                                                const getDurationPct = (start, end) => {
-                                                    if (!start || !end) return 0;
-                                                    return Math.max(0, timeToPos(end) - timeToPos(start));
-                                                };
-
-                                                // Heuristic diff: compare originalTasks vs proposedTasks
-                                                const changesList = [];
-                                                proposedTasks.forEach(prop => {
-                                                    const match = originalTasks.find(orig => orig.startTime === prop.startTime && orig.endTime === prop.endTime);
-                                                    if (match) {
-                                                        match.matched = true;
-                                                    } else {
-                                                        const overlapping = originalTasks.find(orig => !orig.matched &&
-                                                            (Math.abs(getMinutes(orig.startTime) - getMinutes(prop.startTime)) < 120 ||
-                                                                Math.abs(getMinutes(orig.endTime) - getMinutes(prop.endTime)) < 120)
-                                                        );
-                                                        if (overlapping) {
-                                                            overlapping.matched = true;
-                                                            changesList.push({
-                                                                type: 'MODIFY',
-                                                                task: prop,
-                                                                original: overlapping,
-                                                                reason: `Time adjusted: ${fmtTime(overlapping.startTime)}-${fmtTime(overlapping.endTime)} → ${fmtTime(prop.startTime)}-${fmtTime(prop.endTime)}`
-                                                            });
-                                                        } else {
-                                                            changesList.push({ type: 'ADD', task: prop, reason: 'New session added' });
-                                                        }
-                                                    }
-                                                });
-                                                originalTasks.filter(o => !o.matched).forEach(orig => {
-                                                    changesList.push({ type: 'DELETE', task: orig, reason: 'Session removed' });
-                                                });
-
-                                                return (
-                                                    <>
-                                                        <div className="relative p-8 pt-12 pb-8 bg-slate-50 dark:bg-[#13151f] rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden">
-                                                            <div className="absolute top-4 left-6 z-10 flex items-center gap-3">
-                                                                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-[#13151f] m-0 leading-none">Visual Sync Timeline</h3>
-                                                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-200 dark:ring-indigo-800 leading-none">
-                                                                    METHOD: {(selectedRequestData.correction_type || selectedRequestData.correction_method || 'fix').toUpperCase().replace(/_/g, ' ')}
+                                                    {/* Scale */}
+                                                    <div className="relative mb-1 h-5">
+                                                        {Array.from({ length: span + 1 }, (_, i) => startHour + i)
+                                                            .filter((_, i) => i % hourStep === 0)
+                                                            .map((h) => (
+                                                                <span key={h} className="absolute text-[9px] text-slate-400 font-mono -translate-x-1/2" style={{ left: `${((h - startHour) / span) * 100}%` }}>
+                                                                    {h}:00
                                                                 </span>
-                                                            </div>
+                                                            ))}
+                                                    </div>
 
-                                                            {/* Timeline Container */}
-                                                            <div className="relative mt-2">
-                                                                {/* Timeline Scale */}
-                                                                <div className="absolute top-0 bottom-0 left-0 right-0 pointer-events-none">
-                                                                    {Array.from({ length: span + 1 }, (_, i) => startHour + i).map((h, i) => (
-                                                                        <div key={h} className="absolute top-0 bottom-0 border-r border-slate-300 dark:border-github-dark-border/50 dashed" style={{ left: `${(i / span) * 100}%` }}>
-                                                                            <span className="absolute -top-6 -right-3 text-[10px] text-slate-400 font-mono">{h}:00</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-
-                                                                <div className="relative space-y-12 pt-8 z-10">
-                                                                    {/* Original Timeline */}
-                                                                    <div className="relative h-12 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50">
-                                                                        {originalTasks.map((task, i) => (
-                                                                            <div
-                                                                                key={task.id}
-                                                                                className="absolute top-2 bottom-2 rounded-md bg-slate-400/20 border border-slate-400/30 flex items-center justify-center text-[10px] text-slate-500 whitespace-nowrap overflow-hidden shadow-sm"
-                                                                                style={{
-                                                                                    left: `${timeToPos(task.startTime)}%`,
-                                                                                    width: `${getDurationPct(task.startTime, task.endTime)}%`
-                                                                                }}
-                                                                                title={`${task.startTime} - ${task.endTime}`}
-                                                                            >
-                                                                                <span className="font-mono bg-white/50 dark:bg-black/20 px-1 rounded">{fmtTime(task.startTime)} - {fmtTime(task.endTime)}</span>
-                                                                            </div>
-                                                                        ))}
-                                                                        {originalTasks.length === 0 && (
-                                                                            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                                                No Original Records Found
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* SVG Connections Layer (Simplified Heuristic) */}
-                                                                    <div className="absolute inset-x-0 top-12 h-12 pointer-events-none z-0">
-                                                                        <svg className="w-full h-full overflow-visible">
-                                                                            <defs>
-                                                                                <linearGradient id="gradDiff" x1="0%" y1="0%" x2="100%" y2="0%">
-                                                                                    <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.2" />
-                                                                                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.4" />
-                                                                                </linearGradient>
-                                                                            </defs>
-                                                                            {changesList.filter(c => c.type === 'MODIFY').map((change, i) => {
-                                                                                const x1 = timeToPos(change.original.startTime) + (getDurationPct(change.original.startTime, change.original.endTime) / 2);
-                                                                                const x2 = timeToPos(change.task.startTime) + (getDurationPct(change.task.startTime, change.task.endTime) / 2);
-                                                                                return (
-                                                                                    <path
-                                                                                        key={`conn-${i}`}
-                                                                                        d={`M ${x1}% 0 C ${x1}% 50, ${x2}% 50, ${x2}% 100`}
-                                                                                        fill="none"
-                                                                                        stroke="url(#gradDiff)"
-                                                                                        strokeWidth="2"
-                                                                                        strokeDasharray="4 2"
-                                                                                        className="opacity-50"
-                                                                                    />
-                                                                                );
-                                                                            })}
-                                                                        </svg>
-                                                                    </div>
-
-                                                                    {/* Proposed Timeline */}
-                                                                    <div className="relative h-12 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50">
-                                                                        {proposedTasks.map((task, i) => {
-                                                                            const isNew = changesList.some(c => c.type === 'ADD' && c.task.id === task.id);
-                                                                            const isChanged = changesList.some(c => c.type === 'MODIFY' && c.task.id === task.id);
-
-                                                                            let colorClasses = isNew
-                                                                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                                                                                : isChanged
-                                                                                    ? "bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400"
-                                                                                    : "bg-slate-300 dark:bg-slate-700 border border-slate-400/30 text-slate-600 dark:text-slate-300";
-
-                                                                            return (
-                                                                                <div
-                                                                                    key={task.id}
-                                                                                    className={`absolute top-2 bottom-2 rounded-md flex items-center justify-center text-[10px] font-medium whitespace-nowrap overflow-hidden shadow-sm ${colorClasses}`}
-                                                                                    style={{
-                                                                                        left: `${timeToPos(task.startTime)}%`,
-                                                                                        width: `${getDurationPct(task.startTime, task.endTime)}%`
-                                                                                    }}
-                                                                                >
-                                                                                    {isNew && <div className="absolute top-0 right-0 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />}
-                                                                                    <span className="font-mono bg-white/50 dark:bg-black/20 px-1 rounded">{fmtTime(task.startTime)} - {fmtTime(task.endTime)}</span>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                    {/* Tick lines + rows */}
+                                                    <div className="relative">
+                                                        {/* Vertical grid lines */}
+                                                        <div className="absolute inset-0 pointer-events-none flex">
+                                                            {Array.from({ length: span + 1 }, (_, i) => i).map(i => (
+                                                                <div key={i} className="absolute top-0 bottom-0 border-l border-dashed border-slate-300/40 dark:border-github-dark-border/40" style={{ left: `${(i / span) * 100}%` }} />
+                                                            ))}
                                                         </div>
 
-                                                        {/* CHANGES LIST SECTION & REASON */}
-                                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                                            {/* Split view for Original Records and Diff Changelog */}
-                                                            <div className="space-y-8 h-full bg-slate-50 dark:bg-[#1a1c26] p-5 rounded-xl border border-slate-200 dark:border-github-dark-border">
-                                                                <div className="space-y-4">
-                                                                    <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
-                                                                        Proposed Changes <span className="bg-slate-200 dark:bg-github-dark-subtle text-xs px-2 py-0.5 rounded-full">{changesList.length} Modifications</span>
-                                                                    </h3>
-                                                                    <div className="space-y-3">
-                                                                        {changesList.map((change, idx) => (
-                                                                            <div key={idx} className="bg-white dark:bg-[#13151f] p-4 rounded-xl border border-slate-100 dark:border-github-dark-border shadow-sm flex items-start gap-3">
-                                                                                {change.type === 'ADD' && <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600"><CheckCircle size={16} /></div>}
-                                                                                {change.type === 'DELETE' && <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg text-red-600"><XCircle size={16} /></div>}
-                                                                                {change.type === 'MODIFY' && <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600"><Clock size={16} /></div>}
-
-                                                                                <div>
-                                                                                    <h4 className="text-sm font-semibold text-slate-800 dark:text-github-dark-text">
-                                                                                        {change.type === 'DELETE' ? `Session: ${fmtTime(change.task.startTime)}-${fmtTime(change.task.endTime)}` : `Session: ${fmtTime(change.task.startTime)}-${fmtTime(change.task.endTime)}`}
-                                                                                    </h4>
-                                                                                    <p className="text-xs text-slate-500 mt-1">{change.reason}</p>
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                        {changesList.length === 0 && (
-                                                                            <div className="text-center py-8 text-slate-400 text-sm italic">No significant time changes detected.</div>
-                                                                        )}
+                                                        {/* Original row */}
+                                                        <div className="mb-1">
+                                                            <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Original</div>
+                                                            <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
+                                                                {originalTasks.map(task => (
+                                                                    <div key={task.id}
+                                                                        className="absolute inset-y-1 rounded-md bg-slate-400/25 border border-slate-400/40 flex items-center justify-center overflow-hidden"
+                                                                        style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
+                                                                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
                                                                     </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="space-y-6">
-                                                                <div className="bg-slate-50 dark:bg-[#1e202e] p-5 rounded-xl border border-slate-200 dark:border-github-dark-border">
-                                                                    <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                                                        <MessageSquare size={16} /> Request Reason
-                                                                    </h3>
-                                                                    <p className="text-sm text-slate-600 dark:text-github-dark-muted italic">
-                                                                        "{selectedRequestData.reason || "No reason provided."}"
-                                                                    </p>
-                                                                </div>
-
-                                                                {selectedRequestData.status === 'pending' ? (
-                                                                    <div>
-                                                                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Auditor Comments</h4>
-                                                                        <div className="bg-white dark:bg-[#13151f] p-1 rounded-xl border border-slate-200 dark:border-github-dark-border focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                                                                            <textarea
-                                                                                value={reviewComment}
-                                                                                onChange={(e) => setReviewComment(e.target.value)}
-                                                                                placeholder="Add a review comment or explanation..."
-                                                                                className="w-full p-3 text-sm bg-transparent border-none focus:ring-0 outline-none min-h-[100px] text-slate-800 dark:text-github-dark-text resize-none"
-                                                                            ></textarea>
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    reviewComment && (
-                                                                        <div className="bg-slate-50 dark:bg-[#1e202e] p-5 rounded-xl border border-slate-200 dark:border-github-dark-border">
-                                                                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Auditor Comments</h4>
-                                                                            <p className="text-sm text-slate-600 dark:text-github-dark-muted italic">
-                                                                                "{reviewComment}"
-                                                                            </p>
-                                                                        </div>
-                                                                    )
+                                                                ))}
+                                                                {originalTasks.length === 0 && (
+                                                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">No Original Records</div>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    </>
-                                                );
-                                            })()
-                                            }
-                                        </div>
 
-                                        {/* Audit Trail */}
-                                        {/* <div>
-                                            <h4 className="text-xs uppercase tracking-wider text-slate-500 dark:text-github-dark-muted font-semibold mb-4 flex items-center gap-2">
-                                                <Activity size={14} /> Audit Trail
-                                            </h4>
-                                            <div className="relative pl-4 border-l-2 border-slate-200 dark:border-github-dark-border space-y-6">
-                                                {selectedRequestData.audit_trail && selectedRequestData.audit_trail.map((event, idx) => (
-                                                    <div key={idx} className="relative">
-                                                        <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-dark-card ring-1 ring-slate-100 dark:ring-slate-800"></div>
-                                                        <p className="text-sm font-medium text-slate-800 dark:text-github-dark-text">
-                                                            {String(event.action).charAt(0).toUpperCase() + String(event.action).slice(1)}
-                                                        </p>
-                                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted">
-                                                            {new Date(event.at).toLocaleString()} • by {event.by === selectedRequestData.user_id ? selectedRequestData.user_name : 'Admin'}
-                                                        </p>
-                                                        {event.comments && (
-                                                            <p className="text-xs text-slate-600 dark:text-github-dark-muted mt-1 italic">"{event.comments}"</p>
-                                                        )}
+                                                        {/* Proposed row */}
+                                                        <div>
+                                                            <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Proposed</div>
+                                                            <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
+                                                                {proposedTasks.map(task => {
+                                                                    const isNew = changesList.some(c => c.type === 'ADD' && c.task.id === task.id);
+                                                                    const isChanged = changesList.some(c => c.type === 'MODIFY' && c.task.id === task.id);
+                                                                    const cls = isNew
+                                                                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                                                                        : isChanged
+                                                                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400'
+                                                                        : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400';
+                                                                    return (
+                                                                        <div key={task.id}
+                                                                            className={`absolute inset-y-1 rounded-md border flex items-center justify-center overflow-hidden ${cls}`}
+                                                                            style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
+                                                                            {isNew && <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />}
+                                                                            <span className="text-[10px] font-mono font-bold px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                ))}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* ── Info Cards & Layout ── */}
+                                        <div className="p-5 space-y-4">
+                                            {/* Meta row */}
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Type</p>
+                                                    <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">{selectedRequestData.correction_type || '—'}</p>
+                                                </div>
+                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Method</p>
+                                                    <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">
+                                                        {selectedRequestData.correction_method === 'add_session' ? 'Manual' : selectedRequestData.correction_method || 'Fix'}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Submitted</p>
+                                                    <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text">
+                                                        {selectedRequestData.submitted_at ? new Date(selectedRequestData.submitted_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        </div> */}
+
+                                            {/* Proposed Sessions table */}
+                                            {Array.isArray(selectedRequestData.proposed_data) && selectedRequestData.proposed_data.length > 0 && (
+                                                <div className="bg-slate-50 dark:bg-[#1a1c26] rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden">
+                                                    <div className="px-4 py-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between">
+                                                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-github-dark-text">Proposed Sessions</h3>
+                                                        <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+                                                            {selectedRequestData.proposed_data.length} session{selectedRequestData.proposed_data.length !== 1 ? 's' : ''}
+                                                        </span>
+                                                    </div>
+                                                    <div className="divide-y divide-slate-100 dark:divide-github-dark-border">
+                                                        {selectedRequestData.proposed_data.map((s, i) => (
+                                                            <div key={i} className="flex items-center px-4 py-3 gap-4">
+                                                                <span className="text-[10px] font-black text-slate-400 w-5 shrink-0">#{i + 1}</span>
+                                                                <div className="flex items-center gap-2 flex-1">
+                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">In</span>
+                                                                    <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_in || '').substring(0, 5)}</span>
+                                                                </div>
+                                                                <span className="text-slate-300 dark:text-slate-600">→</span>
+                                                                <div className="flex items-center gap-2 flex-1 justify-end">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Out</span>
+                                                                    <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_out || '').substring(0, 5)}</span>
+                                                                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Request Reason */}
+                                            <div className="bg-slate-50 dark:bg-[#1e202e] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
+                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                                                    <FileClock size={12} /> Request Reason
+                                                </h3>
+                                                <p className="text-sm text-slate-700 dark:text-slate-200 italic leading-relaxed">
+                                                    "{selectedRequestData.reason || 'No reason provided.'}"
+                                                </p>
+                                            </div>
+
+                                            {/* Decision Comments / Auditor card */}
+                                            {selectedRequestData.status !== 'pending' ? (
+                                                <div className={`rounded-xl border p-4 ${
+                                                    selectedRequestData.status === 'approved'
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30'
+                                                        : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/30'
+                                                }`}>
+                                                    <h3 className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${
+                                                        selectedRequestData.status === 'approved'
+                                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                                            : 'text-red-600 dark:text-red-400'
+                                                    }`}>
+                                                        <CheckCircle size={12} /> Auditor Comments
+                                                    </h3>
+                                                    <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
+                                                        {selectedRequestData.review_comments || 'No auditor comments provided.'}
+                                                    </p>
+                                                    <p className="mt-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                                        Reviewed {selectedRequestData.reviewed_at ? formatCorrectionDate(selectedRequestData.reviewed_at) : '—'}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-slate-50 dark:bg-[#1e202e] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
+                                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                                                        <MessageSquare size={12} /> Auditor Comments
+                                                    </h3>
+                                                    <textarea
+                                                        value={reviewComment}
+                                                        onChange={(e) => setReviewComment(e.target.value)}
+                                                        placeholder="Add auditor review comments, reasoning or remarks here before approving/rejecting..."
+                                                        className="w-full mt-1 p-3 text-sm bg-white dark:bg-[#13151f] border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-github-dark-text resize-none h-24"
+                                                    ></textarea>
+                                                </div>
+                                            )}
+
+                                        </div>
 
                                     </div>
                                 </>

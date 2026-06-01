@@ -33,6 +33,20 @@ L.Icon.Default.mergeOptions({
 
 const MobileAttendanceMonitoring = () => {
     const { avatarTimestamp, user: currentUser } = useAuth();
+
+    const getRequestTypeStyle = (type) => {
+        const typeStr = String(type).toLowerCase().replace(/_/g, ' ');
+        if (typeStr.includes('overtime')) {
+            return 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-purple-600 bg-purple-50 dark:bg-purple-900/20';
+        }
+        if (typeStr.includes('missed') || typeStr.includes('manual')) {
+            return 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-amber-600 bg-amber-50 dark:bg-amber-900/20';
+        }
+        if (typeStr.includes('correction') || typeStr.includes('time') || typeStr.includes('adjustment')) {
+            return 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-blue-600 bg-blue-50 dark:bg-blue-900/20';
+        }
+        return 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full text-slate-600 bg-slate-50 dark:text-github-dark-muted dark:bg-github-dark-subtle';
+    };
     const MAIN_TABS = ['dashboard', 'requests'];
     const SUB_TABS = [
         { id: 'overview', label: 'Overview', icon: LayoutGrid },
@@ -390,7 +404,7 @@ const MobileAttendanceMonitoring = () => {
                                  >
                                      <Icon size={14} className={`${isActive ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
                                      <span className="truncate leading-none">{label}</span>
-                                    {tab === 'requests' && requestCount > 0 && !isActive && (
+                                    {tab === 'requests' && requestCount > 0 && (
                                         <span className="ml-1 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
                                             {requestCount}
                                         </span>
@@ -526,13 +540,13 @@ const MobileAttendanceMonitoring = () => {
                             dragConstraints={{ left: 0, right: 0 }}
                             dragElastic={0.2}
                             onDragEnd={handleDragEnd}
-                            className="px-4 py-6 space-y-6"
+                            className="p-3 space-y-3"
                         >
                              {/* --- DASHBOARD VIEW --- */}
                              {activeTab === 'dashboard' && (
-                                 <div className="space-y-6">
+                                 <div className="space-y-3">
                                      {activeSubTab === 'overview' && (
-                                         <div className="space-y-6">
+                                         <div className="space-y-3">
                                              {/* Toolbar */}
                                              <div className="flex gap-2">
                                                  <div className="relative flex-1 group">
@@ -599,7 +613,7 @@ const MobileAttendanceMonitoring = () => {
                                      )}
 
                                      {activeSubTab === 'analytics' && (
-                                         <div className="space-y-6">
+                                         <div className="space-y-3">
                                               {/* Attendance Pie */}
                                               <div className="bg-white dark:bg-dark-card p-6 rounded-lg shadow-sm border border-slate-100 dark:border-github-dark-border">
                                                   <h4 className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -753,7 +767,7 @@ const MobileAttendanceMonitoring = () => {
 
                             {/* --- REQUESTS VIEW --- */}
                             {activeTab === 'requests' && (
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     <div className="flex bg-slate-100 dark:bg-black/20 p-1 rounded-xl">
                                         {['PENDING', 'HISTORY'].map(f => (
                                             <button 
@@ -781,22 +795,39 @@ const MobileAttendanceMonitoring = () => {
                                                 <button 
                                                     key={req.acr_id} 
                                                     onClick={() => setSelectedRequest(req)}
-                                                    className="w-full bg-white dark:bg-dark-card p-4 rounded-lg border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center justify-between text-left active:scale-95 transition-all"
+                                                    className={`w-full p-4 rounded-xl border transition-all text-left active:scale-[0.98] flex flex-col ${
+                                                        selectedRequest?.acr_id === req.acr_id
+                                                            ? 'bg-indigo-50/30 dark:bg-indigo-950/20 border-indigo-500/30 dark:border-indigo-500/40 shadow-sm shadow-indigo-500/5'
+                                                            : 'bg-slate-50/40 dark:bg-github-dark-subtle/20 border-slate-200/60 dark:border-github-dark-border/80 hover:bg-slate-50/80 dark:hover:bg-github-dark-subtle/40 hover:border-slate-300 dark:hover:border-github-dark-border'
+                                                    }`}
                                                 >
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-black text-sm">
-                                                            {req.user_name.charAt(0)}
+                                                    <div className="w-full flex justify-between items-start mb-2.5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300 shrink-0">
+                                                                {(req.user_name || 'U').charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className={`text-sm font-semibold leading-none mb-1 ${selectedRequest?.acr_id === req.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}>{req.user_name}</h4>
+                                                                <p className="text-[10px] font-medium text-slate-500 dark:text-github-dark-muted">ID: {req.user_id}</p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <h4 className="text-sm font-black text-slate-800 dark:text-white leading-none mb-1">{req.user_name}</h4>
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{req.correction_type} • {new Date(req.request_date).toLocaleDateString()}</p>
-                                                        </div>
+                                                        <span className={getRequestTypeStyle(req.correction_type)}>
+                                                            {(req.correction_type || '').replace('_', ' ')}
+                                                        </span>
                                                     </div>
-                                                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
-                                                        (req.status || '').toLowerCase() === 'pending' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
-                                                    }`}>
-                                                        {req.status}
-                                                    </span>
+                                                    <div className="w-full flex justify-between items-center text-xs text-slate-500 dark:text-github-dark-muted mt-2 border-t border-slate-100 dark:border-github-dark-border/40 pt-2.5">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Calendar size={12} className="text-slate-400" />
+                                                            <span>{new Date(req.request_date).toLocaleDateString()}</span>
+                                                        </div>
+                                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                                            (req.status || '').toLowerCase() === 'pending'
+                                                                ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
+                                                                : (req.status || '').toLowerCase() === 'approved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400'
+                                                        }`}>
+                                                            {req.status}
+                                                        </span>
+                                                    </div>
                                                 </button>
                                             ))
                                         ) : (
@@ -1259,7 +1290,7 @@ const ClusterDrillDownPopup = ({ data, onClose }) => {
                                     className="flex items-center gap-2.5 p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl cursor-pointer transition-all border border-transparent hover:border-indigo-100 dark:hover:border-indigo-500/20 group"
                                 >
                                     <div className="w-8 h-8 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-xs overflow-hidden shrink-0 border border-indigo-100 dark:border-indigo-500/20">
-                                        {m.user.avatar.length > 1 ? <img src={m.user.avatar} className="w-full h-full object-cover" /> : m.user.avatar}
+                                        {m.user.avatar.length > 1 ? <img src={`${m.user.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" /> : m.user.avatar}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <p className="text-[10px] font-black text-slate-800 dark:text-github-dark-text truncate leading-tight">{m.user.name}</p>
@@ -1287,7 +1318,7 @@ const ClusterDrillDownPopup = ({ data, onClose }) => {
                         >
                             <div className="flex items-center gap-2.5 mb-4">
                                 <div className="w-9 h-9 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-black text-xs overflow-hidden shrink-0 shadow-md">
-                                    {selectedUser.user.avatar.length > 1 ? <img src={selectedUser.user.avatar} className="w-full h-full object-cover" /> : selectedUser.user.avatar}
+                                    {selectedUser.user.avatar.length > 1 ? <img src={`${selectedUser.user.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" /> : selectedUser.user.avatar}
                                 </div>
                                 <div className="min-w-0">
                                     <p className="font-black text-slate-800 dark:text-github-dark-text text-[11px] leading-tight">{selectedUser.user.name}</p>

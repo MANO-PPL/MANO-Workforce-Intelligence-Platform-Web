@@ -7,7 +7,7 @@ import {
     Send, Plus, Search, MessageSquare, Users, Hash, 
     Smile, CheckCheck, 
     ArrowLeft, UserPlus, X, Volume2, Info, Lock,
-    Paperclip, FileText, Download, File, Clock, Calendar, MapPin
+    Paperclip, FileText, Download, File, Clock, Calendar, MapPin, Pin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
@@ -53,10 +53,75 @@ const formatLastMessagePreview = (messageText) => {
                     return `Location Assigned: ${payload.location_name}`;
                 }
                 return `Location Assigned`;
+            } else if (cardType === 'group_update') {
+                return body;
             }
         }
     }
     return messageText;
+};
+
+const renderParsedMessageContent = (text, isSelf) => {
+    if (!text) return null;
+
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    const mentionRegex = /(@[a-zA-Z0-9._-]+)/g;
+
+    const urlParts = text.split(urlRegex);
+    return urlParts.map((urlPart, urlIdx) => {
+        if (urlPart.match(urlRegex)) {
+            const href = urlPart.startsWith('http') ? urlPart : `https://${urlPart}`;
+            return (
+                <a
+                    key={`url-${urlIdx}`}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`underline break-all font-bold ${
+                        isSelf 
+                        ? 'text-indigo-850 dark:text-[#58a6ff] hover:text-indigo-950 dark:hover:text-[#79c0ff]' 
+                        : 'text-indigo-600 dark:text-[#58a6ff] hover:text-indigo-700 dark:hover:text-[#79c0ff]'
+                    }`}
+                >
+                    {urlPart}
+                </a>
+            );
+        }
+
+        const mentionParts = urlPart.split(mentionRegex);
+        return mentionParts.map((part, mentIdx) => {
+            if (part.match(mentionRegex)) {
+                return (
+                    <span 
+                        key={`mention-${urlIdx}-${mentIdx}`} 
+                        className={`px-1.5 py-0.5 rounded font-bold ${
+                            isSelf 
+                            ? 'bg-[#0550ae] dark:bg-[#388bfd]/30 text-white dark:text-[#58a6ff]' 
+                            : 'bg-[#e0f2fe] dark:bg-[#388bfd]/15 text-[#0550ae] dark:text-[#58a6ff] border border-[#7dd3fc]/30 dark:border-[#388bfd]/30'
+                        }`}
+                    >
+                        {part}
+                    </span>
+                );
+            }
+            return part;
+        });
+    });
+};
+
+const getUserColor = (userId) => {
+    const colors = [
+        { text: 'text-rose-600 dark:text-rose-450 font-black', bg: 'bg-rose-50/50 dark:bg-rose-950/15 border-rose-200/60 dark:border-rose-900/30' },
+        { text: 'text-emerald-600 dark:text-emerald-450 font-black', bg: 'bg-emerald-50/50 dark:bg-emerald-950/15 border-emerald-200/60 dark:border-emerald-900/30' },
+        { text: 'text-sky-600 dark:text-sky-450 font-black', bg: 'bg-sky-50/50 dark:bg-sky-950/15 border-sky-200/60 dark:border-sky-900/30' },
+        { text: 'text-amber-700 dark:text-amber-450 font-black', bg: 'bg-amber-50/50 dark:bg-amber-950/15 border-amber-200/60 dark:border-amber-900/30' },
+        { text: 'text-violet-650 dark:text-violet-450 font-black', bg: 'bg-violet-50/50 dark:bg-violet-950/15 border-violet-200/60 dark:border-violet-900/30' },
+        { text: 'text-teal-650 dark:text-teal-450 font-black', bg: 'bg-teal-50/50 dark:bg-teal-950/15 border-teal-200/60 dark:border-teal-900/30' },
+        { text: 'text-fuchsia-650 dark:text-fuchsia-450 font-black', bg: 'bg-fuchsia-50/50 dark:bg-fuchsia-950/15 border-fuchsia-200/60 dark:border-fuchsia-900/30' },
+        { text: 'text-orange-650 dark:text-orange-450 font-black', bg: 'bg-orange-50/50 dark:bg-orange-950/15 border-orange-200/60 dark:border-orange-900/30' }
+    ];
+    const id = Number(userId) || 0;
+    return colors[id % colors.length];
 };
 
 const ChatPage = () => {
@@ -65,6 +130,31 @@ const ChatPage = () => {
     const navigate = useNavigate();
     const currentUserId = user?.user_id ?? user?.id;
 
+    // Pinned rooms state & handlers
+    const [pinnedRoomIds, setPinnedRoomIds] = useState([]);
+
+    useEffect(() => {
+        if (currentUserId) {
+            try {
+                const stored = localStorage.getItem(`pinnedRoomIds_${currentUserId}`);
+                setPinnedRoomIds(stored ? JSON.parse(stored) : []);
+            } catch (e) {
+                setPinnedRoomIds([]);
+            }
+        }
+    }, [currentUserId]);
+
+    const togglePinRoom = (e, roomId) => {
+        e.stopPropagation();
+        setPinnedRoomIds(prev => {
+            const isPinned = prev.includes(roomId);
+            const next = isPinned ? prev.filter(id => id !== roomId) : [...prev, roomId];
+            if (currentUserId) {
+                localStorage.setItem(`pinnedRoomIds_${currentUserId}`, JSON.stringify(next));
+            }
+            return next;
+        });
+    };
 
     // Active states
     const [rooms, setRooms] = useState([]);
@@ -95,6 +185,56 @@ const ChatPage = () => {
         setGroupName('');
         setSelectedGroupMembers([]);
         setShowGroupModal(true);
+    };
+
+    // Group Details Management States & Handlers
+    const [showGroupDetailsModal, setShowGroupDetailsModal] = useState(false);
+    const [groupDetailsSearchQuery, setGroupDetailsSearchQuery] = useState('');
+
+    const handleRemoveMember = async (userIdToRemove) => {
+        if (!selectedRoom) return;
+        const currentMemberIds = selectedRoom.members?.map(m => Number(m.user_id)) || [];
+        const updatedMemberIds = currentMemberIds.filter(id => id !== Number(userIdToRemove));
+        
+        try {
+            const res = await api.put(`/collaboration/rooms/${selectedRoom.room_id}/members`, {
+                member_ids: updatedMemberIds
+            });
+            if (res.data.success) {
+                toast.success("Member removed");
+                setSelectedRoom(prev => ({
+                    ...prev,
+                    member_ids: res.data.data.member_ids,
+                    members: res.data.data.members
+                }));
+                fetchRooms(false);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to remove member");
+        }
+    };
+
+    const handleAddMember = async (userIdToAdd) => {
+        if (!selectedRoom) return;
+        const currentMemberIds = selectedRoom.members?.map(m => Number(m.user_id)) || [];
+        const updatedMemberIds = [...currentMemberIds, Number(userIdToAdd)];
+        
+        try {
+            const res = await api.put(`/collaboration/rooms/${selectedRoom.room_id}/members`, {
+                member_ids: updatedMemberIds
+            });
+            if (res.data.success) {
+                toast.success("Member added");
+                setSelectedRoom(prev => ({
+                    ...prev,
+                    member_ids: res.data.data.member_ids,
+                    members: res.data.data.members
+                }));
+                fetchRooms(false);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to add member");
+        }
     };
 
     // Typing Indicators State
@@ -233,15 +373,69 @@ const ChatPage = () => {
         socket.on('user_typing', handleUserTyping);
         socket.on('user_stop_typing', handleUserStopTyping);
 
-        // If a room is selected, join its socket room
+        const handleGroupUpdated = ({ room_id, member_ids, members }) => {
+            if (selectedRoom && Number(selectedRoom.room_id) === Number(room_id)) {
+                if (!member_ids.map(Number).includes(Number(currentUserId))) {
+                    toast.info("You have been removed from this group.");
+                    setSelectedRoom(prev => ({
+                        ...prev,
+                        is_removed: true,
+                        member_ids,
+                        members
+                    }));
+                } else {
+                    setSelectedRoom(prev => ({
+                        ...prev,
+                        is_removed: false,
+                        member_ids,
+                        members
+                    }));
+                }
+            }
+            fetchRooms(false);
+        };
+
+        const handleRoomCreated = (room) => {
+            fetchRooms(false);
+        };
+
+        const handleRoomDeleted = ({ room_id }) => {
+            if (selectedRoom && Number(selectedRoom.room_id) === Number(room_id)) {
+                toast.info("This chat conversation has been deleted.");
+                setSelectedRoom(null);
+                setShowMobileChatWindow(false);
+            }
+            fetchRooms(false);
+        };
+
+        socket.on('group_updated', handleGroupUpdated);
+        socket.on('room_created', handleRoomCreated);
+        socket.on('room_deleted', handleRoomDeleted);
+
+        const handleConnect = () => {
+            if (selectedRoom) {
+                console.log(`🔌 Socket (re)connected. Re-joining room: ${selectedRoom.room_id}`);
+                socket.emit('join_room', selectedRoom.room_id);
+            }
+        };
+
+        socket.on('connect', handleConnect);
+
+        // If a room is selected and socket is already connected, join it immediately
         if (selectedRoom) {
-            socket.emit('join_room', selectedRoom.room_id);
+            if (socket.connected) {
+                socket.emit('join_room', selectedRoom.room_id);
+            }
         }
 
         return () => {
             socket.off('message_received', handleIncomingMessage);
             socket.off('user_typing', handleUserTyping);
             socket.off('user_stop_typing', handleUserStopTyping);
+            socket.off('group_updated', handleGroupUpdated);
+            socket.off('room_created', handleRoomCreated);
+            socket.off('room_deleted', handleRoomDeleted);
+            socket.off('connect', handleConnect);
             if (selectedRoom) {
                 socket.emit('leave_room', selectedRoom.room_id);
             }
@@ -267,11 +461,18 @@ const ChatPage = () => {
                         name.includes('ai')
                     );
                 });
-                setRooms(filtered);
+                
+                const mapped = filtered.map(room => {
+                    if (selectedRoom && Number(room.room_id) === Number(selectedRoom.room_id)) {
+                        return { ...room, unread_count: 0 };
+                    }
+                    return room;
+                });
+                setRooms(mapped);
                 
                 // Keep selected room details updated
                 if (selectedRoom) {
-                    const updatedSelected = filtered.find(r => r.room_id === selectedRoom.room_id);
+                    const updatedSelected = mapped.find(r => r.room_id === selectedRoom.room_id);
                     if (updatedSelected) setSelectedRoom(updatedSelected);
                 }
             }
@@ -511,19 +712,31 @@ const ChatPage = () => {
         );
     };
 
-    // Filter conversations based on sidebarTab and searchQuery
-    const filteredRooms = rooms.filter(room => {
-        const matchesTab = 
-            sidebarTab === 'all' || 
-            (sidebarTab === 'direct' && room.room_type === 'direct') ||
-            (sidebarTab === 'group' && room.room_type === 'group');
+    // Filter conversations based on sidebarTab and searchQuery, and sort pinned rooms to the top
+    const filteredRooms = rooms
+        .filter(room => {
+            const matchesTab = 
+                sidebarTab === 'all' || 
+                (sidebarTab === 'direct' && room.room_type === 'direct') ||
+                (sidebarTab === 'group' && room.room_type === 'group');
 
-        const matchesSearch = 
-            room.room_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            room.last_message?.text?.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = 
+                room.room_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                room.last_message?.text?.toLowerCase().includes(searchQuery.toLowerCase());
 
-        return matchesTab && matchesSearch;
-    });
+            return matchesTab && matchesSearch;
+        })
+        .sort((a, b) => {
+            const aPinned = pinnedRoomIds.includes(a.room_id);
+            const bPinned = pinnedRoomIds.includes(b.room_id);
+            
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
+            
+            const timeA = a.last_message ? new Date(a.last_message.created_at) : new Date(a.created_at);
+            const timeB = b.last_message ? new Date(b.last_message.created_at) : new Date(b.created_at);
+            return timeB - timeA;
+        });
 
     const getInitials = (name) => {
         if (!name) return '?';
@@ -686,7 +899,7 @@ const ChatPage = () => {
                                     <button
                                         key={room.room_id}
                                         onClick={() => handleRoomSelect(room)}
-                                        className={`w-full text-left p-3 flex items-center gap-3 transition-all cursor-pointer border-none outline-none ${
+                                        className={`w-full text-left p-3 flex items-center gap-3 transition-all cursor-pointer border-none outline-none group ${
                                             isSelected 
                                             ? 'bg-white dark:bg-[#21262d] border-l-[3px] border-[#7dd3fc] dark:border-[#388bfd] shadow-sm' 
                                             : 'hover:bg-[#e0f2fe]/40 dark:hover:bg-[#21262d]/50 bg-transparent border-l-[3px] border-transparent'
@@ -735,12 +948,27 @@ const ChatPage = () => {
                                             )}
                                         </div>
 
-                                        {/* Unread Badge */}
-                                        {room.unread_count > 0 && (
-                                            <span className="shrink-0 w-4 h-4 bg-[#7dd3fc] dark:bg-[#238636] text-[#0550ae] dark:text-white rounded-full flex items-center justify-center text-[8px] font-bold">
-                                                {room.unread_count}
-                                            </span>
-                                        )}
+                                        {/* Badges Column */}
+                                        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                            {room.unread_count > 0 && !isSelected && (
+                                                <span className="w-4 h-4 bg-[#7dd3fc] dark:bg-[#238636] text-[#0550ae] dark:text-white rounded-full flex items-center justify-center text-[8px] font-bold">
+                                                    {room.unread_count}
+                                                </span>
+                                            )}
+                                            
+                                            <button
+                                                type="button"
+                                                onClick={(e) => togglePinRoom(e, room.room_id)}
+                                                className={`p-1 hover:bg-slate-200/60 dark:hover:bg-[#30363d] rounded transition-all cursor-pointer border-none bg-transparent flex items-center justify-center ${
+                                                    pinnedRoomIds.includes(room.room_id) 
+                                                    ? 'text-[#0550ae] dark:text-[#58a6ff] opacity-100' 
+                                                    : 'text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100'
+                                                }`}
+                                                title={pinnedRoomIds.includes(room.room_id) ? "Unpin Chat" : "Pin Chat"}
+                                            >
+                                                <Pin size={12} className={pinnedRoomIds.includes(room.room_id) ? "fill-current" : ""} />
+                                            </button>
+                                        </div>
                                     </button>
                                 );
                             })
@@ -799,7 +1027,18 @@ const ChatPage = () => {
                                     </div>
                                 </div>
 
-                                {/* Call, video and menu actions removed as they are not part of chat features */}
+                                {selectedRoom.room_type === 'group' && !selectedRoom.is_removed && (
+                                    <button 
+                                        onClick={() => {
+                                            setGroupDetailsSearchQuery('');
+                                            setShowGroupDetailsModal(true);
+                                        }}
+                                        className="p-2 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] text-[#57606a] dark:text-[#8b949e] rounded-md transition-colors border-none bg-transparent cursor-pointer flex items-center justify-center"
+                                        title="Group Info & Members"
+                                    >
+                                        <Info size={16} />
+                                    </button>
+                                )}
                             </div>
 
                             {/* Message Panel Area */}
@@ -871,6 +1110,27 @@ const ChatPage = () => {
                                             }
 
 
+                                            if (Number(msg.sender_id) === 0 || cardType === 'group_update') {
+                                                let cleanText = msg.message_text;
+                                                if (cleanText.startsWith("[SYSTEM_CARD:group_update:info]")) {
+                                                    cleanText = cleanText.substring(31).trim();
+                                                } else if (cleanText.startsWith("[SYSTEM_CARD:group_update:alert]")) {
+                                                    cleanText = cleanText.substring(32).trim();
+                                                } else if (cleanText.startsWith("[SYSTEM_CARD:")) {
+                                                    const closeBracketIdx = cleanText.indexOf("]");
+                                                    if (closeBracketIdx !== -1) {
+                                                        cleanText = cleanText.substring(closeBracketIdx + 1).trim();
+                                                    }
+                                                }
+                                                return (
+                                                    <div key={msg.message_id || idx} className="flex justify-center w-full my-2.5">
+                                                        <span className="bg-[#f0f3f6] dark:bg-[#161b22] border border-[#d0d7de]/40 dark:border-[#30363d] text-[#57606a] dark:text-[#8b949e] px-4 py-1.5 rounded-full text-[10px] font-bold shadow-sm max-w-[85%] text-center">
+                                                            {cleanText}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            }
+
                                             return (
                                                 <motion.div 
                                                     key={msg.message_id || idx}
@@ -890,7 +1150,7 @@ const ChatPage = () => {
                                                             {hasAvatar ? (
                                                                 <img src={msg.profile_image_url} alt={msg.user_name} className="w-5 h-5 rounded-md object-cover border border-[#d0d7de] dark:border-[#30363d]" />
                                                             ) : (
-                                                                <div className="w-5 h-5 rounded-md bg-[#e0f2fe] dark:bg-[#21262d] text-[#0550ae] dark:text-[#58a6ff] flex items-center justify-center font-bold text-[8px] border border-[#d0d7de] dark:border-[#30363d]">
+                                                                <div className={`w-5 h-5 rounded-md ${getUserColor(msg.sender_id).bg} ${getUserColor(msg.sender_id).text} flex items-center justify-center font-bold text-[8px] border`}>
                                                                     {msg.user_name?.charAt(0)}
                                                                 </div>
                                                             )}
@@ -900,7 +1160,7 @@ const ChatPage = () => {
                                                     <div className="flex flex-col">
                                                         {/* Sender name for groups */}
                                                         {!isSelf && selectedRoom.room_type === 'group' && (
-                                                            <span className="text-[9px] text-[#57606a] dark:text-[#8b949e] font-bold ml-1.5 mb-0.5">{msg.user_name}</span>
+                                                            <span className={`text-[9px] font-bold ml-1.5 mb-0.5 ${getUserColor(msg.sender_id).text}`}>{msg.user_name}</span>
                                                         )}
 
                                                         {/* Message bubble */}
@@ -921,6 +1181,8 @@ const ChatPage = () => {
                                                                 }
                                                             }
 
+                                                            const uColor = getUserColor(msg.sender_id);
+
                                                             return (
                                                                 <div className={`py-2 px-3.5 rounded-lg text-xs leading-normal relative transition-all duration-300 ${
                                                                     isSystemCard
@@ -939,7 +1201,9 @@ const ChatPage = () => {
                                                                         ? 'bg-[#bae6fd] text-[#0550ae] dark:bg-[#388bfd]/20 dark:text-[#58a6ff] dark:border dark:border-[#388bfd]/30 rounded-br-none' 
                                                                         : matchesMention
                                                                             ? 'bg-[#fff8c5] dark:bg-[#382314] border border-[#d4a72c] dark:border-[#9e6a03] text-[#735c0f] dark:text-[#f1e05a] rounded-bl-none font-semibold'
-                                                                            : 'bg-[#f6f8fa] dark:bg-[#161b22] text-[#24292f] dark:text-[#f0f6fc] border border-[#d0d7de] dark:border-[#30363d] rounded-bl-none'
+                                                                            : selectedRoom.room_type === 'group'
+                                                                                ? `${uColor.bg} text-[#24292f] dark:text-[#f0f6fc] border rounded-bl-none`
+                                                                                : 'bg-[#f6f8fa] dark:bg-[#161b22] text-[#24292f] dark:text-[#f0f6fc] border border-[#d0d7de] dark:border-[#30363d] rounded-bl-none'
                                                                 }`}>
                                                                     
                                                                     {/* Text formatting with mentions styling */}
@@ -1165,24 +1429,7 @@ const ChatPage = () => {
                                                                         <>
                                                                             {msg.message_text && (
                                                                                 <span className="whitespace-pre-wrap font-medium block">
-                                                                                    {(() => {
-                                                                                        // Convert @Names to stylized pills inside message bubble
-                                                                                        const parts = msg.message_text.split(/(@[a-zA-Z0-9\s._-]+)/g);
-                                                                                        return parts.map((part, i) => {
-                                                                                            if (part.startsWith('@')) {
-                                                                                                return (
-                                                                                                    <span key={i} className={`px-1.5 py-0.5 rounded font-bold ${
-                                                                                                        isSelf 
-                                                                                                        ? 'bg-[#0550ae] dark:bg-[#388bfd]/30 text-white dark:text-[#58a6ff]' 
-                                                                                                        : 'bg-[#e0f2fe] dark:bg-[#388bfd]/15 text-[#0550ae] dark:text-[#58a6ff] border border-[#7dd3fc]/30 dark:border-[#388bfd]/30'
-                                                                                                    }`}>
-                                                                                                        {part}
-                                                                                                    </span>
-                                                                                                );
-                                                                                            }
-                                                                                            return part;
-                                                                                        });
-                                                                                    })()}
+                                                                                    {renderParsedMessageContent(msg.message_text, isSelf)}
                                                                                 </span>
                                                                             )}
  
@@ -1252,117 +1499,123 @@ const ChatPage = () => {
                                 )}
                                 <div ref={messagesEndRef} />
                             </div>
-
                             {/* Message Input Panel */}
                             <div className="p-4 bg-[#f0f9ff]/40 dark:bg-[#0d1117] border-t border-[#d0d7de] dark:border-[#30363d] relative shrink-0">
-                                
-                                {/* Mention Suggestions Dropdown */}
-                                <AnimatePresence>
-                                    {activeMention && (
-                                        (() => {
-                                            const candidateUsers = (selectedRoom?.room_type === 'group' && selectedRoom?.members)
-                                                ? selectedRoom.members.filter(m => Number(m.user_id) !== Number(currentUserId))
-                                                : coworkers;
-                                            const filtered = candidateUsers.filter(u => 
-                                                u.user_name.toLowerCase().includes(mentionSearch.toLowerCase())
-                                            ).slice(0, 5);
- 
-                                            if (filtered.length === 0) return null;
- 
-                                            return (
-                                                <motion.div 
-                                                    initial={{ opacity: 0, y: 15 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: 15 }}
-                                                    className="absolute left-4 right-4 bottom-full mb-3 bg-white dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-md shadow-2xl z-50 overflow-hidden py-1 max-h-48"
-                                                >
-                                                    <div className="px-3 py-1.5 text-[9px] font-black uppercase text-[#57606a] dark:text-[#8b949e] bg-[#f6f8fa] dark:bg-[#0d1117] border-b border-[#d0d7de] dark:border-[#30363d] tracking-wider">
-                                                        Mention Team Member
-                                                    </div>
-                                                    {filtered.map(u => (
-                                                        <button
-                                                            key={u.user_id}
-                                                            type="button"
-                                                            onClick={() => handleMentionSelect(u)}
-                                                            className="w-full text-left px-3.5 py-2 flex items-center gap-3 hover:bg-[#f6f8fa] dark:hover:bg-[#21262d] transition-colors border-none bg-transparent cursor-pointer"
-                                                        >
-                                                            {u.profile_image_url ? (
-                                                                <img src={u.profile_image_url} alt={u.user_name} className="w-6 h-6 rounded-md object-cover border border-[#d0d7de] dark:border-[#30363d]" />
-                                                            ) : (
-                                                                <div className="w-6 h-6 rounded-md bg-[#e0f2fe] dark:bg-[#21262d] text-[#0550ae] dark:text-[#58a6ff] flex items-center justify-center font-bold text-[10px] border border-[#d0d7de] dark:border-[#30363d]">
-                                                                    {u.user_name.charAt(0)}
-                                                                </div>
-                                                            )}
-                                                            <div>
-                                                                <div className="font-bold text-xs text-[#24292f] dark:text-[#c9d1d9]">{u.user_name}</div>
-                                                                <div className="text-[9px] text-[#57606a] dark:text-[#8b949e]">{u.dept_name || 'Staff'} • {u.desg_name || 'Member'}</div>
-                                                            </div>
-                                                        </button>
-                                                    ))}
-                                                </motion.div>
-                                            );
-                                        })()
-                                    )}
-                                </AnimatePresence>
- 
-                                {pendingAttachment && (
-                                    <div className="px-3 py-2 bg-[#f0f9ff] dark:bg-[#388bfd]/10 border border-[#7dd3fc]/40 dark:border-[#388bfd]/30 rounded-md flex items-center justify-between gap-3 mb-3 animate-in fade-in slide-in-from-bottom-2">
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                            <FileText size={18} className="text-[#0550ae] dark:text-[#58a6ff] shrink-0" />
-                                            <div className="truncate">
-                                                <span className="text-xs font-bold text-[#24292f] dark:text-[#c9d1d9] block truncate">{pendingAttachment.name}</span>
-                                                <span className="text-[9px] text-[#0550ae] dark:text-[#8b949e] font-semibold uppercase">{formatFileSize(pendingAttachment.size)}</span>
-                                            </div>
-                                        </div>
-                                        <button 
-                                            type="button"
-                                            onClick={() => setPendingAttachment(null)}
-                                            className="p-1 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] rounded-full text-[#57606a] hover:text-[#24292f] dark:hover:text-[#c9d1d9] transition-colors border-none bg-transparent cursor-pointer"
-                                        >
-                                            <X size={14} />
-                                        </button>
+                                {selectedRoom.is_removed ? (
+                                    <div className="w-full py-3 px-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-400 rounded-lg text-center font-bold text-xs select-none">
+                                        You can't send messages to this group because you have been removed.
                                     </div>
+                                ) : (
+                                    <>
+                                        {/* Mention Suggestions Dropdown */}
+                                        <AnimatePresence>
+                                            {activeMention && (
+                                                (() => {
+                                                    const candidateUsers = (selectedRoom?.room_type === 'group' && selectedRoom?.members)
+                                                        ? selectedRoom.members.filter(m => Number(m.user_id) !== Number(currentUserId))
+                                                        : coworkers;
+                                                    const filtered = candidateUsers.filter(u => 
+                                                        u.user_name.toLowerCase().includes(mentionSearch.toLowerCase())
+                                                    ).slice(0, 5);
+  
+                                                    if (filtered.length === 0) return null;
+  
+                                                    return (
+                                                        <motion.div 
+                                                            initial={{ opacity: 0, y: 15 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            exit={{ opacity: 0, y: 15 }}
+                                                            className="absolute left-4 right-4 bottom-full mb-3 bg-white dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-md shadow-2xl z-50 overflow-hidden py-1 max-h-48"
+                                                        >
+                                                            <div className="px-3 py-1.5 text-[9px] font-black uppercase text-[#57606a] dark:text-[#8b949e] bg-[#f6f8fa] dark:bg-[#0d1117] border-b border-[#d0d7de] dark:border-[#30363d] tracking-wider">
+                                                                Mention Team Member
+                                                            </div>
+                                                            {filtered.map(u => (
+                                                                <button
+                                                                    key={u.user_id}
+                                                                    type="button"
+                                                                    onClick={() => handleMentionSelect(u)}
+                                                                    className="w-full text-left px-3.5 py-2 flex items-center gap-3 hover:bg-[#f6f8fa] dark:hover:bg-[#21262d] transition-colors border-none bg-transparent cursor-pointer"
+                                                                >
+                                                                    {u.profile_image_url ? (
+                                                                        <img src={u.profile_image_url} alt={u.user_name} className="w-6 h-6 rounded-md object-cover border border-[#d0d7de] dark:border-[#30363d]" />
+                                                                    ) : (
+                                                                        <div className="w-6 h-6 rounded-md bg-[#e0f2fe] dark:bg-[#21262d] text-[#0550ae] dark:text-[#58a6ff] flex items-center justify-center font-bold text-[10px] border border-[#d0d7de] dark:border-[#30363d]">
+                                                                            {u.user_name.charAt(0)}
+                                                                        </div>
+                                                                    )}
+                                                                    <div>
+                                                                        <div className="font-bold text-xs text-[#24292f] dark:text-[#c9d1d9]">{u.user_name}</div>
+                                                                        <div className="text-[9px] text-[#57606a] dark:text-[#8b949e]">{u.dept_name || 'Staff'} • {u.desg_name || 'Member'}</div>
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                        </motion.div>
+                                                    );
+                                                })()
+                                            )}
+                                        </AnimatePresence>
+  
+                                        {pendingAttachment && (
+                                            <div className="px-3 py-2 bg-[#f0f9ff] dark:bg-[#388bfd]/10 border border-[#7dd3fc]/40 dark:border-[#388bfd]/30 rounded-md flex items-center justify-between gap-3 mb-3 animate-in fade-in slide-in-from-bottom-2">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <FileText size={18} className="text-[#0550ae] dark:text-[#58a6ff] shrink-0" />
+                                                    <div className="truncate">
+                                                        <span className="text-xs font-bold text-[#24292f] dark:text-[#c9d1d9] block truncate">{pendingAttachment.name}</span>
+                                                        <span className="text-[9px] text-[#0550ae] dark:text-[#8b949e] font-semibold uppercase">{formatFileSize(pendingAttachment.size)}</span>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => setPendingAttachment(null)}
+                                                    className="p-1 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] rounded-full text-[#57606a] hover:text-[#24292f] dark:hover:text-[#c9d1d9] transition-colors border-none bg-transparent cursor-pointer"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        )}
+  
+                                        <form onSubmit={handleSend} className="flex items-center gap-2">
+                                            <button 
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="p-2 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] text-[#57606a] dark:text-[#8b949e] rounded-md transition-colors border-none bg-transparent cursor-pointer"
+                                                title="Upload attachment (max 50MB)"
+                                            >
+                                                <Paperclip size={18} />
+                                            </button>
+                                            <input 
+                                                type="file"
+                                                ref={fileInputRef}
+                                                className="hidden"
+                                                onChange={handleFileUpload}
+                                            />
+  
+                                            {/* Text Area Input */}
+                                            <input 
+                                                ref={chatInputRef}
+                                                type="text"
+                                                placeholder="Type a message... Use @ to tag people"
+                                                value={newMessageText}
+                                                onChange={(e) => handleInputChange(e.target.value)}
+                                                className="flex-1 px-3 py-2 bg-white dark:bg-[#010409] rounded-md border border-[#d0d7de] dark:border-[#30363d] focus:outline-none focus:border-[#7dd3fc] focus:ring-1 focus:ring-[#7dd3fc] dark:focus:border-[#388bfd] dark:focus:ring-1 dark:focus:ring-[#388bfd] text-xs font-semibold text-[#24292f] dark:text-[#f0f6fc] placeholder-[#8c959f] dark:placeholder-[#484f58] shadow-inner"
+                                            />
+  
+                                            {/* Send Trigger */}
+                                            <button 
+                                                type="submit"
+                                                disabled={!newMessageText.trim() && !pendingAttachment}
+                                                className={`p-2.5 rounded-md transition-all active:scale-95 cursor-pointer flex items-center justify-center border ${
+                                                    newMessageText.trim() || pendingAttachment
+                                                    ? 'bg-[#bae6fd] dark:bg-[#238636] text-[#0550ae] dark:text-white border border-[#7dd3fc]/30 dark:border-transparent hover:bg-[#bde0fe] dark:hover:bg-[#2ea44f] shadow-sm' 
+                                                    : 'bg-[#f6f8fa] text-[#8c959f] dark:bg-[#21262d] dark:text-[#484f58] border-[#d0d7de] dark:border-[#30363d] cursor-not-allowed shadow-none'
+                                                }`}
+                                            >
+                                                <Send size={14} />
+                                            </button>
+                                        </form>
+                                    </>
                                 )}
- 
-                                <form onSubmit={handleSend} className="flex items-center gap-2">
-                                    <button 
-                                        type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="p-2 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] text-[#57606a] dark:text-[#8b949e] rounded-md transition-colors border-none bg-transparent cursor-pointer"
-                                        title="Upload attachment (max 50MB)"
-                                    >
-                                        <Paperclip size={18} />
-                                    </button>
-                                    <input 
-                                        type="file"
-                                        ref={fileInputRef}
-                                        className="hidden"
-                                        onChange={handleFileUpload}
-                                    />
- 
-                                    {/* Text Area Input */}
-                                    <input 
-                                        ref={chatInputRef}
-                                        type="text"
-                                        placeholder="Type a message... Use @ to tag people"
-                                        value={newMessageText}
-                                        onChange={(e) => handleInputChange(e.target.value)}
-                                        className="flex-1 px-3 py-2 bg-white dark:bg-[#010409] rounded-md border border-[#d0d7de] dark:border-[#30363d] focus:outline-none focus:border-[#7dd3fc] focus:ring-1 focus:ring-[#7dd3fc] dark:focus:border-[#388bfd] dark:focus:ring-1 dark:focus:ring-[#388bfd] text-xs font-semibold text-[#24292f] dark:text-[#f0f6fc] placeholder-[#8c959f] dark:placeholder-[#484f58] shadow-inner"
-                                    />
- 
-                                    {/* Send Trigger */}
-                                    <button 
-                                        type="submit"
-                                        disabled={!newMessageText.trim() && !pendingAttachment}
-                                        className={`p-2.5 rounded-md transition-all active:scale-95 cursor-pointer flex items-center justify-center border ${
-                                            newMessageText.trim() || pendingAttachment
-                                            ? 'bg-[#bae6fd] dark:bg-[#238636] text-[#0550ae] dark:text-white border border-[#7dd3fc]/30 dark:border-transparent hover:bg-[#bde0fe] dark:hover:bg-[#2ea44f] shadow-sm' 
-                                            : 'bg-[#f6f8fa] text-[#8c959f] dark:bg-[#21262d] dark:text-[#484f58] border-[#d0d7de] dark:border-[#30363d] cursor-not-allowed shadow-none'
-                                        }`}
-                                    >
-                                        <Send size={14} />
-                                    </button>
-                                </form>
                             </div>
                         </>
                     ) : (
@@ -1574,6 +1827,140 @@ const ChatPage = () => {
                                     >
                                         Create Group
                                     </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* --- MODAL C: GROUP DETAILS & MEMBER MANAGEMENT --- */}
+                <AnimatePresence>
+                    {showGroupDetailsModal && selectedRoom && selectedRoom.room_type === 'group' && (
+                        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
+                            <div className="absolute inset-0" onClick={() => setShowGroupDetailsModal(false)} />
+                            <motion.div 
+                                initial={{ x: '100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '100%' }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className="w-full max-w-sm sm:max-w-md h-full bg-white dark:bg-[#0d1117] border-l border-[#d0d7de] dark:border-[#30363d] shadow-2xl flex flex-col relative z-10"
+                            >
+                                <div className="p-4 border-b border-[#d0d7de] dark:border-[#30363d] flex items-center justify-between shrink-0">
+                                    <h3 className="text-sm font-bold text-[#24292f] dark:text-[#c9d1d9] uppercase tracking-wider">Group Info</h3>
+                                    <button 
+                                        onClick={() => setShowGroupDetailsModal(false)} 
+                                        className="p-1 hover:bg-[#eaeef2] dark:hover:bg-[#21262d] rounded-md text-[#57606a] dark:text-[#8b949e] border-none bg-transparent cursor-pointer"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
+                                    {/* Group Title and Info */}
+                                    <div className="flex items-center gap-3 bg-[#f6f8fa] dark:bg-[#161b22] p-3 rounded-md border border-[#d0d7de]/60 dark:border-[#30363d]">
+                                        <div className="w-12 h-12 rounded-md bg-[#e0f2fe] dark:bg-[#388bfd]/10 text-[#0550ae] dark:text-[#58a6ff] flex items-center justify-center font-bold text-lg border border-[#7dd3fc]/30 dark:border-[#388bfd]/30 shrink-0">
+                                            <Users size={20} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h4 className="font-extrabold text-sm text-[#24292f] dark:text-[#c9d1d9] truncate uppercase tracking-wide">{selectedRoom.room_name}</h4>
+                                            <span className="text-[10px] text-[#57606a] dark:text-[#8b949e] font-bold">{selectedRoom.members?.length || 0} Members</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Members List */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-[#57606a] dark:text-[#8b949e] tracking-wider block">Current Members</label>
+                                        <div className="space-y-1.5 pr-1">
+                                            {selectedRoom.members?.map((member) => {
+                                                const isMemberSelf = Number(member.user_id) === Number(currentUserId);
+                                                return (
+                                                    <div 
+                                                        key={member.user_id} 
+                                                        className="flex items-center justify-between p-2 hover:bg-[#f6f8fa]/60 dark:hover:bg-[#161b22]/40 rounded-md border border-[#d0d7de]/30 dark:border-[#30363d]/30"
+                                                    >
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            {member.profile_image_url ? (
+                                                                <img src={member.profile_image_url} alt={member.user_name} className="w-7 h-7 rounded-md object-cover border border-[#d0d7de] dark:border-[#30363d]" />
+                                                            ) : (
+                                                                <div className="w-7 h-7 rounded-md bg-slate-100 dark:bg-[#21262d] text-[#24292f] dark:text-white flex items-center justify-center font-bold text-[10px] border border-[#d0d7de] dark:border-[#30363d]">
+                                                                    {getInitials(member.user_name)}
+                                                                </div>
+                                                            )}
+                                                            <div className="truncate">
+                                                                <span className="text-xs font-bold text-[#24292f] dark:text-white block truncate leading-none mb-0.5">{member.user_name} {isMemberSelf && '(You)'}</span>
+                                                                <span className="text-[9px] text-[#57606a] dark:text-[#8b949e] block truncate">{member.desg_name || 'Staff'}</span>
+                                                            </div>
+                                                        </div>
+                                                        {!isMemberSelf && (
+                                                            <button 
+                                                                onClick={() => handleRemoveMember(member.user_id)}
+                                                                className="text-red-500 hover:text-red-600 dark:hover:text-red-400 p-1 hover:bg-red-50 dark:hover:bg-red-500/10 rounded border-none bg-transparent cursor-pointer text-[10px] font-black"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Add Members section */}
+                                    <div className="space-y-2 pt-2 border-t border-[#d0d7de]/50 dark:border-[#30363d]/50">
+                                        <label className="text-[10px] font-black uppercase text-[#57606a] dark:text-[#8b949e] tracking-wider block">Add Teammates</label>
+                                        <div className="relative">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Search other teammates..." 
+                                                value={groupDetailsSearchQuery} 
+                                                onChange={(e) => setGroupDetailsSearchQuery(e.target.value)} 
+                                                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-[#010409] rounded-md border border-[#d0d7de] dark:border-[#30363d] focus:outline-none focus:border-[#7dd3fc] focus:ring-1 focus:ring-[#7dd3fc] text-[#24292f] dark:text-white" 
+                                            />
+                                            <Search size={12} className="absolute left-2.5 top-2.5 text-[#8c959f]" />
+                                        </div>
+
+                                        <div className="space-y-1.5 pr-1">
+                                            {(() => {
+                                                const currentMemberIds = selectedRoom.members?.map(m => Number(m.user_id)) || [];
+                                                const nonMembers = coworkers.filter(c => 
+                                                    !currentMemberIds.includes(Number(c.user_id)) &&
+                                                    (c.user_name.toLowerCase().includes(groupDetailsSearchQuery.toLowerCase()) ||
+                                                     c.desg_name?.toLowerCase().includes(groupDetailsSearchQuery.toLowerCase()))
+                                                );
+
+                                                if (nonMembers.length === 0) {
+                                                    return <p className="text-[10px] text-[#8c959f] italic text-center py-4">No other teammates available.</p>;
+                                                }
+
+                                                return nonMembers.map((colleague) => (
+                                                    <div 
+                                                        key={colleague.user_id} 
+                                                        className="flex items-center justify-between p-2 hover:bg-[#f6f8fa]/40 dark:hover:bg-[#161b22]/20 rounded-md border border-transparent"
+                                                    >
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            {colleague.profile_image_url ? (
+                                                                <img src={colleague.profile_image_url} alt={colleague.user_name} className="w-7 h-7 rounded-md object-cover border border-[#d0d7de] dark:border-[#30363d]" />
+                                                            ) : (
+                                                                <div className="w-7 h-7 rounded-md bg-slate-100 dark:bg-[#21262d] text-[#24292f] dark:text-white flex items-center justify-center font-bold text-[10px] border border-[#d0d7de] dark:border-[#30363d]">
+                                                                    {getInitials(colleague.user_name)}
+                                                                </div>
+                                                            )}
+                                                            <div className="truncate">
+                                                                <span className="text-xs font-bold text-[#24292f] dark:text-white block truncate leading-none mb-0.5">{colleague.user_name}</span>
+                                                                <span className="text-[9px] text-[#57606a] dark:text-[#8b949e] block truncate">{colleague.desg_name || 'Staff'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => handleAddMember(colleague.user_id)}
+                                                            className="text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded border-none bg-transparent cursor-pointer text-[10px] font-black"
+                                                        >
+                                                            Add
+                                                        </button>
+                                                    </div>
+                                                ));
+                                            })()}
+                                        </div>
+                                    </div>
                                 </div>
                             </motion.div>
                         </div>

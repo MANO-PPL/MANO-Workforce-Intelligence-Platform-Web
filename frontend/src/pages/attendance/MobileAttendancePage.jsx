@@ -60,7 +60,6 @@ import { useAuth } from '../../context/AuthContext';
 const MobileAttendancePage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const [avatarTimestamp] = useState(Date.now());
 
     const SUB_TABS = [
         { id: 'history', label: 'History', icon: History },
@@ -128,6 +127,9 @@ const MobileAttendancePage = () => {
         reason: '',
         files: []
     });
+
+    const [originalSessions, setOriginalSessions] = useState([]);
+
 
     const [currentTime, setCurrentTime] = useState(new Date());
     const [location, setLocation] = useState({ lat: null, lng: null, address: 'Fetching location...', error: null });
@@ -226,6 +228,55 @@ const MobileAttendancePage = () => {
     useEffect(() => {
         fetchMonthlyRecords();
     }, [reportMonth]);
+
+    useEffect(() => {
+        if (!correctionForm.date) {
+            setOriginalSessions([]);
+            return;
+        }
+
+        const fetchRecord = async () => {
+            try {
+                const res = await attendanceService.getMyRecords(correctionForm.date, correctionForm.date);
+                if (res?.data && res.data.length > 0) {
+                    const userSessions = res.data;
+                    const loadedSessions = userSessions.map((s, i) => {
+                        let time_in_str = '';
+                        let time_out_str = '';
+                        if (s.time_in) {
+                            time_in_str = new Date(s.time_in).toTimeString().slice(0, 5);
+                        }
+                        if (s.time_out) {
+                            time_out_str = new Date(s.time_out).toTimeString().slice(0, 5);
+                        }
+                        return { in: time_in_str, out: time_out_str, isExisting: true };
+                    });
+
+                    setOriginalSessions(loadedSessions.map(s => ({ time_in: s.in, time_out: s.out })));
+                    setCorrectionForm(prev => ({
+                        ...prev,
+                        sessions: loadedSessions
+                    }));
+                } else {
+                    setOriginalSessions([]);
+                    setCorrectionForm(prev => ({
+                        ...prev,
+                        sessions: [{ in: '', out: '' }]
+                    }));
+                }
+            } catch (error) {
+                console.error("Failed to fetch existing record", error);
+                setOriginalSessions([]);
+                setCorrectionForm(prev => ({
+                    ...prev,
+                    sessions: [{ in: '', out: '' }]
+                }));
+            }
+        };
+
+        fetchRecord();
+    }, [correctionForm.date]);
+
 
     // --- FETCHING ---
 
@@ -401,14 +452,28 @@ const MobileAttendancePage = () => {
     const handleConfirmSubmitMobile = async () => {
         setSubmitLoading(true);
         try {
+            const original_data = originalSessions;
+            let proposed_data = [];
+
+            if (correctionForm.method === 'manual') {
+                const validSessions = correctionForm.sessions.filter(s => s.in && s.out);
+                proposed_data = validSessions.map(s => ({ time_in: s.in, time_out: s.out }));
+            } else if (correctionForm.method === 'reset') {
+                const resetSession = correctionForm.sessions[0];
+                if (!resetSession || !resetSession.in || !resetSession.out) {
+                    toast.error("Please enter both Time In and Time Out for Day Reset.");
+                    setSubmitLoading(false);
+                    return;
+                }
+                proposed_data = [{ time_in: resetSession.in, time_out: resetSession.out }];
+            }
+
             const payload = {
                 request_date: correctionForm.date,
                 correction_type: correctionForm.type,
                 reason: correctionForm.reason,
-                details: {
-                    method: correctionForm.method,
-                    sessions: correctionForm.sessions
-                }
+                original_data,
+                proposed_data
             };
 
             await attendanceService.submitCorrectionRequest(payload);
@@ -424,6 +489,7 @@ const MobileAttendancePage = () => {
             setSubmitLoading(false);
         }
     };
+
 
     const handleRequestClick = async (item) => {
         if (isFetchingDetails) return;
@@ -500,6 +566,18 @@ const MobileAttendancePage = () => {
     };
 
     // --- HELPERS ---
+
+    const formatCorrectionDate = (dateStr) => {
+        if (!dateStr) return 'Unknown Date';
+        try {
+            const cleanStr = (dateStr.length === 10 && !dateStr.includes('T')) ? dateStr + 'T00:00:00' : dateStr;
+            const d = new Date(cleanStr);
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        } catch (e) {
+            return dateStr;
+        }
+    };
 
     const calculateHours = (inTime, outTime) => {
         if (!inTime || !outTime) return '0h 0m';
@@ -616,14 +694,14 @@ const MobileAttendancePage = () => {
                                     <Clock size={24} />
                                 </div>
                                 <div>
-                                    <span className="block text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Current Time</span>
+                                    <span className="block text-[10px] font-bold text-indigo-200 tracking-widest">Current Time</span>
                                     <span className="text-2xl font-black text-white font-mono">
                                         {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
                                     </span>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <span className="block text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">Location</span>
+                                <span className="block text-[10px] font-bold text-indigo-200 tracking-widest mb-1">Location</span>
                                 <div className="flex items-center gap-1.5 text-white/90 font-bold text-xs bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
                                     <MapPin size={12} className="text-indigo-300" />
                                     {isLoadingLoc ? 'Locating...' : location.address}
@@ -831,10 +909,10 @@ const MobileAttendancePage = () => {
                                 {/* Today's Activity */}
                                 <div className="pt-4">
                                     <div className="flex items-center justify-between mb-4 px-1">
-                                        <h3 className="text-lg font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight">
+                                        <h3 className="text-lg font-black text-slate-800 dark:text-github-dark-text tracking-tight">
                                             {selectedDate === new Date().toISOString().split('T')[0] ? "Today's Logs" : `Logs for ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
                                         </h3>
-                                        <button onClick={() => setIsCorrectionOpen(true)} className="flex items-center gap-1.5 text-indigo-600 font-black text-xs uppercase tracking-widest bg-indigo-50 px-4 py-2 rounded-full active:scale-95 transition-all">
+                                        <button onClick={() => setIsCorrectionOpen(true)} className="flex items-center gap-1.5 text-indigo-600 font-black text-xs tracking-widest bg-indigo-50 px-4 py-2 rounded-full active:scale-95 transition-all">
                                             <Plus size={14} strokeWidth={3} /> Correction
                                         </button>
                                     </div>
@@ -844,10 +922,10 @@ const MobileAttendancePage = () => {
                                             <div key={s.acr_id || s.id || s.time_in} className="bg-white dark:bg-github-dark-subtle p-6 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm space-y-5 transition-all active:scale-[0.98]">
                                                 {/* Session Header */}
                                                 <div className="flex justify-between items-center pb-2 border-b border-slate-50 dark:border-github-dark-border/10">
-                                                    <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest flex items-center gap-2">
+                                                    <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest flex items-center gap-2">
                                                         <Clock size={12} /> Session #{dailySessions.length - idx}
                                                     </span>
-                                                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${s.late_minutes > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                                    <span className={`text-[9px] font-black px-2.5 py-1 rounded-full ${s.late_minutes > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
                                                         {s.late_minutes > 0 ? 'Late' : 'On Time'}
                                                     </span>
                                                 </div>
@@ -861,7 +939,7 @@ const MobileAttendancePage = () => {
                                                                 <ArrowUpRight size={16} strokeWidth={3} />
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <span className="block text-[9px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest leading-none mb-1">Time In</span>
+                                                                <span className="block text-[9px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest leading-none mb-1">Time In</span>
                                                                 <span className="text-sm font-black text-slate-800 dark:text-github-dark-text truncate block">{new Date(s.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                             </div>
                                                         </div>
@@ -878,7 +956,7 @@ const MobileAttendancePage = () => {
                                                         ) : (
                                                             <div className="w-full aspect-square rounded-2xl bg-slate-50 dark:bg-github-dark-border/30 border border-dashed border-slate-200 dark:border-github-dark-border flex flex-col items-center justify-center text-slate-300">
                                                                 <ImageIcon size={20} />
-                                                                <span className="text-[8px] font-bold mt-1 uppercase tracking-tighter">No Photo</span>
+                                                                <span className="text-[8px] font-bold mt-1 tracking-tighter">No Photo</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -890,7 +968,7 @@ const MobileAttendancePage = () => {
                                                                 <ArrowDownRight size={16} strokeWidth={3} />
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <span className="block text-[9px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest leading-none mb-1">Time Out</span>
+                                                                <span className="block text-[9px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest leading-none mb-1">Time Out</span>
                                                                 <span className="text-sm font-black text-slate-800 dark:text-github-dark-text truncate block">{s.time_out ? new Date(s.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---'}</span>
                                                             </div>
                                                         </div>
@@ -1209,7 +1287,7 @@ const MobileAttendancePage = () => {
                                                         </div>
                                                         <div>
                                                             <h4 className="font-black text-sm text-slate-800 dark:text-github-dark-text truncate max-w-[150px] leading-none">{item.correction_type}</h4>
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1.5">{new Date(item.request_date).toLocaleDateString()}</p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1.5">{formatCorrectionDate(item.request_date)}</p>
                                                         </div>
                                                     </div>
                                                     <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full border ${
@@ -1289,17 +1367,17 @@ const MobileAttendancePage = () => {
                             animate={{ y: 0 }} 
                             exit={{ y: '100%' }} 
                             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="relative w-full bg-white dark:bg-[#121212] rounded-t-[3rem] p-8 pb-12 shadow-2xl flex flex-col max-h-[92vh] overflow-y-auto no-scrollbar border-t border-white/10"
+                            className="relative w-full bg-white dark:bg-github-dark-subtle rounded-t-[3rem] p-8 pb-12 shadow-2xl flex flex-col max-h-[92vh] overflow-y-auto no-scrollbar border-t border-slate-100 dark:border-github-dark-border"
                         >
                             {/* Handle Bar */}
-                            <div className="w-12 h-1.5 bg-slate-200 dark:bg-white/10 rounded-full mx-auto mb-8 shrink-0" />
+                            <div className="w-12 h-1.5 bg-slate-200 dark:bg-github-dark-border rounded-full mx-auto mb-8 shrink-0" />
 
                             <div className="flex justify-between items-start mb-8">
                                 <div>
-                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Apply Correction</h3>
-                                    <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mt-1">Adjust your attendance records</p>
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-github-dark-text tracking-tight">Apply Correction</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted tracking-widest mt-1">Adjust Your Attendance Records</p>
                                 </div>
-                                <button onClick={() => setIsCorrectionOpen(false)} className="p-2 bg-slate-50 dark:bg-white/5 rounded-xl text-slate-400">
+                                <button onClick={() => setIsCorrectionOpen(false)} className="p-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-slate-400">
                                     <X size={24} />
                                 </button>
                             </div>
@@ -1316,17 +1394,17 @@ const MobileAttendancePage = () => {
 
                                 {/* Type Selection */}
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Correction Type</label>
+                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Correction Type</label>
                                     <div className="grid grid-cols-2 gap-3">
                                         {['Missed Punch', 'Overtime', 'Correction', 'Other'].map(type => (
                                             <button
                                                 key={type}
                                                 type="button"
                                                 onClick={() => setCorrectionForm({...correctionForm, type})}
-                                                className={`py-4 px-2 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border ${
+                                                className={`py-4 px-2 rounded-2xl text-[11px] font-black tracking-widest transition-all border ${
                                                     correctionForm.type === type 
                                                         ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-600/20' 
-                                                        : 'bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-github-dark-muted border-slate-100 dark:border-white/5'
+                                                        : 'bg-slate-50 dark:bg-github-dark-bg text-slate-500 dark:text-github-dark-muted border-slate-200 dark:border-github-dark-border'
                                                 }`}
                                             >
                                                 {type}
@@ -1337,19 +1415,19 @@ const MobileAttendancePage = () => {
 
                                 {/* Method Toggle */}
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Method</label>
-                                    <div className="flex p-1.5 bg-slate-100 dark:bg-white/5 rounded-2xl gap-2">
+                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Method</label>
+                                    <div className="flex p-1.5 bg-slate-100 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-2xl gap-2">
                                         <button
                                             type="button"
                                             onClick={() => setCorrectionForm({...correctionForm, method: 'manual'})}
-                                            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${correctionForm.method === 'manual' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                                            className={`flex-1 py-3 text-[10px] font-black tracking-widest rounded-xl transition-all ${correctionForm.method === 'manual' ? 'bg-white dark:bg-github-dark-subtle text-indigo-600 shadow-sm border border-slate-200 dark:border-github-dark-border' : 'text-slate-500 dark:text-github-dark-muted'}`}
                                         >
                                             Manual Entry
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setCorrectionForm({...correctionForm, method: 'reset'})}
-                                            className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${correctionForm.method === 'reset' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                                            className={`flex-1 py-3 text-[10px] font-black tracking-widest rounded-xl transition-all ${correctionForm.method === 'reset' ? 'bg-white dark:bg-github-dark-subtle text-indigo-600 shadow-sm border border-slate-200 dark:border-github-dark-border' : 'text-slate-500 dark:text-github-dark-muted'}`}
                                         >
                                             Reset Day
                                         </button>
@@ -1359,11 +1437,11 @@ const MobileAttendancePage = () => {
                                 {/* Sessions Logic */}
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between px-1">
-                                        <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em]">Sessions</label>
+                                        <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em]">Sessions</label>
                                         {correctionForm.method === 'manual' && (
                                             <button 
                                                 onClick={addSession}
-                                                className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg"
+                                                className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg"
                                             >
                                                 + Add
                                             </button>
@@ -1373,26 +1451,48 @@ const MobileAttendancePage = () => {
                                     {correctionForm.method === 'manual' ? (
                                         <div className="space-y-3">
                                             {correctionForm.sessions.map((s, idx) => (
-                                                <div key={idx} className="flex items-center gap-3 bg-slate-50 dark:bg-white/5 p-4 rounded-[2rem] border border-slate-100 dark:border-white/5">
-                                                    <div className="flex-1 space-y-2">
-                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">In</label>
-                                                        <input 
-                                                            type="time" 
-                                                            value={s.in} 
-                                                            onChange={(e) => updateSession(idx, 'in', e.target.value)}
-                                                            className="w-full bg-white dark:bg-slate-900 rounded-xl p-3 text-xs font-bold dark:text-white border border-slate-100 dark:border-white/10" 
-                                                        />
-                                                    </div>
-                                                    <div className="flex-1 space-y-2">
-                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Out</label>
-                                                        <input 
-                                                            type="time" 
-                                                            value={s.out} 
-                                                            onChange={(e) => updateSession(idx, 'out', e.target.value)}
-                                                            className="w-full bg-white dark:bg-slate-900 rounded-xl p-3 text-xs font-bold dark:text-white border border-slate-100 dark:border-white/10" 
-                                                        />
-                                                    </div>
-                                                    {correctionForm.sessions.length > 1 && (
+                                                <div 
+                                                    key={idx} 
+                                                    className={`flex items-center gap-3 p-4 rounded-[2rem] border transition-all ${
+                                                        s.isExisting 
+                                                            ? 'bg-slate-100/30 dark:bg-github-dark-border/20 border-slate-200 dark:border-github-dark-border/50' 
+                                                            : 'bg-white dark:bg-github-dark-bg/50 border-slate-100 dark:border-white/5 shadow-sm'
+                                                    }`}
+                                                >
+                                                    {s.isExisting ? (
+                                                        <div className="flex-1 flex gap-3 w-full">
+                                                            <div className="flex-1 bg-slate-100/50 dark:bg-github-dark-bg p-3.5 rounded-xl border border-slate-200 dark:border-github-dark-border flex flex-col justify-center shadow-inner">
+                                                                <span className="block text-[8px] font-black text-slate-500 dark:text-github-dark-muted tracking-widest mb-1">Existing In</span>
+                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono tracking-tight">{s.in || '--:--'}</span>
+                                                            </div>
+                                                            <div className="flex-1 bg-slate-100/50 dark:bg-github-dark-bg p-3.5 rounded-xl border border-slate-200 dark:border-github-dark-border flex flex-col justify-center shadow-inner">
+                                                                <span className="block text-[8px] font-black text-slate-500 dark:text-github-dark-muted tracking-widest mb-1">Existing Out</span>
+                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono tracking-tight">{s.out || '--:--'}</span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div className="flex-1 space-y-2">
+                                                                <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">In</label>
+                                                                <input 
+                                                                    type="time" 
+                                                                    value={s.in} 
+                                                                    onChange={(e) => updateSession(idx, 'in', e.target.value)}
+                                                                    className="w-full bg-slate-50 dark:bg-github-dark-bg rounded-xl p-3 text-xs font-bold text-slate-700 dark:text-github-dark-text border border-slate-200 dark:border-github-dark-border" 
+                                                                />
+                                                            </div>
+                                                            <div className="flex-1 space-y-2">
+                                                                <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">Out</label>
+                                                                <input 
+                                                                    type="time" 
+                                                                    value={s.out} 
+                                                                    onChange={(e) => updateSession(idx, 'out', e.target.value)}
+                                                                    className="w-full bg-slate-50 dark:bg-github-dark-bg rounded-xl p-3 text-xs font-bold text-slate-700 dark:text-github-dark-text border border-slate-200 dark:border-github-dark-border" 
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    {correctionForm.sessions.length > 1 && !s.isExisting && (
                                                         <button onClick={() => removeSession(idx)} className="mt-4 p-2 text-rose-500">
                                                             <XCircle size={18} />
                                                         </button>
@@ -1401,38 +1501,214 @@ const MobileAttendancePage = () => {
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200/50 dark:border-amber-500/20 p-5 rounded-2xl">
-                                            <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 leading-relaxed italic">
-                                                * Resetting the day will remove all existing logs for this date and replace them with a single manual entry.
-                                            </p>
+                                        <div className="space-y-4">
+                                            <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200/50 dark:border-amber-500/20 p-5 rounded-2xl">
+                                                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 leading-relaxed italic">
+                                                    * Resetting the day will remove all existing logs for this date and replace them with a single manual entry.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-3 bg-white dark:bg-github-dark-bg/50 p-4 rounded-[2rem] border border-indigo-100 dark:border-indigo-500/20 shadow-sm">
+                                                <div className="flex-1 space-y-2">
+                                                    <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">New In</label>
+                                                    <input 
+                                                        type="time" 
+                                                        value={correctionForm.sessions[0]?.in || ''} 
+                                                        onChange={(e) => updateSession(0, 'in', e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-bg rounded-xl p-3 text-xs font-bold text-slate-700 dark:text-github-dark-text border border-slate-200 dark:border-github-dark-border" 
+                                                    />
+                                                </div>
+                                                <div className="flex-1 space-y-2">
+                                                    <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">New Out</label>
+                                                    <input 
+                                                        type="time" 
+                                                        value={correctionForm.sessions[0]?.out || ''} 
+                                                        onChange={(e) => updateSession(0, 'out', e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-bg rounded-xl p-3 text-xs font-bold text-slate-700 dark:text-github-dark-text border border-slate-200 dark:border-github-dark-border" 
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
 
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Reason for correction</label>
+                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Reason for Correction</label>
                                     <textarea
                                         value={correctionForm.reason}
                                         onChange={(e) => setCorrectionForm({...correctionForm, reason: e.target.value})}
-                                        className="w-full bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-[1.5rem] p-5 text-sm font-bold min-h-[120px] focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all dark:text-white resize-none"
+                                        className="w-full bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-[1.5rem] p-5 text-sm font-bold min-h-[120px] focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all dark:text-github-dark-text resize-none"
                                         placeholder="Please explain the reason for this adjustment..."
                                     />
                                 </div>
 
                                 <button 
                                     onClick={handleCorrectionSubmit} 
-                                    className="w-full py-5 bg-indigo-600 text-white text-xs font-black uppercase tracking-[0.2em] rounded-[1.5rem] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
+                                    className="w-full py-5 bg-indigo-600 text-white text-xs font-black tracking-[0.2em] rounded-[1.5rem] shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
                                 >
                                     <FileClock size={20} />
                                     Submit Request
                                 </button>
-                                <p className="text-[9px] text-center text-slate-400 font-bold uppercase mt-4 tracking-widest opacity-60">Requires admin approval</p>
+                                <p className="text-[9px] text-center text-slate-400 font-bold mt-4 tracking-widest opacity-60">Requires Admin Approval</p>
                             </div>
                         </motion.div>
                     </div>
                 )}
             </AnimatePresence>
 
+            {/* Request Details Drawer Modal */}
+            <AnimatePresence>
+                {selectedRequest && (
+                    <div className="fixed inset-0 z-[1000] flex items-end justify-center">
+                        <motion.div 
+                            initial={{ opacity: 0 }} 
+                            animate={{ opacity: 1 }} 
+                            exit={{ opacity: 0 }} 
+                            onClick={() => setSelectedRequest(null)} 
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+                        />
+                        <motion.div 
+                            initial={{ y: '100%' }} 
+                            animate={{ y: 0 }} 
+                            exit={{ y: '100%' }} 
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="relative w-full bg-white dark:bg-github-dark-subtle rounded-t-[3rem] p-8 pb-12 shadow-2xl flex flex-col max-h-[92vh] overflow-y-auto no-scrollbar border-t border-slate-100 dark:border-github-dark-border"
+                        >
+                            {/* Handle Bar */}
+                            <div className="w-12 h-1.5 bg-slate-200 dark:bg-github-dark-border rounded-full mx-auto mb-8 shrink-0" />
+
+                            <div className="flex justify-between items-start mb-8">
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-github-dark-text tracking-tight uppercase">Request Details</h3>
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mt-1 font-mono">ID: #{selectedRequest.acr_id || selectedRequest.id}</p>
+                                </div>
+                                <button onClick={() => setSelectedRequest(null)} className="p-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-slate-400">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Status Header Card */}
+                                <div className="flex items-center gap-4 bg-slate-50/50 dark:bg-github-dark-bg p-5 rounded-[2rem] border border-slate-200 dark:border-github-dark-border">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+                                        selectedRequest.status?.toLowerCase() === 'approved' 
+                                            ? 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/20' 
+                                            : selectedRequest.status?.toLowerCase() === 'rejected'
+                                                ? 'bg-rose-50 border-rose-100 text-rose-600 dark:bg-rose-500/10 dark:border-rose-500/20'
+                                                : 'bg-amber-50 border-amber-100 text-amber-600 dark:bg-amber-500/10 dark:border-amber-500/20'
+                                    }`}>
+                                        {selectedRequest.status?.toLowerCase() === 'approved' && <CheckCircle size={24} />}
+                                        {selectedRequest.status?.toLowerCase() === 'rejected' && <XCircle size={24} />}
+                                        {selectedRequest.status?.toLowerCase() !== 'approved' && selectedRequest.status?.toLowerCase() !== 'rejected' && <Clock size={24} />}
+                                    </div>
+                                    <div>
+                                        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                            selectedRequest.status?.toLowerCase() === 'approved' 
+                                                ? 'bg-emerald-100 text-emerald-700' 
+                                                : selectedRequest.status?.toLowerCase() === 'rejected'
+                                                    ? 'bg-red-100 text-red-700'
+                                                    : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                            {selectedRequest.status || 'PENDING'}
+                                        </span>
+                                        <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted mt-1 uppercase tracking-widest">
+                                            Submitted on {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleDateString() : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Details Grid */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-50/50 dark:bg-github-dark-bg p-4 rounded-2xl border border-slate-200 dark:border-github-dark-border/50">
+                                        <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Request Date</span>
+                                        <span className="text-xs font-bold text-slate-700 dark:text-github-dark-text block truncate">
+                                            {selectedRequest.request_date ? new Date(selectedRequest.request_date).toLocaleDateString() : 'Invalid Date'}
+                                        </span>
+                                    </div>
+                                    <div className="bg-slate-50/50 dark:bg-github-dark-bg p-4 rounded-2xl border border-slate-200 dark:border-github-dark-border/50">
+                                        <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Correction Type</span>
+                                        <span className="text-xs font-bold text-slate-700 dark:text-github-dark-text block truncate">
+                                            {selectedRequest.correction_type}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Reason Section */}
+                                <div className="bg-slate-50/50 dark:bg-github-dark-bg p-5 rounded-2xl border border-slate-200 dark:border-github-dark-border/50">
+                                    <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 opacity-60">Reason for Request</span>
+                                    <div className="text-xs text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                                        "{selectedRequest.reason}"
+                                    </div>
+                                </div>
+
+                                {/* Proposed Attendance */}
+                                {selectedRequest.correction_data && (
+                                    <div className="bg-slate-50/50 dark:bg-github-dark-bg p-5 rounded-2xl border border-slate-200 dark:border-github-dark-border/50">
+                                        <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-4 opacity-60">Proposed Attendance</span>
+                                        <div className="space-y-3">
+                                            {(typeof selectedRequest.correction_data === 'string'
+                                                ? JSON.parse(selectedRequest.correction_data).sessions
+                                                : selectedRequest.correction_data.sessions || []
+                                            ).sort((a, b) => (a.time_in || "").localeCompare(b.time_in || "")).map((s, i) => (
+                                                <div key={i} className="flex items-center justify-between p-3.5 bg-white dark:bg-github-dark-bg/60 border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">In</span>
+                                                        <span className="text-xs font-black text-slate-800 dark:text-github-dark-text font-mono">{s.time_in}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Out</span>
+                                                        <span className="text-xs font-black text-slate-800 dark:text-github-dark-text font-mono">{s.time_out}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {/* Single Session Check */}
+                                            {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in && (
+                                                <div className="flex items-center justify-between p-3.5 bg-white dark:bg-github-dark-bg/60 border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">In</span>
+                                                        <span className="text-xs font-black text-slate-800 dark:text-github-dark-text font-mono">
+                                                            {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Out</span>
+                                                        <span className="text-xs font-black text-slate-800 dark:text-github-dark-text font-mono">
+                                                            {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_out}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Admin Decision Section */}
+                                {selectedRequest.status?.toLowerCase() !== 'pending' && (
+                                    <div className="bg-slate-50/50 dark:bg-github-dark-bg p-5 rounded-2xl border border-slate-200 dark:border-github-dark-border/50 border-t-4 border-t-indigo-500/20">
+                                        <span className="block text-[8px] font-black text-indigo-500 uppercase tracking-widest mb-3">Reviewer Decision</span>
+                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                                            {selectedRequest.review_comments || "No reviewer comments provided."}
+                                        </p>
+                                        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-github-dark-border/50 text-[8px] text-slate-400 font-bold uppercase tracking-widest">
+                                            Reviewed on {selectedRequest.reviewed_at ? formatCorrectionDate(selectedRequest.reviewed_at) : '-'}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button 
+                                    onClick={() => setSelectedRequest(null)}
+                                    className="w-full py-4 bg-slate-100 hover:bg-slate-200 dark:bg-github-dark-bg dark:hover:bg-github-dark-border text-slate-700 dark:text-github-dark-muted text-xs font-black uppercase tracking-[0.2em] rounded-2xl active:scale-[0.98] transition-all"
+                                >
+                                    Close Details
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Image Preview Modal */}
             <AnimatePresence>

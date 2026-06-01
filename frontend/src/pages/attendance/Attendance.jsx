@@ -85,7 +85,7 @@ const ThemedSelect = ({ label, value, options, onChange }) => {
 
     return (
         <div className="space-y-3" ref={containerRef}>
-            {label && <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">{label}</label>}
+            {label && <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">{label}</label>}
             <div className="relative">
                 <button
                     type="button"
@@ -313,6 +313,7 @@ const Attendance = () => {
     const [originalSessions, setOriginalSessions] = useState([]); // Immutable snapshot of DB records at date-load time
     const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null); // For details sidebar
+    const [isFetchingDetails, setIsFetchingDetails] = useState(false);
     const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
     const [scrollerDates, setScrollerDates] = useState([]);
@@ -420,13 +421,30 @@ const Attendance = () => {
         }
     }, [reportMonth, activeTab]);
 
-    // 3. Fetch Correction History
+    // 3. Fetch Correction History (my own requests only, even for admins)
     const fetchCorrectionHistory = useCallback(async () => {
         if (activeTab === 'my_attendance' && subTab === 'correction') {
             setLoading(true);
             try {
-                const res = await attendanceService.getCorrectionRequests({ limit: 50 });
-                setCorrectionHistory(res.data || []);
+                const res = await attendanceService.getCorrectionRequests({ limit: 10000, my_requests: 'true' });
+                const history = res.data || [];
+                setCorrectionHistory(history);
+                // Auto-select the first item: fetch its full details for the right panel
+                if (history.length > 0) {
+                    const first = history[0];
+                    const requestId = first.acr_id || first.request_id || first.id;
+                    try {
+                        setIsFetchingDetails(true);
+                        const detail = await attendanceService.getCorrectionDetails(requestId);
+                        setSelectedRequest({ ...first, ...(detail.data || detail) });
+                    } catch {
+                        setSelectedRequest(first);
+                    } finally {
+                        setIsFetchingDetails(false);
+                    }
+                } else {
+                    setSelectedRequest(null);
+                }
             } catch (error) {
                 console.error(error);
                 toast.error("Failed to fetch correction history");
@@ -435,6 +453,7 @@ const Attendance = () => {
             }
         }
     }, [activeTab, subTab]);
+
 
     // 4. Fetch Existing Record for Correction Date
     useEffect(() => {
@@ -748,7 +767,34 @@ const Attendance = () => {
         }
     };
 
+    const handleRequestClick = async (req) => {
+        if (isFetchingDetails) return;
+        try {
+            setIsFetchingDetails(true);
+            const requestId = req.acr_id || req.request_id || req.id;
+            const res = await attendanceService.getCorrectionDetails(requestId);
+            setSelectedRequest({ ...req, ...(res.data || res) });
+        } catch (error) {
+            console.error("Failed to fetch correction details:", error);
+            setSelectedRequest(req);
+        } finally {
+            setIsFetchingDetails(false);
+        }
+    };
+
     // --- HELPERS ---
+    const formatCorrectionDate = (dateStr) => {
+        if (!dateStr) return 'Unknown Date';
+        try {
+            const cleanStr = (dateStr.length === 10 && !dateStr.includes('T')) ? dateStr + 'T00:00:00' : dateStr;
+            const d = new Date(cleanStr);
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
     const formatDateDisplay = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
     };
@@ -924,14 +970,14 @@ const Attendance = () => {
                                     <Clock size={40} strokeWidth={2.5} />
                                 </div>
                                 <div>
-                                    <span className="block text-xs font-black text-indigo-200 uppercase tracking-[0.2em] mb-1 opacity-80">Current Time</span>
+                                    <span className="block text-xs font-black text-indigo-200 tracking-[0.2em] mb-1 opacity-80">Current Time</span>
                                     <span className="text-3xl font-black text-white font-mono tracking-tighter">
                                         {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
                                     </span>
                                 </div>
                             </div>
                             <div className="w-full md:w-auto flex flex-col md:items-end gap-3">
-                                <span className="block text-xs font-black text-indigo-200 uppercase tracking-[0.2em] opacity-80">Your Location</span>
+                                <span className="block text-xs font-black text-indigo-200 tracking-[0.2em] opacity-80">Your Location</span>
                                 <div className="flex items-center gap-3 text-white/90 font-bold text-sm bg-white/10 px-6 py-4 rounded-2xl border border-white/10 shadow-lg backdrop-blur-xl">
                                     <div className="w-8 h-8 rounded-full bg-indigo-500/30 flex items-center justify-center">
                                         <MapPin size={18} className="text-indigo-300" />
@@ -1168,7 +1214,7 @@ const Attendance = () => {
                             <div className="flex items-center justify-between mb-8 px-2">
                                 <div className="flex items-center gap-4">
                                     <div className="w-1.5 h-8 bg-indigo-600 rounded-full" />
-                                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight uppercase">
+                                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">
                                         {selectedDate === new Date().toISOString().split('T')[0] ? "Today's Logs" : `Logs for ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
                                     </h3>
                                 </div>
@@ -1177,7 +1223,7 @@ const Attendance = () => {
                                         setCorrDate(selectedDate);
                                         setIsCorrectionDrawerOpen(true);
                                     }} 
-                                    className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-[10px] uppercase tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-xl hover:shadow-lg transition-all active:scale-95 border border-indigo-100/50 dark:border-indigo-500/20"
+                                    className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-[10px] tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-xl hover:shadow-lg transition-all active:scale-95 border border-indigo-100/50 dark:border-indigo-500/20"
                                 >
                                     <Plus size={14} strokeWidth={3} /> Request Correction
                                 </button>
@@ -1200,16 +1246,22 @@ const Attendance = () => {
                                                     </div>
                                                     Session #{dailySessions.length - idx}
                                                 </span>
-                                                {(() => {
-                                                    const st = (session.status || (session.late_minutes > 0 ? 'LATE' : 'PRESENT')).toUpperCase();
-                                                    const style = getStatusStyle(st);
-                                                    return (
-                                                        <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full shadow-sm flex items-center gap-2 ${style.bg} ${style.text}`}>
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${style.dot} animate-pulse`} />
-                                                            {style.label}
-                                                        </span>
-                                                    );
-                                                })()}
+                                                <div className="flex flex-col items-end gap-2">
+                                                    {(() => {
+                                                        const st = (session.status || (session.late_minutes > 0 ? 'LATE' : 'PRESENT')).toUpperCase();
+                                                        const style = getStatusStyle(st);
+                                                        return (
+                                                            <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full shadow-sm flex items-center gap-2 ${style.bg} ${style.text}`}>
+                                                                <div className={`w-1.5 h-1.5 rounded-full ${style.dot} animate-pulse`} />
+                                                                {style.label}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 bg-slate-50/50 dark:bg-white/5 px-2.5 py-1 rounded-lg border border-slate-100/50 dark:border-white/5">
+                                                        <Clock size={12} className="text-indigo-500 dark:text-indigo-400 animate-pulse" />
+                                                        <span>Duration: <span className="font-black text-slate-800 dark:text-white">{session.total_hours || calculateDuration(session.time_in, session.time_out) || '--'}</span></span>
+                                                    </span>
+                                                </div>
                                             </div>
 
                                             {/* IN/OUT Sections Grid */}
@@ -1221,7 +1273,7 @@ const Attendance = () => {
                                                             <ArrowUpRight size={24} strokeWidth={3} />
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <span className="block text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-1 opacity-70">Time In</span>
+                                                            <span className="block text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest mb-1 opacity-70">Time In</span>
                                                             <span className="text-2xl font-black text-slate-800 dark:text-white truncate block tracking-tight">
                                                                 {formatTime(session.time_in)}
                                                             </span>
@@ -1239,8 +1291,8 @@ const Attendance = () => {
                                                     {/* In Image */}
                                                     <div className="space-y-3 max-w-[280px]">
                                                         <div className="flex items-center justify-between px-1">
-                                                            <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest opacity-60">Verification Image</p>
-                                                            {session.time_in_image && <span className="text-[9px] font-black text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md uppercase">Captured</span>}
+                                                            <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest opacity-60">Verification Image</p>
+                                                            {session.time_in_image && <span className="text-[9px] font-black text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md">Captured</span>}
                                                         </div>
                                                         <div 
                                                             onClick={() => session.time_in_image && setViewerImage(session.time_in_image)}
@@ -1258,7 +1310,7 @@ const Attendance = () => {
                                                                     <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-300">
                                                                         <Camera size={24} />
                                                                     </div>
-                                                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">No Image</span>
+                                                                    <span className="text-[9px] font-black text-slate-300 tracking-[0.2em]">No Image</span>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1272,29 +1324,26 @@ const Attendance = () => {
                                                             <LogOut size={24} strokeWidth={3} className="rotate-180" />
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <span className="block text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-1 opacity-70">Time Out</span>
+                                                            <span className="block text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest mb-1 opacity-70">Time Out</span>
                                                             <span className={`text-2xl font-black truncate block tracking-tight ${session.time_out ? 'text-slate-800 dark:text-white' : 'text-emerald-500 animate-pulse'}`}>
-                                                                {session.time_out ? formatTime(session.time_out) : 'ACTIVE SESSION'}
+                                                                {session.time_out ? formatTime(session.time_out) : 'Active Session'}
                                                             </span>
                                                         </div>
                                                     </div>
 
-                                                    {/* Duration Chip */}
-                                                    <div className="flex items-center gap-3 bg-indigo-50/50 dark:bg-indigo-500/5 p-4 rounded-2xl border border-indigo-100/30 dark:border-indigo-500/10">
-                                                        <Clock size={16} className="text-indigo-400 shrink-0" />
-                                                        <div className="flex items-baseline gap-2">
-                                                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest opacity-70">Duration:</span>
-                                                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">
-                                                                {session.total_hours || calculateDuration(session.time_in, session.time_out) || '--'}
-                                                            </span>
-                                                        </div>
+                                                    {/* Out Address */}
+                                                    <div className="flex items-start gap-3 bg-slate-50/50 dark:bg-white/5 p-4 rounded-2xl border border-slate-100/50 dark:border-white/5">
+                                                        <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                                                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
+                                                            {session.time_out ? (session.time_out_address || 'Address not captured') : 'Ongoing session...'}
+                                                        </p>
                                                     </div>
 
                                                     {/* Out Image */}
                                                     <div className="space-y-3 max-w-[280px]">
                                                         <div className="flex items-center justify-between px-1">
-                                                            <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest opacity-60">Verification Image</p>
-                                                            {session.time_out_image && <span className="text-[9px] font-black text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded-md uppercase">Captured</span>}
+                                                            <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest opacity-60">Verification Image</p>
+                                                            {session.time_out_image && <span className="text-[9px] font-black text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded-md">Captured</span>}
                                                         </div>
                                                         <div 
                                                             onClick={() => session.time_out_image && setViewerImage(session.time_out_image)}
@@ -1312,7 +1361,7 @@ const Attendance = () => {
                                                                     <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-300">
                                                                         <Camera size={24} />
                                                                     </div>
-                                                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">No Image</span>
+                                                                    <span className="text-[9px] font-black text-slate-300 tracking-[0.2em]">No Image</span>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1694,398 +1743,325 @@ const Attendance = () => {
                                 </div>
                             </div>
                         )}
-
                         {/* SUB-TAB: CORRECTION REQUESTS */}
                         {subTab === 'correction' && (
                             <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                    {/* Application Form */}
-                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border h-fit">
-                                        <div className="flex items-center gap-3 mb-6">
-                                            <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
-                                                <AlertCircle size={24} />
-                                            </div>
-                                            <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Apply Correction</h3>
+                                {/* Split Panel */}
+                                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                                    {/* LEFT — Request List */}
+                                    <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col lg:sticky lg:top-6" style={{ height: '650px' }}>
+                                        <div className="p-4 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-center">
+                                            <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text uppercase tracking-wider">My Requests</h3>
+                                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800">
+                                                {correctionHistory.length} Total
+                                            </span>
                                         </div>
-
-                                        <form onSubmit={handleSubmitCorrection} className="space-y-4">
-                                            <div className="z-20 relative">
-                                                <DatePicker
-                                                    label="Date"
-                                                    value={corrDate}
-                                                    onChange={(val) => setCorrDate(val)}
-                                                    maxDate={new Date().toISOString().split('T')[0]}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
-                                                <select
-                                                    value={corrType}
-                                                    onChange={(e) => setCorrType(e.target.value)}
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text appearance-none"
-                                                >
-                                                    <option value="Correction">Correction</option>
-                                                    <option value="Missed Punch">Missed Punch</option>
-                                                    <option value="Overtime">Overtime</option>
-                                                    <option value="Other">Other</option>
-                                                </select>
-                                                {corrType === 'Other' && (
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Specify Type"
-                                                        value={corrOtherType}
-                                                        onChange={(e) => setCorrOtherType(e.target.value)}
-                                                        className="w-full mt-2 px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
-                                                        required
-                                                    />
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Method</label>
-                                                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-50 dark:bg-github-dark-subtle rounded-lg">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCorrMethod('add_session')}
-                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'add_session' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted'}`}
-                                                    >
-                                                        Manual Correction
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCorrMethod('reset')}
-                                                        className={`py-1.5 text-xs font-bold rounded-md transition-all ${corrMethod === 'reset' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted'}`}
-                                                    >
-                                                        Reset Day
-                                                    </button>
+                                        <div className="overflow-y-auto flex-1 p-3 space-y-2 no-scrollbar">
+                                            {loading ? (
+                                                <div className="p-10 text-center text-slate-400 text-sm">Loading…</div>
+                                            ) : correctionHistory.length === 0 ? (
+                                                <div className="p-10 text-center">
+                                                    <FileClock size={32} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+                                                    <p className="text-sm text-slate-400 dark:text-github-dark-muted italic">No correction requests yet.</p>
                                                 </div>
-                                            </div>
-
-                                            {corrMethod === 'reset' ? (
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New In</label>
-                                                        <input
-                                                            type="time"
-                                                            value={corrIn}
-                                                            onChange={(e) => setCorrIn(e.target.value)}
-                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
-                                                            required
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Out</label>
-                                                        <input
-                                                            type="time"
-                                                            value={corrOut}
-                                                            onChange={(e) => setCorrOut(e.target.value)}
-                                                            className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
-                                                            required
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    <label className="block text-xs font-bold text-slate-500 uppercase">Sessions</label>
-                                                    {[...corrSessions].sort((a, b) => {
-                                                        if (!a.time_in) return 1;
-                                                        if (!b.time_in) return -1;
-                                                        return a.time_in.localeCompare(b.time_in);
-                                                    }).map((session, index, arr) => (
-                                                        <div key={session.id} className="flex gap-2 animate-in fade-in zoom-in-95 duration-200">
-                                                            <input
-                                                                type="time"
-                                                                value={session.time_in}
-                                                                readOnly={session.isExisting}
-                                                                onChange={(e) => {
-                                                                    setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s));
-                                                                }}
-                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
-                                                                placeholder="In"
-                                                            />
-                                                            <input
-                                                                type="time"
-                                                                value={session.time_out}
-                                                                readOnly={session.isExisting}
-                                                                onChange={(e) => {
-                                                                    setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s));
-                                                                }}
-                                                                className={`flex-1 px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text text-sm transition-all focus:bg-white dark:focus:bg-slate-900 ${session.isExisting ? 'opacity-70 cursor-not-allowed' : ''}`}
-                                                                placeholder="Out"
-                                                            />
-                                                            {arr.length > 1 && !session.isExisting && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setCorrSessions(prev => prev.filter(s => s.id !== session.id));
-                                                                    }}
-                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
-                                                                >
-                                                                    <X size={16} />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCorrSessions([...corrSessions, { id: Date.now(), time_in: '', time_out: '' }])}
-                                                        className="w-full py-2.5 mt-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-colors"
-                                                    >
-                                                        + Add Another Session
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reason</label>
-                                                <textarea
-                                                    value={corrReason}
-                                                    onChange={(e) => setCorrReason(e.target.value)}
-                                                    placeholder="Why is this correction needed?"
-                                                    className="w-full px-4 py-2 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text h-24 resize-none"
-                                                    required
-                                                ></textarea>
-                                            </div>
-
-                                            <button
-                                                type="submit"
-                                                disabled={isSubmittingCorrection}
-                                                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-                                            >
-                                                {isSubmittingCorrection ? 'Submitting...' : 'Submit Request'}
-                                            </button>
-                                        </form>
-                                    </div>
-
-                                    {/* History View (Simplified) */}
-                                    <div className="space-y-4">
-                                        <h3 className="font-bold text-slate-800 dark:text-github-dark-text px-2">Request History</h3>
-                                        <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                                            {correctionHistory.length === 0 ? (
-                                                <p className="text-sm text-slate-500 dark:text-github-dark-muted italic px-2">No history found.</p>
                                             ) : (
                                                 correctionHistory.map((req) => (
                                                     <div
                                                         key={req.acr_id}
-                                                        onClick={() => setSelectedRequest(req)}
-                                                        className="bg-slate-50 dark:bg-github-dark-subtle/50 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group"
+                                                        onClick={() => handleRequestClick(req)}
+                                                        className={`p-4 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                                                            selectedRequest?.acr_id === req.acr_id
+                                                                ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-400/40 dark:border-indigo-500/40 shadow-indigo-500/5'
+                                                                : 'bg-slate-50/40 dark:bg-github-dark-subtle/20 border-slate-200/60 dark:border-github-dark-border/80 hover:bg-slate-50/80 dark:hover:bg-github-dark-subtle/40 hover:border-slate-300 dark:hover:border-github-dark-border'
+                                                        }`}
                                                     >
-                                                        <div>
-                                                            <div className="flex items-center gap-3 mb-1">
-                                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                                                                    req.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                                                        'bg-amber-100 text-amber-700'
-                                                                    }`}>
-                                                                    {req.status}
-                                                                </span>
-                                                                <span className="text-xs text-slate-400 font-mono group-hover:text-indigo-500 transition-colors">
-                                                                    {req.submitted_at ? new Date(req.submitted_at).toLocaleDateString() : ''}
-                                                                </span>
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <div className="flex items-center gap-2.5">
+                                                                <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                                    {req.profile_image_url && req.profile_image_url.startsWith('http') ? (
+                                                                        <img src={req.profile_image_url} alt={req.user_name} className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        (req.user_name || 'U').charAt(0).toUpperCase()
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <p className={`text-xs font-bold leading-none ${selectedRequest?.acr_id === req.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>{req.user_name}</p>
+                                                                    <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-medium mt-1 inline-block">ID: {req.user_id}</span>
+                                                                </div>
                                                             </div>
-                                                            <h4 className="font-bold text-slate-700 dark:text-github-dark-text text-sm">
-                                                                {req.correction_type} for {req.request_date ? new Date(req.request_date).toLocaleDateString() : 'Unknown Date'}
-                                                            </h4>
-                                                            <p className="text-xs text-slate-500 mt-1 line-clamp-1 italic">"{req.reason}"</p>
+                                                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                                req.status === 'approved' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                                                                : req.status === 'rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                                                : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                                            }`}>{req.status}</span>
                                                         </div>
-
-                                                        <div className="text-right text-xs">
-                                                            {req.requested_time_in && (
-                                                                <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
-                                                                    <span className="font-bold text-slate-400">In:</span> {req.requested_time_in}
-                                                                </div>
-                                                            )}
-                                                            {req.requested_time_out && (
-                                                                <div className="flex items-center gap-1 justify-end text-slate-600 dark:text-slate-300">
-                                                                    <span className="font-bold text-slate-400">Out:</span> {req.requested_time_out}
-                                                                </div>
-                                                            )}
-                                                            {!req.requested_time_in && !req.requested_time_out && (
-                                                                <span className="text-slate-400 italic group-hover:text-indigo-400 transition-colors">Added Sessions</span>
-                                                            )}
+                                                        <p className={`text-sm font-semibold mb-1 ${selectedRequest?.acr_id === req.acr_id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>
+                                                            {formatCorrectionDate(req.request_date)}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted italic line-clamp-1">"{req.reason}"</p>
+                                                        <div className="flex justify-between items-center text-[10px] text-slate-400 mt-2.5 font-mono border-t border-slate-100/50 dark:border-github-dark-border/30 pt-2">
+                                                            <span>Sub. {req.submitted_at ? formatCorrectionDate(req.submitted_at) : '—'}</span>
+                                                            <span className="font-bold text-[9px] text-indigo-600 dark:text-indigo-400 bg-transparent dark:bg-transparent p-0">{(req.correction_type || '').replace('_', ' ')}</span>
                                                         </div>
                                                     </div>
                                                 ))
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* RIGHT — Details Panel */}
+                                    <div className="w-full lg:w-2/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col min-h-[650px] h-fit">
+                                        {isFetchingDetails ? (
+                                            <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400">
+                                                <RefreshCw className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
+                                                <p className="text-xs font-bold uppercase tracking-wider">Fetching details…</p>
+                                            </div>
+                                        ) : selectedRequest ? (
+                                            <>
+                                                {/* Detail Header */}
+                                                <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-start">
+                                                    <div className="flex items-center gap-3">
+                                                         <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 overflow-hidden shrink-0">
+                                                             {selectedRequest.profile_image_url && selectedRequest.profile_image_url.startsWith('http') ? (
+                                                                 <img src={selectedRequest.profile_image_url} alt={selectedRequest.user_name} className="w-full h-full object-cover" />
+                                                             ) : (
+                                                                 (selectedRequest.user_name || 'U').charAt(0).toUpperCase()
+                                                             )}
+                                                         </div>
+                                                         <div>
+                                                             <h2 className="text-lg font-bold text-slate-900 dark:text-github-dark-text mb-0.5">Request #{selectedRequest.acr_id}</h2>
+                                                             <p className="text-xs text-slate-500 dark:text-github-dark-muted">
+                                                                 By <span className="font-bold text-slate-700 dark:text-slate-300">{selectedRequest.user_name}</span> • {formatCorrectionDate(selectedRequest.request_date)}
+                                                             </p>
+                                                         </div>
+                                                     </div>
+                                                    <span className={`text-xs font-bold uppercase px-3 py-1.5 rounded-lg border ${
+                                                        selectedRequest.status === 'approved'
+                                                            ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/30'
+                                                            : selectedRequest.status === 'rejected'
+                                                            ? 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/30'
+                                                            : 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/30'
+                                                    }`}>
+                                                        {selectedRequest.status}
+                                                    </span>
+                                                </div>
+
+                                                {/* Detail Body */}
+                                                <div className="flex-1">
+
+                                                    {/* ── Visual Sync Timeline ── */}
+                                                    {(() => {
+                                                        const originalSnap = Array.isArray(selectedRequest.original_data) ? selectedRequest.original_data : [];
+                                                        const proposedSnap = Array.isArray(selectedRequest.proposed_data) ? selectedRequest.proposed_data : [];
+                                                        const fmtTime = (t) => t ? String(t).substring(0, 5) : '';
+                                                        const originalTasks = originalSnap.map((s, i) => ({ id: `orig-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
+                                                        const proposedTasks = proposedSnap.map((s, i) => ({ id: `prop-${i}`, startTime: fmtTime(s.time_in), endTime: fmtTime(s.time_out) })).filter(t => t.startTime && t.endTime);
+                                                        const allTasks = [...originalTasks, ...proposedTasks];
+                                                        if (allTasks.length === 0) return null;
+                                                        const getMinutes = (t) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+                                                        let minMin = Math.min(...allTasks.map(t => getMinutes(t.startTime)));
+                                                        let maxMin = Math.max(...allTasks.map(t => getMinutes(t.endTime)));
+                                                        let startHour = Math.max(0, Math.floor((minMin - 60) / 60));
+                                                        let endHour = Math.min(24, Math.ceil((maxMin + 60) / 60));
+                                                        const span = Math.max(1, endHour - startHour);
+                                                        const timeToPos = (time) => { if (!time) return 0; const [h, m] = time.split(':').map(Number); const mins = (h || 0) * 60 + (m || 0); return Math.max(0, Math.min(100, ((mins - startHour * 60) / (span * 60)) * 100)); };
+                                                        const getDurationPct = (s, e) => Math.max(0, timeToPos(e) - timeToPos(s));
+                                                        const changesList = [];
+                                                        const origCopy = originalTasks.map(t => ({ ...t }));
+                                                        proposedTasks.forEach(prop => {
+                                                            const match = origCopy.find(o => o.startTime === prop.startTime && o.endTime === prop.endTime);
+                                                            if (match) { match.matched = true; } else {
+                                                                const over = origCopy.find(o => !o.matched && (Math.abs(getMinutes(o.startTime) - getMinutes(prop.startTime)) < 120 || Math.abs(getMinutes(o.endTime) - getMinutes(prop.endTime)) < 120));
+                                                                if (over) { over.matched = true; changesList.push({ type: 'MODIFY', task: prop, original: over }); }
+                                                                else { changesList.push({ type: 'ADD', task: prop }); }
+                                                            }
+                                                        });
+                                                        origCopy.filter(o => !o.matched).forEach(o => changesList.push({ type: 'DELETE', task: o }));
+                                                        // Show only every 2nd hour if span > 8 to avoid crowding
+                                                        const hourStep = span > 8 ? 2 : 1;
+                                                        return (
+                                                            <div className="bg-slate-50 dark:bg-[#13151f] border-b border-slate-200 dark:border-github-dark-border px-6 pt-4 pb-5">
+                                                                {/* Title row */}
+                                                                <div className="flex items-center gap-2 mb-4">
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Visual Sync Timeline</span>
+                                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-800">
+                                                                        {(selectedRequest.correction_type || 'correction').toUpperCase()}
+                                                                    </span>
+                                                                    {/* Legend */}
+                                                                    <div className="ml-auto flex items-center gap-3 text-[9px] font-bold uppercase text-slate-400">
+                                                                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-slate-400/30 border border-slate-400/40"></span>Original</span>
+                                                                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-emerald-500/20 border border-emerald-500/40"></span>Proposed</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Scale */}
+                                                                <div className="relative mb-1 h-5">
+                                                                    {Array.from({ length: span + 1 }, (_, i) => startHour + i)
+                                                                        .filter((_, i) => i % hourStep === 0)
+                                                                        .map((h, i, arr) => (
+                                                                            <span key={h} className="absolute text-[9px] text-slate-400 font-mono -translate-x-1/2" style={{ left: `${((h - startHour) / span) * 100}%` }}>
+                                                                                {h}:00
+                                                                            </span>
+                                                                        ))}
+                                                                </div>
+
+                                                                {/* Tick lines + rows */}
+                                                                <div className="relative">
+                                                                    {/* Vertical grid lines */}
+                                                                    <div className="absolute inset-0 pointer-events-none flex">
+                                                                        {Array.from({ length: span + 1 }, (_, i) => i).map(i => (
+                                                                            <div key={i} className="absolute top-0 bottom-0 border-l border-dashed border-slate-300/40 dark:border-github-dark-border/40" style={{ left: `${(i / span) * 100}%` }} />
+                                                                        ))}
+                                                                    </div>
+
+                                                                    {/* Original row */}
+                                                                    <div className="mb-1">
+                                                                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Original</div>
+                                                                        <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
+                                                                            {originalTasks.map(task => (
+                                                                                <div key={task.id}
+                                                                                    className="absolute inset-y-1 rounded-md bg-slate-400/25 border border-slate-400/40 flex items-center justify-center overflow-hidden"
+                                                                                    style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
+                                                                                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                            {originalTasks.length === 0 && (
+                                                                                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">No Original Records</div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Proposed row */}
+                                                                    <div>
+                                                                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Proposed</div>
+                                                                        <div className="relative h-8 bg-slate-200/40 dark:bg-slate-800/40 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden">
+                                                                            {proposedTasks.map(task => {
+                                                                                const isNew = changesList.some(c => c.type === 'ADD' && c.task.id === task.id);
+                                                                                const isChanged = changesList.some(c => c.type === 'MODIFY' && c.task.id === task.id);
+                                                                                const cls = isNew
+                                                                                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                                                                                    : isChanged
+                                                                                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400'
+                                                                                    : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400';
+                                                                                return (
+                                                                                    <div key={task.id}
+                                                                                        className={`absolute inset-y-1 rounded-md border flex items-center justify-center overflow-hidden ${cls}`}
+                                                                                        style={{ left: `${timeToPos(task.startTime)}%`, width: `${getDurationPct(task.startTime, task.endTime)}%` }}>
+                                                                                        {isNew && <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />}
+                                                                                        <span className="text-[10px] font-mono font-bold px-1 truncate">{fmtTime(task.startTime)}–{fmtTime(task.endTime)}</span>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+
+                                                    {/* ── Info Cards ── */}
+                                                    <div className="p-5 space-y-4">
+
+                                                        {/* Meta row */}
+                                                        <div className="grid grid-cols-3 gap-3">
+                                                            <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Type</p>
+                                                                <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">{selectedRequest.correction_type || '—'}</p>
+                                                            </div>
+                                                            <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Method</p>
+                                                                <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text capitalize">
+                                                                    {selectedRequest.correction_method === 'add_session' ? 'Manual' : selectedRequest.correction_method || 'Fix'}
+                                                                </p>
+                                                            </div>
+                                                            <div className="bg-slate-50 dark:bg-github-dark-subtle/40 rounded-xl p-3 border border-slate-100 dark:border-github-dark-border/50">
+                                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Submitted</p>
+                                                                <p className="text-xs font-bold text-slate-700 dark:text-github-dark-text">
+                                                                    {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Proposed Sessions */}
+                                                        {Array.isArray(selectedRequest.proposed_data) && selectedRequest.proposed_data.length > 0 && (
+                                                            <div className="bg-slate-50 dark:bg-[#1a1c26] rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden">
+                                                                <div className="px-4 py-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between">
+                                                                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-github-dark-text">Proposed Sessions</h3>
+                                                                    <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+                                                                        {selectedRequest.proposed_data.length} session{selectedRequest.proposed_data.length !== 1 ? 's' : ''}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="divide-y divide-slate-100 dark:divide-github-dark-border">
+                                                                    {selectedRequest.proposed_data.map((s, i) => (
+                                                                        <div key={i} className="flex items-center px-4 py-3 gap-4">
+                                                                            <span className="text-[10px] font-black text-slate-400 w-5 shrink-0">#{i + 1}</span>
+                                                                            <div className="flex items-center gap-2 flex-1">
+                                                                                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase">In</span>
+                                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_in || '').substring(0, 5)}</span>
+                                                                            </div>
+                                                                            <span className="text-slate-300 dark:text-slate-600">→</span>
+                                                                            <div className="flex items-center gap-2 flex-1 justify-end">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Out</span>
+                                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text font-mono">{String(s.time_out || '').substring(0, 5)}</span>
+                                                                                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Reason */}
+                                                        <div className="bg-slate-50 dark:bg-[#1e202e] rounded-xl border border-slate-200 dark:border-github-dark-border p-4">
+                                                            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                                                                <FileClock size={12} /> Request Reason
+                                                            </h3>
+                                                            <p className="text-sm text-slate-700 dark:text-slate-200 italic leading-relaxed">
+                                                                "{selectedRequest.reason || 'No reason provided.'}"
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Reviewer Decision */}
+                                                        {selectedRequest.status !== 'pending' && (
+                                                            <div className={`rounded-xl border p-4 ${
+                                                                selectedRequest.status === 'approved'
+                                                                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30'
+                                                                    : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/30'
+                                                            }`}>
+                                                                <h3 className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${
+                                                                    selectedRequest.status === 'approved'
+                                                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                                                        : 'text-red-600 dark:text-red-400'
+                                                                }`}>
+                                                                    <CheckCircle size={12} /> Reviewer Decision
+                                                                </h3>
+                                                                <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
+                                                                    {selectedRequest.review_comments || 'No reviewer comments provided.'}
+                                                                </p>
+                                                                <p className="mt-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                                                    Reviewed {selectedRequest.reviewed_at ? formatDateDisplay(selectedRequest.reviewed_at) : '—'}
+                                                                </p>
+                                                            </div>
+                                                        )}
+
+                                                    </div>
+                                                </div>
+
+                                            </>
+                                        ) : (
+                                            <div className="flex-1 flex flex-col items-center justify-center h-full text-slate-400 p-12">
+                                                <FileText size={48} className="mb-4 opacity-40" />
+                                                <p className="text-sm">Select a request to view details</p>
+                                            </div>
+                                        )}
+                                    </div>
+
                                 </div>
                             </div>
                         )}
-                    </div>
+                     </div>
                 )}
-
-
-
-
-                {/* --- CORRECTION DETAILS SIDEBAR --- */}
-                <AnimatePresence>
-                    {selectedRequest && (
-                        <>
-                            {/* Backdrop */}
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setSelectedRequest(null)}
-                                className="fixed inset-0 z-[8000] bg-slate-900/40 backdrop-blur-[2px]"
-                            />
-
-                            {/* Sidebar Drawer */}
-                            <motion.div
-                                initial={{ x: '100%', opacity: 0 }}
-                                animate={{ x: 0, opacity: 1 }}
-                                exit={{ x: '100%', opacity: 0 }}
-                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                                className="fixed right-0 top-0 h-full w-full max-w-[480px] z-[8001] bg-white dark:bg-dark-card border-l border-slate-200 dark:border-github-dark-border shadow-2xl flex flex-col overflow-hidden"
-                            >
-                                {/* Header */}
-                                <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
-                                            <FileClock size={20} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-800 dark:text-github-dark-text leading-none">Request Details</h3>
-                                            <p className="text-[10px] text-slate-400 font-mono mt-1">ID: #{selectedRequest.acr_id}</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setSelectedRequest(null)}
-                                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                                    >
-                                        <X size={20} />
-                                    </button>
-                                </div>
-
-                                {/* Body */}
-                                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-8">
-                                    {/* Status Section */}
-                                    <div className="flex flex-col items-center gap-4 text-center">
-                                        <div className={`w-16 h-16 rounded-xl flex items-center justify-center border-2 ${selectedRequest.status === 'approved'
-                                            ? 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400'
-                                            : selectedRequest.status === 'rejected'
-                                                ? 'bg-red-50 border-red-100 text-red-600 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
-                                                : 'bg-amber-50 border-amber-100 text-amber-600 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400'
-                                            }`}>
-                                            {selectedRequest.status === 'approved' && <CheckCircle size={32} />}
-                                            {selectedRequest.status === 'rejected' && <XCircle size={32} />}
-                                            {selectedRequest.status === 'pending' && <Clock size={32} />}
-                                        </div>
-                                        <div>
-                                            <h4 className="text-lg font-black text-slate-900 dark:text-github-dark-text uppercase tracking-widest">{selectedRequest.status}</h4>
-                                            <p className="text-sm font-medium text-slate-500 dark:text-github-dark-muted mt-1">
-                                                Submitted on {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleDateString() : '-'}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Action Details Grid */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
-                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Request Date</span>
-                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
-                                                {selectedRequest.request_date ? formatDateDisplay(selectedRequest.request_date) : 'Invalid Date'}
-                                            </span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
-                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Correction Type</span>
-                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">{selectedRequest.correction_type}</span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
-                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Method</span>
-                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text capitalize">
-                                                {selectedRequest.correction_method === 'add_session' ? 'Manual Correction' : selectedRequest.correction_method || 'Fix'}
-                                            </span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-4 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
-                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 opacity-60">Submitted At</span>
-                                            <span className="text-sm font-bold text-slate-700 dark:text-github-dark-text">
-                                                {selectedRequest.submitted_at ? new Date(selectedRequest.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Reason Section */}
-                                    <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
-                                        <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 opacity-60">Reason for Request</span>
-                                        <div className="text-sm text-slate-600 dark:text-slate-300 italic leading-relaxed">
-                                            "{selectedRequest.reason}"
-                                        </div>
-                                    </div>
-
-                                    {/* Proposed Data Section */}
-                                    {selectedRequest.correction_data && (
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-xl border border-slate-100 dark:border-github-dark-border/50">
-                                            <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 opacity-60">Proposed Attendance</span>
-                                            <div className="space-y-3">
-                                                {(typeof selectedRequest.correction_data === 'string'
-                                                    ? JSON.parse(selectedRequest.correction_data).sessions
-                                                    : selectedRequest.correction_data.sessions || []
-                                                ).sort((a, b) => (a.time_in || "").localeCompare(b.time_in || "")).map((s, i) => (
-                                                    <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-lg shadow-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">In</span>
-                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">{s.time_in}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">Out</span>
-                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">{s.time_out}</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {/* Single Session Check */}
-                                                {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in && (
-                                                    <div className="flex items-center justify-between p-3 bg-white dark:bg-indigo-950/20 border border-slate-100 dark:border-indigo-900/30 rounded-lg shadow-sm">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">In</span>
-                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">
-                                                                {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_in}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                                                            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">Out</span>
-                                                            <span className="text-sm font-black text-slate-900 dark:text-github-dark-text font-mono">
-                                                                {(typeof selectedRequest.correction_data === 'string' ? JSON.parse(selectedRequest.correction_data) : selectedRequest.correction_data).time_out}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Admin Feedback Section */}
-                                    {selectedRequest.status !== 'pending' && (
-                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-xl border border-slate-100 dark:border-github-dark-border/50 border-t-4 border-t-indigo-500/20">
-                                            <span className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3">Reviewer Decision</span>
-                                            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-                                                {selectedRequest.review_comments || "No reviewer comments provided."}
-                                            </p>
-                                            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-github-dark-border/50 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                                                Reviewed on {selectedRequest.reviewed_at ? new Date(selectedRequest.reviewed_at).toLocaleDateString() : '-'}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Footer */}
-                                <div className="p-5 border-t border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20">
-                                    <button
-                                        onClick={() => setSelectedRequest(null)}
-                                        className="w-full px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-github-dark-muted hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-all"
-                                    >
-                                        Close Details
-                                    </button>
-                                </div>
-                            </motion.div>
-                        </>
-                    )}
-                </AnimatePresence>
 
                 {/* --- CONFIRM SUBMISSION MODAL --- */}
                 {showConfirmSubmit && createPortal(
@@ -2263,31 +2239,31 @@ const Attendance = () => {
                                 animate={{ x: 0, opacity: 1 }}
                                 exit={{ x: '100%', opacity: 0.5 }}
                                 transition={{ type: "spring", damping: 30, stiffness: 300 }}
-                                className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-github-dark-subtle z-[120] shadow-2xl border-l border-slate-100 dark:border-white/5 flex flex-col"
+                                className="fixed top-0 right-0 h-full w-full max-w-xl bg-white dark:bg-github-dark-subtle z-[120] shadow-2xl border-l border-slate-100 dark:border-github-dark-border flex flex-col"
                             >
-                                <div className="p-8 border-b border-slate-50 dark:border-white/5 flex items-center justify-between bg-gradient-to-r from-indigo-50/50 to-transparent dark:from-indigo-500/5">
+                                <div className="p-8 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between bg-gradient-to-r from-indigo-50/50 to-transparent dark:from-github-dark-bg/30">
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/20">
                                             <FileClock size={24} />
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Request Correction</h3>
-                                            <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mt-1">Submit your attendance adjustments</p>
+                                            <h3 className="text-xl font-black text-slate-800 dark:text-github-dark-text tracking-tight">Request Correction</h3>
+                                            <p className="text-[10px] font-bold text-slate-400 dark:text-github-dark-muted tracking-widest mt-1">Submit Your Attendance Adjustments</p>
                                         </div>
                                     </div>
                                     <button 
                                         onClick={() => setIsCorrectionDrawerOpen(false)}
-                                        className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all active:scale-90"
+                                        className="p-3 rounded-xl bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all active:scale-90"
                                     >
                                         <X size={24} />
                                     </button>
                                 </div>
-
+ 
                                 <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                                     <form id="correction-form" onSubmit={handleSubmitCorrection} className="space-y-8">
                                         {/* Date Section */}
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Adjustment Date</label>
+                                            <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Adjustment Date</label>
                                             <div className="relative z-[130]">
                                                 <DatePicker
                                                     value={corrDate}
@@ -2296,7 +2272,7 @@ const Attendance = () => {
                                                 />
                                             </div>
                                         </div>
-
+ 
                                         {/* Type & Method Grid */}
                                         <div className="grid grid-cols-1 gap-6">
                                             <ThemedSelect 
@@ -2318,66 +2294,66 @@ const Attendance = () => {
                                                     placeholder="Specify Adjustment Type"
                                                     value={corrOtherType}
                                                     onChange={(e) => setCorrOtherType(e.target.value)}
-                                                    className="w-full mt-3 px-5 py-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-bold shadow-sm"
+                                                    className="w-full mt-3 px-5 py-4 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text font-bold shadow-sm"
                                                     required
                                                 />
                                             )}
-
+ 
                                             <div className="space-y-3">
-                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Correction Method</label>
-                                                <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10">
+                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Correction Method</label>
+                                                <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-github-dark-bg rounded-2xl border border-slate-200 dark:border-github-dark-border">
                                                     <button
                                                         type="button"
                                                         onClick={() => setCorrMethod('add_session')}
-                                                        className={`py-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${corrMethod === 'add_session' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-white/10' : 'text-slate-400'}`}
+                                                        className={`py-3 text-[11px] font-black tracking-widest rounded-xl transition-all ${corrMethod === 'add_session' ? 'bg-white dark:bg-github-dark-subtle text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border' : 'text-slate-400'}`}
                                                     >
                                                         Manual Entry
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => setCorrMethod('reset')}
-                                                        className={`py-3 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${corrMethod === 'reset' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-100 dark:border-white/10' : 'text-slate-400'}`}
+                                                        className={`py-3 text-[11px] font-black tracking-widest rounded-xl transition-all ${corrMethod === 'reset' ? 'bg-white dark:bg-github-dark-subtle text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-github-dark-border' : 'text-slate-400'}`}
                                                     >
                                                         Full Day Reset
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
-
+ 
                                         {/* Dynamic Session Inputs */}
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between px-1">
-                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em]">Session Details</label>
+                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em]">Session Details</label>
                                                 {corrMethod === 'add_session' && (
                                                     <button 
                                                         type="button"
                                                         onClick={() => setCorrSessions(prev => [...prev, { id: Date.now(), time_in: '', time_out: '' }])}
-                                                        className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg hover:shadow-md transition-all active:scale-95"
+                                                        className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg hover:shadow-md transition-all active:scale-95"
                                                     >
                                                         + Add Session
                                                     </button>
                                                 )}
                                             </div>
-
+ 
                                             {corrMethod === 'reset' ? (
-                                                <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-white/5 p-5 rounded-2xl border border-slate-100 dark:border-white/10">
+                                                <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-github-dark-bg p-5 rounded-2xl border border-slate-200 dark:border-github-dark-border">
                                                     <div className="space-y-2">
-                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">New In</label>
+                                                        <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">New In</label>
                                                         <input
                                                             type="time"
                                                             value={corrIn}
                                                             onChange={(e) => setCorrIn(e.target.value)}
-                                                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-mono font-bold"
+                                                            className="w-full px-4 py-3 bg-white dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text font-mono font-bold"
                                                             required
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">New Out</label>
+                                                        <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">New Out</label>
                                                         <input
                                                             type="time"
                                                             value={corrOut}
                                                             onChange={(e) => setCorrOut(e.target.value)}
-                                                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-mono font-bold"
+                                                            className="w-full px-4 py-3 bg-white dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text font-mono font-bold"
                                                             required
                                                         />
                                                     </div>
@@ -2392,28 +2368,45 @@ const Attendance = () => {
                                                         <motion.div 
                                                             layout
                                                             key={session.id} 
-                                                            className={`flex items-end gap-3 p-4 rounded-2xl border transition-all ${session.isExisting ? 'bg-slate-50/50 dark:bg-white/5 border-slate-100 dark:border-white/5' : 'bg-white dark:bg-slate-900/50 border-indigo-100 dark:border-indigo-500/20 shadow-sm'}`}
+                                                            className={`flex items-end gap-3 p-4 rounded-2xl border transition-all ${
+                                                                session.isExisting 
+                                                                    ? 'bg-slate-100/30 dark:bg-github-dark-border/20 border-slate-200 dark:border-github-dark-border/50' 
+                                                                    : 'bg-white dark:bg-github-dark-bg/50 border-indigo-100 dark:border-indigo-500/20 shadow-sm'
+                                                            }`}
                                                         >
-                                                            <div className="flex-1 space-y-2">
-                                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">In</label>
-                                                                <input
-                                                                    type="time"
-                                                                    value={session.time_in}
-                                                                    readOnly={session.isExisting}
-                                                                    onChange={(e) => setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s))}
-                                                                    className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-sm ${session.isExisting ? 'bg-transparent text-slate-400 cursor-not-allowed' : 'bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-white border border-slate-100 dark:border-white/10'}`}
-                                                                />
-                                                            </div>
-                                                            <div className="flex-1 space-y-2">
-                                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Out</label>
-                                                                <input
-                                                                    type="time"
-                                                                    value={session.time_out}
-                                                                    readOnly={session.isExisting}
-                                                                    onChange={(e) => setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s))}
-                                                                    className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-sm ${session.isExisting ? 'bg-transparent text-slate-400 cursor-not-allowed' : 'bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-white border border-slate-100 dark:border-white/10'}`}
-                                                                />
-                                                            </div>
+                                                            {session.isExisting ? (
+                                                                <div className="flex-1 flex gap-4 w-full">
+                                                                    <div className="flex-1 bg-slate-100/50 dark:bg-github-dark-bg p-4 rounded-xl border border-slate-200 dark:border-github-dark-border flex flex-col justify-center shadow-inner">
+                                                                        <span className="block text-[9px] font-black text-slate-500 dark:text-github-dark-muted tracking-widest mb-1.5">Existing In</span>
+                                                                        <span className="text-base font-black text-slate-800 dark:text-github-dark-text font-mono tracking-tight">{session.time_in || '--:--'}</span>
+                                                                    </div>
+                                                                    <div className="flex-1 bg-slate-100/50 dark:bg-github-dark-bg p-4 rounded-xl border border-slate-200 dark:border-github-dark-border flex flex-col justify-center shadow-inner">
+                                                                        <span className="block text-[9px] font-black text-slate-500 dark:text-github-dark-muted tracking-widest mb-1.5">Existing Out</span>
+                                                                        <span className="text-base font-black text-slate-800 dark:text-github-dark-text font-mono tracking-tight">{session.time_out || '--:--'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="flex-1 space-y-2">
+                                                                        <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">In</label>
+                                                                        <input
+                                                                            type="time"
+                                                                            value={session.time_in}
+                                                                            onChange={(e) => setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_in: e.target.value } : s))}
+                                                                            className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-sm bg-slate-50 dark:bg-github-dark-bg text-slate-700 dark:text-github-dark-text border border-slate-200 dark:border-github-dark-border"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="flex-1 space-y-2">
+                                                                        <label className="text-[9px] font-black text-slate-400 tracking-widest px-1">Out</label>
+                                                                        <input
+                                                                            type="time"
+                                                                            value={session.time_out}
+                                                                            onChange={(e) => setCorrSessions(prev => prev.map(s => s.id === session.id ? { ...s, time_out: e.target.value } : s))}
+                                                                            className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono font-bold text-sm bg-slate-50 dark:bg-github-dark-bg text-slate-700 dark:text-github-dark-text border border-slate-200 dark:border-github-dark-border"
+                                                                        />
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                             {arr.length > 1 && !session.isExisting && (
                                                                 <button
                                                                     type="button"
@@ -2431,28 +2424,28 @@ const Attendance = () => {
 
                                         {/* Reason Section */}
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em] px-1">Reason for adjustment</label>
+                                            <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Reason for Adjustment</label>
                                             <textarea
                                                 value={corrReason}
                                                 onChange={(e) => setCorrReason(e.target.value)}
                                                 placeholder="Please provide context for this correction..."
-                                                className="w-full px-5 py-4 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-white font-medium h-32 resize-none"
+                                                className="w-full px-5 py-4 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text font-medium h-32 resize-none shadow-sm"
                                                 required
                                             />
                                         </div>
                                     </form>
                                 </div>
 
-                                <div className="p-8 border-t border-slate-50 dark:border-white/5 bg-slate-50/50 dark:bg-black/20">
+                                <div className="p-8 border-t border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-bg/80">
                                     <button 
                                         type="submit" 
                                         form="correction-form"
-                                        className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.15em] rounded-[1.25rem] shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 transition-all active:scale-[0.98] flex items-center justify-center gap-3 group"
+                                        className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black tracking-[0.15em] rounded-[1.25rem] shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 transition-all active:scale-[0.98] flex items-center justify-center gap-3 group"
                                     >
                                         <FileClock size={20} className="group-hover:scale-110 transition-transform" />
                                         Submit Request
                                     </button>
-                                    <p className="text-[9px] text-center text-slate-400 font-bold uppercase mt-4 tracking-widest opacity-60">Requires admin approval</p>
+                                    <p className="text-[9px] text-center text-slate-400 font-bold mt-4 tracking-widest opacity-60">Requires Admin Approval</p>
                                 </div>
                             </motion.div>
                         </>
