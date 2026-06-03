@@ -398,7 +398,8 @@ const MobileChatPage = () => {
     };
 
     const fetchRooms = async (showLoading = true) => {
-        if (showLoading) setLoadingRooms(true);
+        const shouldShow = showLoading && rooms.length === 0;
+        if (shouldShow) setLoadingRooms(true);
         try {
             const res = await api.get('/collaboration/rooms');
             if (res.data.success) {
