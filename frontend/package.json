@@ -13,6 +13,7 @@
     "axios": "^1.13.2",
     "chart.js": "^4.5.1",
     "esbuild": "^0.27.2",
+    "firebase": "^12.14.0",
     "framer-motion": "^12.26.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.300.0",

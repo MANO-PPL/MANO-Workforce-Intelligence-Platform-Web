@@ -119,7 +119,37 @@ export const sendPushNotification = async (userId, title, body, data = {}) => {
       },
       data: {
         ...data,
+        // String values only in FCM data payload
         click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      },
+      // ── Android config ──────────────────────────────────────────────────
+      // 'high' priority ensures delivery even when the device is in Doze mode
+      // and the app is killed. This is required for WhatsApp-style real-time delivery.
+      android: {
+        priority: 'high',
+        notification: {
+          // Must match the channel created in LocalNotificationService + AndroidManifest.xml
+          channelId: 'high_importance_channel',
+          sound: 'default',
+          defaultSound: true,
+          // Use our custom monochrome icon (declared in AndroidManifest.xml meta-data)
+          icon: 'ic_notification',
+          color: '#5B60F6',
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+        },
+      },
+      // ── iOS / macOS config ───────────────────────────────────────────────
+      apns: {
+        headers: {
+          'apns-priority': '10', // 10 = immediate delivery (like push for messages)
+        },
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            contentAvailable: true, // Wake the app even when in background on iOS
+          },
+        },
       },
     };
 

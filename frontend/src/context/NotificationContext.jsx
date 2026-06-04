@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { toast } from 'react-toastify';
 import { notificationService } from '../services/notificationService';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { requestAllPlatformPermissions, requestAndRegisterFCMToken, onForegroundMessage } from '../services/fcm';
 
 const NotificationContext = createContext({
     notifications: [],
@@ -79,6 +81,30 @@ export const NotificationProvider = ({ children }) => {
                     return [notif, ...prev];
                 });
                 setUnreadCount(prev => prev + 1);
+
+                // Trigger in-app toast notification aligned with the dark theme
+                toast.info(
+                    <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-[13px] text-white">{notif.title}</span>
+                        <span className="text-[12px] text-gray-300 line-clamp-2">{notif.message}</span>
+                    </div>,
+                    {
+                        position: "top-right",
+                        autoClose: 5000,
+                        hideProgressBar: false,
+                        closeOnClick: true,
+                        pauseOnHover: true,
+                        draggable: true,
+                        progressClassName: "bg-indigo-500",
+                        bodyClassName: "text-sm font-sans",
+                        style: {
+                            background: '#1A1A1A',
+                            border: '1px solid #333333',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                );
             };
 
             socket.on('new_notification', handleNewNotification);
@@ -90,15 +116,61 @@ export const NotificationProvider = ({ children }) => {
         }
     }, [user, socket]);
 
-    // Initial fetch
+    // Prompt for all permissions immediately when the platform is opened/mounted
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            requestAllPlatformPermissions();
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Initial fetch and FCM Registration
     useEffect(() => {
         if (user) {
             fetchNotifications();
+
+            // Register FCM Push Token after a short delay
+            const timer = setTimeout(() => {
+                requestAndRegisterFCMToken();
+            }, 3000);
+
+            // Listen to foreground FCM push messages (fallback when socket is disconnected)
+            const unsubscribeFCM = onForegroundMessage((payload) => {
+                if (!socket || !socket.connected) {
+                    toast.info(
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-semibold text-[13px] text-white">
+                                {payload.notification?.title || 'New Notification'}
+                            </span>
+                            <span className="text-[12px] text-gray-300 line-clamp-2">
+                                {payload.notification?.body || ''}
+                            </span>
+                        </div>,
+                        {
+                            position: "top-right",
+                            autoClose: 5000,
+                            style: {
+                                background: '#1A1A1A',
+                                border: '1px solid #333333',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
+                            }
+                        }
+                    );
+                }
+            });
+
+            return () => {
+                clearTimeout(timer);
+                if (typeof unsubscribeFCM === 'function') {
+                    unsubscribeFCM();
+                }
+            };
         } else {
             setNotifications([]);
             setUnreadCount(0);
         }
-    }, [user, fetchNotifications]);
+    }, [user, fetchNotifications, socket]);
 
     return (
         <NotificationContext.Provider value={{ 

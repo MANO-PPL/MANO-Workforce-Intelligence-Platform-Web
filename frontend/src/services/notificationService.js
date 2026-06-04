@@ -31,5 +31,15 @@ export const notificationService = {
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to mark all notifications as read");
         }
+    },
+
+    // Register FCM Token
+    async registerFCMToken(token, deviceType = 'web') {
+        try {
+            const res = await api.post(`${API_BASE_URL}/register-token`, { token, device_type: deviceType });
+            return res.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || "Failed to register FCM token");
+        }
     }
 };
