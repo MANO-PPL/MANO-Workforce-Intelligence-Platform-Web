@@ -44,9 +44,22 @@ export const requestAndRegisterFCMToken = async () => {
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+            console.log('🔄 Registering Firebase messaging service worker (/firebase-messaging-sw.js)...');
+            
+            // Explicitly register the service worker to ensure reliable token fetching in dev environments
+            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+                scope: '/'
+            });
+            console.log('✅ Service Worker registered with scope:', registration.scope);
+
+            console.log('🔑 Fetching FCM token using VAPID Key:', VAPID_KEY);
+            const token = await getToken(messaging, { 
+                vapidKey: VAPID_KEY,
+                serviceWorkerRegistration: registration
+            });
+
             if (token) {
-                console.log('🔑 FCM Web Registration Token retrieved:', token);
+                console.log('🔑 FCM Web Registration Token successfully retrieved:', token);
                 await notificationService.registerFCMToken(token, 'web');
                 return token;
             } else {
@@ -57,6 +70,9 @@ export const requestAndRegisterFCMToken = async () => {
         }
     } catch (error) {
         console.error('❌ Error getting or registering FCM token:', error);
+        if (error.message && error.message.includes('vapid')) {
+            console.error('💡 TIP: The VAPID key you provided may be invalid or truncated. Firebase Web Push VAPID keys are usually long base64 strings starting with a "B". Please verify the key under Settings > Cloud Messaging > Web Push certificates in the Firebase Console.');
+        }
     }
     return null;
 };

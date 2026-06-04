@@ -1,6 +1,7 @@
 import { attendanceDB } from '../../config/database.js';
 import { createNotification } from '../notifications/notificationService.js';
 import { encryptText, decryptText } from '../../utils/encryption.js';
+import EventBus from '../../utils/EventBus.js';
 
 
 /**
@@ -79,7 +80,8 @@ export const handleMentions = async ({ org_id, sender_id, text, context_type, co
                 message = `${senderName} tagged you in a Daily Activity Report meeting.`;
             }
 
-            const notificationId = await createNotification({
+            // Emit notification via EventBus (saves to DB and pushes via Socket.IO & FCM)
+            EventBus.emitNotification({
                 org_id,
                 user_id: userId,
                 type: 'INFO',
@@ -88,22 +90,6 @@ export const handleMentions = async ({ org_id, sender_id, text, context_type, co
                 related_entity_type: context_type,
                 related_entity_id: String(context_id)
             });
-
-            // Emit real-time notification event if WebSocket engine is attached
-            if (io) {
-                io.to(`user_${userId}`).emit('new_notification', {
-                    notification_id: notificationId,
-                    org_id,
-                    user_id: userId,
-                    type: 'INFO',
-                    title,
-                    message,
-                    is_read: 0,
-                    related_entity_type: context_type,
-                    related_entity_id: String(context_id),
-                    created_at: new Date().toISOString()
-                });
-            }
 
             // Instagram-like mention preview chat message creation (without emojis)
             if (context_type === 'dar_activity' || context_type === 'dar_meeting') {
@@ -224,7 +210,7 @@ export const handleMentions = async ({ org_id, sender_id, text, context_type, co
                 }
             }
 
-            results.push({ user_id: userId, notification_id: notificationId });
+            results.push({ user_id: userId, notification_id: null });
         }
 
         return results;

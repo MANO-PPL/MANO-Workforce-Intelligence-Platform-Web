@@ -9,7 +9,8 @@ import {
     Info, 
     User, 
     AlertCircle,
-    ChevronRight
+    ChevronRight,
+    MessageSquare
 } from 'lucide-react';
 import { useNotification } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -77,10 +78,14 @@ const Notifications = () => {
     };
 
     const getIcon = (type) => {
-        switch (type) {
+        const lowerType = String(type || '').toLowerCase();
+        switch (lowerType) {
             case 'attendance': return <Clock size={16} className="text-emerald-500" />;
             case 'leave': return <Calendar size={16} className="text-indigo-500" />;
             case 'policy': return <Info size={16} className="text-amber-500" />;
+            case 'chat':
+            case 'chat_message':
+                return <MessageSquare size={16} className="text-blue-500" />;
             default: return <Bell size={16} className="text-slate-500" />;
         }
     };

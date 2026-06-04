@@ -1,6 +1,7 @@
 import { attendanceDB } from '../../config/database.js';
 import { uploadFile, getFileUrl } from '../s3/s3Service.js';
 import { sendEmail } from '../auth/emailService.js';
+import EventBus from '../../utils/EventBus.js';
 
 /**
  * Submit new feedback with optional file attachments and email notification.
@@ -50,7 +51,7 @@ export async function submitFeedback(user_id, { title, description, type = 'FEED
         }
     }
 
-    // 3. Send email notification
+    // 3. Send email & push notifications
     try {
         const user = await attendanceDB('users').where('user_id', user_id).first();
         const submittedAt = new Date().toLocaleString('en-US', {
@@ -58,24 +59,41 @@ export async function submitFeedback(user_id, { title, description, type = 'FEED
             timeStyle: 'short'
         });
 
+        // Send Email
         const emailHtml = buildFeedbackEmailHtml({ type, title, description, submittedAt, user, user_id, feedback_id, attachments });
-
         const emailAttachments = files.map(file => ({
             filename: file.originalname,
             content: file.buffer,
             contentType: file.mimetype
         }));
-
         const adminEmails = process.env.ADMIN_EMAIL.split(',').map(email => email.trim());
-
         await sendEmail({
             to: adminEmails.join(', '),
             subject: title,
             html: emailHtml,
             attachments: emailAttachments
         });
+
+        // Trigger standard browser/push notifications to admins
+        if (user && user.org_id) {
+            const admins = await attendanceDB('users')
+                .where({ org_id: user.org_id, user_type: 'admin', is_deleted: 0, is_active: 1 })
+                .select('user_id');
+
+            for (const admin of admins) {
+                EventBus.emitNotification({
+                    org_id: user.org_id,
+                    user_id: admin.user_id,
+                    title: 'Feedback Submitted',
+                    message: `A new feedback/bug report has been submitted by ${user.user_name || 'an employee'}.`,
+                    type: 'INFO',
+                    related_entity_type: 'FEEDBACK',
+                    related_entity_id: feedback_id
+                });
+            }
+        }
     } catch (emailError) {
-        console.error('Failed to send feedback email notification:', emailError);
+        console.error('Failed to send feedback email/push notifications:', emailError);
     }
 
     return { feedback_id, attachments_count: attachments.length, attachments };

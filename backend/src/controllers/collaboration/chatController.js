@@ -4,6 +4,7 @@ import AppError from '../../utils/AppError.js';
 import { handleMentions } from '../../services/collaboration/mentionService.js';
 import { encryptText, decryptText } from '../../utils/encryption.js';
 import { uploadFile } from '../../services/s3/s3Service.js';
+import EventBus from '../../utils/EventBus.js';
 
 // Helper to enrich a raw chat room with members info, last message, unread count, etc.
 const enrichRoomDetails = async (room, userId) => {
@@ -660,6 +661,31 @@ export const sendMessage = catchAsync(async (req, res, next) => {
                     io.to(`user_${mId}`).emit('message_received', formattedResponseMsg);
                 }
             });
+        }
+    }
+
+    // Send standard notification via EventBus (handles saving to DB, on-screen Socket toast, and background FCM)
+    if (Array.isArray(memberIds)) {
+        const isGroup = room.room_type === 'group';
+        const customRoomName = isGroup ? (decryptText(room.room_name) || room.room_name) : null;
+        const senderName = sender ? sender.user_name : 'Someone';
+        const displayTitle = isGroup 
+            ? `${senderName} in ${customRoomName || 'Group'}`
+            : senderName;
+        const displayBody = newMsg.message_text || 'Sent an attachment';
+
+        for (const mId of memberIds) {
+            if (Number(mId) !== Number(userId)) {
+                EventBus.emitNotification({
+                    org_id: room.org_id,
+                    user_id: mId,
+                    title: displayTitle,
+                    message: displayBody,
+                    type: 'CHAT',
+                    related_entity_type: 'CHAT_MESSAGE',
+                    related_entity_id: String(roomId)
+                });
+            }
         }
     }
 

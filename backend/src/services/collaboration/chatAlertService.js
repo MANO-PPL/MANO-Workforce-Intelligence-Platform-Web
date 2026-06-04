@@ -1,5 +1,6 @@
 import { attendanceDB } from '../../config/database.js';
 import { encryptText, decryptText } from '../../utils/encryption.js';
+import EventBus from '../../utils/EventBus.js';
 
 /**
  * Helper to get or create a direct chat room between two users
@@ -153,6 +154,17 @@ export async function notifyLeaveApplied({ org_id, sender_id, leave_id, attachme
                 payload,
                 io
             });
+
+            // Send standard browser / FCM notification
+            EventBus.emitNotification({
+                org_id,
+                user_id: admin.user_id,
+                title: 'New Leave Application',
+                message: `${employeeName} has applied for ${leave.leave_type} (${leave.start_date} to ${leave.end_date}).`,
+                type: 'INFO',
+                related_entity_type: 'LEAVE',
+                related_entity_id: leave_id
+            });
         }
     } catch (err) {
         console.error('Error in notifyLeaveApplied:', err);
@@ -199,6 +211,17 @@ export async function notifyLeaveStatusUpdated({ org_id, reviewer_id, leave_id, 
             payload,
             io
         });
+
+        // Send standard browser / FCM notification
+        EventBus.emitNotification({
+            org_id,
+            user_id: leave.user_id,
+            title: `Leave Request ${leave.status}`,
+            message: `Your leave request for ${leave.leave_type} has been ${leave.status.toLowerCase()} by ${reviewerName}.`,
+            type: leave.status === 'Approved' ? 'SUCCESS' : 'ERROR',
+            related_entity_type: 'LEAVE',
+            related_entity_id: leave_id
+        });
     } catch (err) {
         console.error('Error in notifyLeaveStatusUpdated:', err);
     }
@@ -239,6 +262,17 @@ export async function notifyCorrectionApplied({ org_id, sender_id, acr_id, io })
                 payload,
                 io
             });
+
+            // Send standard browser / FCM notification
+            EventBus.emitNotification({
+                org_id,
+                user_id: admin.user_id,
+                title: 'New Correction Request',
+                message: `${employeeName} has submitted an attendance correction request for ${correction.request_date}.`,
+                type: 'INFO',
+                related_entity_type: 'CORRECTION',
+                related_entity_id: acr_id
+            });
         }
     } catch (err) {
         console.error('Error in notifyCorrectionApplied:', err);
@@ -275,6 +309,17 @@ export async function notifyCorrectionStatusUpdated({ org_id, reviewer_id, acr_i
             status: correction.status,
             payload,
             io
+        });
+
+        // Send standard browser / FCM notification
+        EventBus.emitNotification({
+            org_id,
+            user_id: correction.user_id,
+            title: `Correction Request ${correction.status.charAt(0).toUpperCase() + correction.status.slice(1)}`,
+            message: `Your attendance correction request for ${correction.request_date} has been ${correction.status.toLowerCase()} by ${reviewerName}.`,
+            type: correction.status === 'approved' ? 'SUCCESS' : 'ERROR',
+            related_entity_type: 'CORRECTION',
+            related_entity_id: acr_id
         });
     } catch (err) {
         console.error('Error in notifyCorrectionStatusUpdated:', err);
@@ -316,6 +361,17 @@ export async function notifyShiftAssigned({ org_id, admin_id, recipient_id, shif
             payload,
             io
         });
+
+        // Send standard browser / FCM notification
+        EventBus.emitNotification({
+            org_id,
+            user_id: recipient_id,
+            title: 'New Shift Assigned',
+            message: `You have been assigned to shift "${shift.shift_name}" (${startTime} - ${endTime}) by ${adminName}.`,
+            type: 'INFO',
+            related_entity_type: 'SHIFT',
+            related_entity_id: shift_id
+        });
     } catch (err) {
         console.error('Error in notifyShiftAssigned:', err);
     }
@@ -349,6 +405,17 @@ export async function notifyGeofenceAssigned({ org_id, admin_id, recipient_id, l
             status: 'Active',
             payload,
             io
+        });
+
+        // Send standard browser / FCM notification
+        EventBus.emitNotification({
+            org_id,
+            user_id: recipient_id,
+            title: 'Work Location Assigned',
+            message: `You have been assigned to work location "${location.location_name}" by ${adminName}.`,
+            type: 'INFO',
+            related_entity_type: 'LOCATION',
+            related_entity_id: location_id
         });
     } catch (err) {
         console.error('Error in notifyGeofenceAssigned:', err);
