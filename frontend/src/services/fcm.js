@@ -44,10 +44,21 @@ export const requestAndRegisterFCMToken = async () => {
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            console.log('🔄 Registering Firebase messaging service worker (/firebase-messaging-sw.js)...');
+            console.log('🔄 Registering Firebase messaging service worker with config URL...');
             
+            const configParams = new URLSearchParams({
+                apiKey: firebaseConfig.apiKey || '',
+                authDomain: firebaseConfig.authDomain || '',
+                projectId: firebaseConfig.projectId || '',
+                storageBucket: firebaseConfig.storageBucket || '',
+                messagingSenderId: firebaseConfig.messagingSenderId || '',
+                appId: firebaseConfig.appId || ''
+            }).toString();
+
+            const swUrl = `/firebase-messaging-sw.js?${configParams}`;
+
             // Explicitly register the service worker to ensure reliable token fetching in dev environments
-            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+            const registration = await navigator.serviceWorker.register(swUrl, {
                 scope: '/'
             });
             console.log('✅ Service Worker registered with scope:', registration.scope);

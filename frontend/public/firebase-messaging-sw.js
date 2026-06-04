@@ -4,38 +4,49 @@
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
-// Initialize the Firebase app in the service worker.
-// Note: Replace these config placeholders with your Firebase project Web App credentials.
-// You can find these in the Firebase Console: Project Settings > General > Your apps (Web)
-firebase.initializeApp({
-    apiKey: "AIzaSyAvyjiJJ6MunjisEjt4K1rhHDeuFgi_8fo",
-    authDomain: "attendance-app-14f60.firebaseapp.com",
-    projectId: "attendance-app-14f60",
-    storageBucket: "attendance-app-14f60.firebasestorage.app",
-    messagingSenderId: "274826785203",
-    appId: "1:274826785203:web:3d6c05a76017ba39dd9bc6"
-});
+// Extract Firebase config from the query string (passed during service worker registration)
+const params = new URLSearchParams(self.location.search);
+const apiKey = params.get('apiKey');
+const authDomain = params.get('authDomain');
+const projectId = params.get('projectId');
+const storageBucket = params.get('storageBucket');
+const messagingSenderId = params.get('messagingSenderId');
+const appId = params.get('appId');
 
-// Retrieve an instance of Firebase Cloud Messaging.
-const messaging = firebase.messaging();
+if (apiKey) {
+    // Initialize the Firebase app dynamically using the extracted credentials
+    firebase.initializeApp({
+        apiKey,
+        authDomain,
+        projectId,
+        storageBucket,
+        messagingSenderId,
+        appId
+    });
 
-// Handle background messages
-messaging.onBackgroundMessage((payload) => {
-    console.log('[firebase-messaging-sw.js] Received background message:', payload);
+    // Retrieve an instance of Firebase Cloud Messaging.
+    const messaging = firebase.messaging();
 
-    // Customize notification behavior here
-    const notificationTitle = payload.notification?.title || 'Workforce Alert';
-    const notificationOptions = {
-        body: payload.notification?.body || 'You have a new real-time alert.',
-        icon: '/logo.png', // Ensure this points to a valid logo or fallback
-        badge: '/favicon.ico',
-        data: payload.data || {},
-        tag: payload.data?.notification_id || 'workforce-notification', // collapse duplicate notifications
-        requireInteraction: false
-    };
+    // Handle background messages
+    messaging.onBackgroundMessage((payload) => {
+        console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-    self.registration.showNotification(notificationTitle, notificationOptions);
-});
+        // Customize notification behavior here
+        const notificationTitle = payload.notification?.title || 'Workforce Alert';
+        const notificationOptions = {
+            body: payload.notification?.body || 'You have a new real-time alert.',
+            icon: '/mano-logo.svg', // Points to a valid logo fallback
+            badge: '/favicon.ico',
+            data: payload.data || {},
+            tag: payload.data?.notification_id || 'workforce-notification', // collapse duplicate notifications
+            requireInteraction: false
+        };
+
+        self.registration.showNotification(notificationTitle, notificationOptions);
+    });
+} else {
+    console.warn('⚠️ [firebase-messaging-sw.js] Service worker loaded without active configuration parameters.');
+}
 
 // Handle clicking notifications in the background
 self.addEventListener('notificationclick', (event) => {
