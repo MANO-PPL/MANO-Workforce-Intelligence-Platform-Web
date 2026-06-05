@@ -10,6 +10,8 @@ import { initDatabase } from './src/config/databaseInit.js';
 import { sendPushNotification } from './src/services/notifications/fcmService.js';
 import EventBus from './src/utils/EventBus.js';
 import './src/workers/reportWorker.js';
+import fs from 'fs';
+import { getLogPaths, parseLogLine } from './src/services/superAdmin/pm2Service.js';
 
 const PORT = Number(process.env.PORT) || 5003;
 
@@ -109,6 +111,18 @@ io.on('connection', (socket) => {
     socket.to(`room_${roomId}`).emit('user_stop_typing', { roomId, userId });
   });
 
+  socket.on('subscribe_pm2_logs', () => {
+    if (socket.user?.user_type === 'super_admin') {
+      socket.join('super_admin_pm2_logs');
+      console.log(`[PM2 Monitor] Socket ${socket.id} (user ${userId}) subscribed to PM2 logs`);
+    }
+  });
+
+  socket.on('unsubscribe_pm2_logs', () => {
+    socket.leave('super_admin_pm2_logs');
+    console.log(`[PM2 Monitor] Socket ${socket.id} (user ${userId}) unsubscribed from PM2 logs`);
+  });
+
   socket.on('disconnect', (reason) => {
     // Socket disconnected
   });
@@ -142,6 +156,51 @@ server.on('error', (err) => {
   throw err;
 });
 
+// Start PM2 Log Tailing & Streaming
+const logFileOffsets = {};
+function startLogTailing(ioInstance) {
+  const paths = getLogPaths();
+  const setupWatcher = (filePath, sourceName) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.warn(`[PM2 Monitor] Log file does not exist: ${filePath}`);
+        return;
+      }
+      logFileOffsets[filePath] = fs.statSync(filePath).size;
+      fs.watchFile(filePath, { interval: 1000 }, async (curr, prev) => {
+        if (curr.size > prev.size) {
+          let fileHandle;
+          try {
+            const readLen = curr.size - prev.size;
+            const buffer = Buffer.alloc(readLen);
+            fileHandle = await fs.promises.open(filePath, 'r');
+            await fileHandle.read(buffer, 0, readLen, prev.size);
+            const newText = buffer.toString('utf8');
+            const lines = newText.split('\n');
+            lines.forEach(line => {
+              if (line.trim() !== '') {
+                const parsed = parseLogLine(line, sourceName);
+                if (parsed) {
+                  ioInstance.to('super_admin_pm2_logs').emit('pm2:log', parsed);
+                }
+              }
+            });
+          } catch (err) {
+            console.error(`[PM2 Monitor] Error reading new tail bytes for ${sourceName}:`, err);
+          } finally {
+            if (fileHandle) await fileHandle.close();
+          }
+        }
+      });
+      console.log(`[PM2 Monitor] Tailing initialized for ${sourceName}: ${filePath}`);
+    } catch (err) {
+      console.error(`[PM2 Monitor] Failed to initialize tailing for ${sourceName}:`, err);
+    }
+  };
+  setupWatcher(paths.out, 'stdout');
+  setupWatcher(paths.err, 'stderr');
+}
+
 server.listen(activePort, '0.0.0.0', () => {
   console.log(`Backend server listening at http://0.0.0.0:${activePort}`);
 
@@ -154,4 +213,7 @@ server.listen(activePort, '0.0.0.0', () => {
     initCleanupScheduler();
     initDARReportScheduler();
   }
+
+  // Initialize PM2 logs monitoring tailer
+  startLogTailing(io);
 });
