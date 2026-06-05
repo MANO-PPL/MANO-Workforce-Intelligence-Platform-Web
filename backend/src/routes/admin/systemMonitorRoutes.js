@@ -23,8 +23,7 @@ router.put('/alerts/:id', monitorController.updateSecurityAlertStatus);
 router.get('/feedback', monitorController.getUserFeedback);
 router.put('/feedback/:id', monitorController.updateFeedbackStatus);
 
-// System Logs
-router.get('/logs/errors', monitorController.getErrorLogs);
-router.get('/logs/activity', monitorController.getActivityLogs);
+// PM2 Logs Console
+router.get('/pm2-logs', monitorController.getPM2Logs);
 
 export default router;

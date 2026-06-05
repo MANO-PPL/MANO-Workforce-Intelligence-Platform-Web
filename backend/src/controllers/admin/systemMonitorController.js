@@ -1,6 +1,7 @@
 import { attendanceDB } from '../../config/database.js';
 import AppError from '../../utils/AppError.js';
 import { getFileUrl } from '../../services/s3/s3Service.js';
+import { getHistoryLogs } from '../../services/superAdmin/pm2Service.js';
 
 // --- Security Alerts ---
 export const getSecurityAlerts = async (req, res, next) => {
@@ -177,113 +178,12 @@ const getModuleFromPath = (path) => {
     return 'General';
 };
 
-// --- System Logs ---
-export const getErrorLogs = async (req, res, next) => {
+// --- PM2 Logs Console ---
+export const getPM2Logs = async (req, res, next) => {
     try {
-        const logs = await attendanceDB('application_error_logs')
-            .leftJoin('users', 'application_error_logs.user_id', 'users.user_id')
-            .leftJoin('organizations', 'application_error_logs.org_id', 'organizations.org_id')
-            .select(
-                'application_error_logs.*',
-                'users.user_name', 'users.email',
-                'organizations.org_name'
-            )
-            .orderBy('application_error_logs.occurred_at', 'desc')
-            .limit(1000); // Prevent massive payloads
-
-        const normalizedLogs = logs.map(log => {
-            let platform = 'UNKNOWN';
-            try {
-                let context = log.extra_context;
-                if (typeof context === 'string') {
-                    context = JSON.parse(context);
-                }
-                if (context && context.platform) {
-                    platform = context.platform;
-                }
-            } catch (e) {}
-            if (platform === 'UNKNOWN') {
-                platform = 'WEB'; // default fallback
-            }
-            return {
-                ...log,
-                platform,
-                module: getModuleFromPath(log.request_path)
-            };
-        });
-
-        res.status(200).json({ status: 'success', data: normalizedLogs });
-    } catch (error) {
-        next(error);
-    }
-};
-
-export const getActivityLogs = async (req, res, next) => {
-    try {
-        const logs = await attendanceDB('user_activity_logs')
-            .leftJoin('users', 'user_activity_logs.user_id', 'users.user_id')
-            .leftJoin('organizations', 'user_activity_logs.org_id', 'organizations.org_id')
-            .select(
-                'user_activity_logs.*',
-                'users.user_name', 'users.email',
-                'organizations.org_name'
-            )
-            .orderBy('user_activity_logs.occurred_at', 'desc')
-            .limit(1000);
-
-        const normalizedLogs = logs.map(log => {
-            let platform = 'UNKNOWN';
-            let moduleName = 'General';
-
-            if (log.event_type === 'API_CALL') {
-                platform = log.event_source || 'UNKNOWN';
-                moduleName = log.object_type || 'General';
-                if (moduleName === 'API_ENDPOINT') moduleName = 'General';
-            } else {
-                // Manual log classification
-                platform = log.event_source || 'UNKNOWN';
-                if (platform !== 'WEB' && platform !== 'MOBILE_APP' && platform !== 'API_CLIENT') {
-                    const ua = (log.user_agent || '').toLowerCase();
-                    if (ua.includes('dart') || ua.includes('flutter')) platform = 'MOBILE_APP';
-                    else platform = 'WEB';
-                }
-
-                // Map manual events to module names
-                const lowerType = (log.event_type || '').toLowerCase();
-                const lowerObj = (log.object_type || '').toLowerCase();
-                const lowerDesc = (log.description || '').toLowerCase();
-
-                if (lowerType === 'login' || lowerType === 'logout') {
-                    moduleName = 'Authentication';
-                } else if (lowerType.startsWith('attendance') || lowerObj === 'attendance' || lowerDesc.includes('check in') || lowerDesc.includes('checked in') || lowerDesc.includes('check out') || lowerDesc.includes('checked out')) {
-                    moduleName = 'Attendance';
-                } else if (lowerObj === 'leave' || lowerObj === 'leaves' || lowerType.includes('leave')) {
-                    moduleName = 'Leaves';
-                } else if (lowerObj === 'holiday' || lowerType.includes('holiday')) {
-                    moduleName = 'Holidays';
-                } else if (lowerObj === 'policy' || lowerObj === 'policies') {
-                    moduleName = 'Shift Policies';
-                } else if (lowerObj === 'notification' || lowerType.includes('notification')) {
-                    moduleName = 'Notifications';
-                } else if (lowerObj === 'dar' || lowerType.includes('dar')) {
-                    moduleName = 'DAR (Daily Activity)';
-                } else if (lowerObj === 'employee' || lowerType.includes('employee')) {
-                    moduleName = 'Employees';
-                } else if (lowerObj === 'organization' || lowerType.includes('organization')) {
-                    moduleName = 'Organizations';
-                } else {
-                    moduleName = log.object_type || 'General';
-                }
-            }
-
-            return {
-                ...log,
-                platform,
-                module: moduleName
-            };
-        });
-
-        res.status(200).json({ status: 'success', data: normalizedLogs });
+        const limit = Number(req.query.limit) || 150;
+        const logs = await getHistoryLogs(limit);
+        res.status(200).json({ status: 'success', data: logs });
     } catch (error) {
         next(error);
     }
