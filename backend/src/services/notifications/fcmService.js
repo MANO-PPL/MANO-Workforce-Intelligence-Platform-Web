@@ -130,12 +130,15 @@ export const sendPushNotification = async (userId, title, body, data = {}) => {
         notification: {
           // Must match the channel created in LocalNotificationService + AndroidManifest.xml
           channelId: 'high_importance_channel',
+          channel_id: 'high_importance_channel',
           sound: 'default',
           defaultSound: true,
           // Use our custom monochrome icon (declared in AndroidManifest.xml meta-data)
           icon: 'ic_notification',
           color: '#5B60F6',
           clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          category: 'msg',
         },
       },
       // ── iOS / macOS config ───────────────────────────────────────────────
