@@ -31,7 +31,6 @@ export const getOpenings = async (req, res) => {
 
     const formattedOpenings = openings.map(j => ({
       ...j,
-      skills_required: j.skills_required ? j.skills_required.split(', ') : [],
       form_config: safeParseJSON(j.form_config, [])
     }));
 
@@ -138,7 +137,6 @@ export const getPublicOpening = async (req, res) => {
 
     res.json({
       ...opening,
-      skills_required: opening.skills_required ? opening.skills_required.split(', ') : [],
       form_config: safeParseJSON(opening.form_config, []),
       isExpired
     });
@@ -183,34 +181,32 @@ export const savePipelineStages = async (req, res) => {
 
     const firstNewStageName = stages[0].name;
 
-    // 2. Perform candidate status migrations
-    for (const oldStage of currentStages) {
-      const correspondingNewStage = stages.find(ns => ns.id === oldStage.id);
+    // Fetch all job opening IDs scoped to the organization to perform candidate status migrations
+    const orgOpenings = await trx('recruitment_openings')
+      .where({ org_id: orgId })
+      .select('id');
+    const openingIds = orgOpenings.map(o => o.id);
 
-      if (correspondingNewStage) {
-        // If renamed, update candidates in old stage name to new stage name
-        if (correspondingNewStage.name !== oldStage.name) {
+    // 2. Perform candidate status migrations
+    if (openingIds.length > 0) {
+      for (const oldStage of currentStages) {
+        const correspondingNewStage = stages.find(ns => ns.id === oldStage.id);
+
+        if (correspondingNewStage) {
+          // If renamed, update candidates in old stage name to new stage name
+          if (correspondingNewStage.name !== oldStage.name) {
+            await trx('recruitment_candidates')
+              .where({ stage: oldStage.name })
+              .whereIn('job_id', openingIds)
+              .update({ stage: correspondingNewStage.name });
+          }
+        } else {
+          // If deleted, migrate candidates in old stage name to the first stage of the updated pipeline
           await trx('recruitment_candidates')
             .where({ stage: oldStage.name })
-            .andWhereExists(function() {
-              this.select('*')
-                .from('recruitment_openings')
-                .whereRaw('recruitment_candidates.job_id = recruitment_openings.id')
-                .andWhere('org_id', orgId);
-            })
-            .update({ stage: correspondingNewStage.name });
+            .whereIn('job_id', openingIds)
+            .update({ stage: firstNewStageName });
         }
-      } else {
-        // If deleted, migrate candidates in old stage name to the first stage of the updated pipeline
-        await trx('recruitment_candidates')
-          .where({ stage: oldStage.name })
-          .andWhereExists(function() {
-            this.select('*')
-              .from('recruitment_openings')
-              .whereRaw('recruitment_candidates.job_id = recruitment_openings.id')
-              .andWhere('org_id', orgId);
-          })
-          .update({ stage: firstNewStageName });
       }
     }
 
@@ -322,18 +318,25 @@ export const getCandidatesForJob = async (req, res) => {
       .select('recruitment_candidates.*', 'recruitment_openings.job_title', 'recruitment_openings.department')
       .orderBy('recruitment_candidates.created_at', 'desc');
 
-    const formatted = candidates.map(c => ({
-      ...c,
-      form_responses: safeParseJSON(c.form_responses, {}),
-      ai_strengths: safeParseJSON(c.ai_strengths, []),
-      ai_weaknesses: safeParseJSON(c.ai_weaknesses, []),
-      extracted_skills: safeParseJSON(c.extracted_skills, []),
-      // Map name/email dynamically from the response JSON for presentation
-      full_name: c.form_responses.full_name || c.form_responses['Full Name'] || 'Candidate ' + c.id,
-      email: c.form_responses.email || c.form_responses['Email Address'] || 'N/A',
-      mobile: c.form_responses.mobile || c.form_responses['Mobile Number'] || 'N/A',
-      resume_name: c.form_responses.resume_name || c.form_responses['Resume File'] || 'resume.pdf'
-    }));
+    const formatted = candidates.map(c => {
+      const resp = safeParseJSON(c.form_responses, {});
+      return {
+        ...c,
+        form_responses: resp,
+        ai_strengths: safeParseJSON(c.ai_strengths, []),
+        ai_weaknesses: safeParseJSON(c.ai_weaknesses, []),
+        extracted_skills: safeParseJSON(c.extracted_skills, []),
+        // Map fields dynamically from the response JSON for presentation compatibility
+        full_name: resp.full_name || resp['Full Name'] || 'Candidate ' + c.id,
+        email: resp.email || resp['Email Address'] || 'N/A',
+        mobile: resp.mobile || resp['Mobile Number'] || 'N/A',
+        resume_name: resp.resume_name || resp['Resume File'] || 'resume.pdf',
+        notice_period: resp.notice_period || resp['Notice Period'] || 'N/A',
+        current_ctc: resp.current_ctc || resp['Current CTC'] || 'N/A',
+        current_company: resp.current_company || resp['Current Company'] || 'N/A',
+        cover_letter: resp.cover_letter || resp['Cover Note'] || resp['Cover Letter'] || ''
+      };
+    });
 
     res.json(formatted);
   } catch (error) {
@@ -387,16 +390,22 @@ export const applyForJob = async (req, res) => {
       return res.status(404).json({ error: 'Job opening is closed or deactivated.' });
     }
 
-    // Capture uploaded resume from Multer (mock upload path)
-    const resumeName = req.file ? req.file.originalname : 'resume.pdf';
-    const resumeUrl = `/uploads/resumes/${Date.now()}_${resumeName}`;
+    // Capture uploaded resume from Multer
+    const resumeName = req.file ? req.file.originalname : null;
+    const resumeUrl = req.file ? `/uploads/resumes/${Date.now()}_${resumeName}` : null;
 
     // Inject file details into the dynamic form response values
     const fullFormResponses = {
       ...parsedResponses,
-      resume_name: resumeName,
-      resume_url: resumeUrl
+      ...(resumeName ? { resume_name: resumeName, resume_url: resumeUrl } : {})
     };
+
+    // If the opening's form config has a file field, map the file to it as well
+    const formConfig = safeParseJSON(opening.form_config, []);
+    const fileField = formConfig.find(f => f.type === 'file');
+    if (fileField && resumeName) {
+      fullFormResponses[fileField.label] = resumeName;
+    }
 
     // Calculate AI matches and scores on the backend
     const fullName = parsedResponses.full_name || parsedResponses['Full Name'] || 'Candidate';
@@ -437,6 +446,154 @@ export const applyForJob = async (req, res) => {
   } catch (error) {
     console.error('Error submitting application:', error);
     res.status(500).json({ error: 'Failed to submit candidate application.' });
+  }
+};
+
+// Update an existing job opening
+export const updateOpening = async (req, res) => {
+  try {
+    const orgId = req.user.org_id;
+    const { id } = req.params;
+    const {
+      job_title,
+      department,
+      location,
+      employment_type,
+      experience_required,
+      salary_range,
+      skills_required,
+      responsibilities,
+      benefits,
+      deadline,
+      status,
+      form_config,
+      template_id,
+      template_source
+    } = req.body;
+
+    const affected = await attendanceDB('recruitment_openings')
+      .where({ id, org_id: orgId })
+      .update({
+        job_title,
+        department,
+        location,
+        employment_type: employment_type || 'Full-time',
+        experience_required,
+        salary_range,
+        skills_required: Array.isArray(skills_required) ? skills_required.join(', ') : skills_required,
+        responsibilities,
+        benefits,
+        deadline,
+        status: status || 'active',
+        form_config: safeStringifyJSON(form_config),
+        template_id,
+        template_source: template_source || 'scratch',
+        updated_at: attendanceDB.fn.now()
+      });
+
+    if (!affected) {
+      return res.status(404).json({ error: 'Job opening not found.' });
+    }
+
+    res.json({ message: 'Job opening updated successfully.' });
+  } catch (error) {
+    console.error('Error updating opening:', error);
+    res.status(500).json({ error: 'Failed to update job opening.' });
+  }
+};
+
+// Delete a job opening and its candidates
+export const deleteOpening = async (req, res) => {
+  const trx = await attendanceDB.transaction();
+  try {
+    const orgId = req.user.org_id;
+    const { id } = req.params;
+
+    // Verify job belongs to org
+    const opening = await trx('recruitment_openings')
+      .where({ id, org_id: orgId })
+      .first();
+
+    if (!opening) {
+      await trx.rollback();
+      return res.status(404).json({ error: 'Job opening not found.' });
+    }
+
+    // Delete associated candidates
+    await trx('recruitment_candidates')
+      .where({ job_id: id })
+      .delete();
+
+    // Delete job opening
+    await trx('recruitment_openings')
+      .where({ id, org_id: orgId })
+      .delete();
+
+    await trx.commit();
+    res.json({ message: 'Job opening and associated candidates deleted successfully.' });
+  } catch (error) {
+    await trx.rollback();
+    console.error('Error deleting opening:', error);
+    res.status(500).json({ error: 'Failed to delete job opening.' });
+  }
+};
+
+// Update custom form template
+export const updateTemplate = async (req, res) => {
+  try {
+    const orgId = req.user.org_id;
+    const { id } = req.params;
+    const { name, description, fields } = req.body;
+
+    if (!name || !fields) {
+      return res.status(400).json({ error: 'Missing template name or fields schema.' });
+    }
+
+    const affected = await attendanceDB('recruitment_form_templates')
+      .where({ id, org_id: orgId })
+      .update({
+        name,
+        description: description || null,
+        fields: safeStringifyJSON(fields)
+      });
+
+    if (!affected) {
+      return res.status(404).json({ error: 'Template not found or cannot be modified.' });
+    }
+
+    res.json({ message: 'Template updated successfully.' });
+  } catch (error) {
+    console.error('Error updating template:', error);
+    res.status(500).json({ error: 'Failed to update template.' });
+  }
+};
+
+// Delete candidate application
+export const deleteCandidate = async (req, res) => {
+  try {
+    const orgId = req.user.org_id;
+    const { id } = req.params;
+
+    // Verify candidate belongs to the active organization's openings
+    const candidate = await attendanceDB('recruitment_candidates')
+      .join('recruitment_openings', 'recruitment_candidates.job_id', '=', 'recruitment_openings.id')
+      .where('recruitment_candidates.id', id)
+      .andWhere('recruitment_openings.org_id', orgId)
+      .select('recruitment_candidates.id')
+      .first();
+
+    if (!candidate) {
+      return res.status(404).json({ error: 'Candidate profile not found.' });
+    }
+
+    await attendanceDB('recruitment_candidates')
+      .where({ id })
+      .delete();
+
+    res.json({ message: 'Candidate application deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting candidate:', error);
+    res.status(500).json({ error: 'Failed to delete candidate application.' });
   }
 };
 

@@ -4,16 +4,20 @@ import { authenticateJWT, requireActiveOrg } from '../../middleware/auth.js';
 import {
   getOpenings,
   createOpening,
+  updateOpening,
+  deleteOpening,
   toggleOpeningStatus,
   getPublicOpening,
   getPipelineStages,
   savePipelineStages,
   getTemplates,
   saveTemplate,
+  updateTemplate,
   deleteTemplate,
   getCandidatesForJob,
   applyForJob,
-  updateCandidateStage
+  updateCandidateStage,
+  deleteCandidate
 } from '../../controllers/recruitmentController.js';
 
 const router = express.Router();
@@ -29,6 +33,8 @@ router.use(authenticateJWT, requireActiveOrg);
 // Job postings
 router.get('/openings', getOpenings);
 router.post('/openings', createOpening);
+router.put('/openings/:id', updateOpening);
+router.delete('/openings/:id', deleteOpening);
 router.put('/openings/:id/status', toggleOpeningStatus);
 
 // Pipeline Customization
@@ -38,10 +44,12 @@ router.post('/pipeline-stages', savePipelineStages);
 // Custom saved templates
 router.get('/templates', getTemplates);
 router.post('/templates', saveTemplate);
+router.put('/templates/:id', updateTemplate);
 router.delete('/templates/:id', deleteTemplate);
 
 // Candidate applications & pipeline
 router.get('/candidates', getCandidatesForJob);
 router.put('/candidates/:id/stage', updateCandidateStage);
+router.delete('/candidates/:id', deleteCandidate);
 
 export default router;
