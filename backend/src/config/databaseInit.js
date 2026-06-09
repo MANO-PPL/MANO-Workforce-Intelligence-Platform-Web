@@ -92,6 +92,106 @@ export const initDatabase = async () => {
             console.log('✅ "user_fcm_tokens" table initialized.');
         }
 
+        // 4. Initialize recruitment_openings
+        const hasRecruitmentOpenings = await db.schema.hasTable('recruitment_openings');
+        if (!hasRecruitmentOpenings) {
+            console.log('Creating "recruitment_openings" table...');
+            await db.schema.createTable('recruitment_openings', (table) => {
+                table.increments('id').primary();
+                table.integer('org_id').unsigned().notNullable();
+                table.string('job_title', 255).notNullable();
+                table.string('slug', 255).notNullable().unique();
+                table.string('department', 100).notNullable();
+                table.string('location', 255).notNullable();
+                table.string('employment_type', 50).defaultTo('Full-time');
+                table.string('experience_required', 100).nullable();
+                table.string('salary_range', 100).nullable();
+                table.text('skills_required').nullable();
+                table.text('responsibilities').nullable();
+                table.text('benefits').nullable();
+                table.date('deadline').nullable();
+                table.enum('status', ['active', 'inactive']).defaultTo('active');
+                table.text('form_config', 'longtext').nullable(); // JSON configuration for dynamic forms
+                table.string('template_id', 100).nullable();
+                table.enum('template_source', ['predefined', 'custom', 'scratch']).defaultTo('scratch');
+                table.integer('created_by').unsigned().nullable();
+                table.timestamp('created_at').defaultTo(db.fn.now());
+                table.timestamp('updated_at').defaultTo(db.fn.now());
+
+                table.index(['org_id']);
+                table.index(['slug']);
+            });
+            console.log('✅ "recruitment_openings" table initialized.');
+        }
+
+        // 5. Initialize recruitment_pipeline_stages
+        const hasRecruitmentStages = await db.schema.hasTable('recruitment_pipeline_stages');
+        if (!hasRecruitmentStages) {
+            console.log('Creating "recruitment_pipeline_stages" table...');
+            await db.schema.createTable('recruitment_pipeline_stages', (table) => {
+                table.string('id', 100).primary();
+                table.integer('org_id').unsigned().notNullable();
+                table.string('name', 100).notNullable();
+                table.string('color', 50).defaultTo('slate');
+                table.integer('sort_order').defaultTo(0);
+                table.timestamp('created_at').defaultTo(db.fn.now());
+                table.timestamp('updated_at').defaultTo(db.fn.now());
+
+                table.index(['org_id']);
+            });
+            console.log('✅ "recruitment_pipeline_stages" table initialized.');
+        }
+
+        // 6. Initialize recruitment_form_templates
+        const hasRecruitmentTemplates = await db.schema.hasTable('recruitment_form_templates');
+        if (!hasRecruitmentTemplates) {
+            console.log('Creating "recruitment_form_templates" table...');
+            await db.schema.createTable('recruitment_form_templates', (table) => {
+                table.string('id', 100).primary();
+                table.integer('org_id').unsigned().nullable(); // null for global predefined templates
+                table.string('name', 255).notNullable();
+                table.text('description').nullable();
+                table.text('fields', 'longtext').notNullable(); // JSON list of template components
+                table.timestamp('created_at').defaultTo(db.fn.now());
+
+                table.index(['org_id']);
+            });
+            console.log('✅ "recruitment_form_templates" table initialized.');
+        }
+
+        // 7. Initialize recruitment_candidates
+        const hasRecruitmentCandidates = await db.schema.hasTable('recruitment_candidates');
+        if (!hasRecruitmentCandidates) {
+            console.log('Creating "recruitment_candidates" table...');
+            await db.schema.createTable('recruitment_candidates', (table) => {
+                table.increments('id').primary();
+                table.integer('job_id').unsigned().notNullable();
+                table.string('template_id', 100).nullable();
+                table.enum('template_source', ['predefined', 'custom', 'scratch']).nullable();
+                table.string('stage', 100).defaultTo('Applied');
+                table.text('form_responses', 'longtext').notNullable(); // JSON responses containing all dynamic form data
+                table.integer('ai_score').defaultTo(0);
+                table.integer('skill_match_score').defaultTo(0);
+                table.integer('experience_match_score').defaultTo(0);
+                table.integer('education_match_score').defaultTo(0);
+                table.integer('culture_fit_score').defaultTo(0);
+                table.text('ai_strengths').nullable(); // JSON list
+                table.text('ai_weaknesses').nullable(); // JSON list
+                table.string('ai_recommendation', 255).nullable();
+                table.text('extracted_skills').nullable(); // JSON list
+                table.string('total_experience', 50).nullable();
+                table.string('relevant_experience', 50).nullable();
+                table.string('education', 255).nullable();
+                table.text('certifications').nullable();
+                table.text('projects').nullable();
+                table.text('achievements').nullable();
+                table.timestamp('created_at').defaultTo(db.fn.now());
+
+                table.index(['job_id']);
+            });
+            console.log('✅ "recruitment_candidates" table initialized.');
+        }
+
     } catch (error) {
         console.error('Error during database table initialization:', error);
     }
