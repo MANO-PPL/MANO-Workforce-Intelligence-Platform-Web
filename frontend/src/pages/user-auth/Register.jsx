@@ -166,9 +166,27 @@ const Register = () => {
                 toast.error("A valid contact email is required.");
                 return;
             }
-            if (formData.tax_identity !== "Neither" && !formData.tax_code.trim()) {
-                toast.error(`Please enter your ${formData.tax_identity} identification code.`);
-                return;
+            if (formData.tax_identity !== "Neither") {
+                if (!formData.tax_code.trim()) {
+                    toast.error(`Please enter your ${formData.tax_identity} identification code.`);
+                    return;
+                }
+                const upperTaxCode = formData.tax_code.trim().toUpperCase();
+                if (formData.tax_identity === "PAN") {
+                    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+                    if (!panRegex.test(upperTaxCode)) {
+                        toast.error("Invalid PAN format. It must be in the format: ABCDE1234F (5 letters, 4 digits, 1 letter).");
+                        return;
+                    }
+                } else if (formData.tax_identity === "GST") {
+                    const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+                    if (!gstRegex.test(upperTaxCode)) {
+                        toast.error("Invalid GST format. It must be in the format: 27ABCDE1234F1Z5.");
+                        return;
+                    }
+                }
+                // Automatically save the upper-cased code back to state
+                setFormData(prev => ({ ...prev, tax_code: upperTaxCode }));
             }
         }
 
