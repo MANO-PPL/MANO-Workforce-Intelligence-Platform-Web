@@ -1,6 +1,53 @@
 import { attendanceDB } from '../../config/database.js';
 import { encryptText, decryptText } from '../../utils/encryption.js';
 import EventBus from '../../utils/EventBus.js';
+import { getFileUrl } from '../s3/s3Service.js';
+
+// Helper to parse system card and sign its attachments
+const signSystemCardAttachments = async (messageText) => {
+    if (!messageText || !messageText.startsWith("[SYSTEM_CARD:")) return messageText;
+    const closeBracketIdx = messageText.indexOf("]");
+    if (closeBracketIdx === -1) return messageText;
+
+    const header = messageText.substring(0, closeBracketIdx + 1);
+    const body = messageText.substring(closeBracketIdx + 1).trim();
+    try {
+        const payload = JSON.parse(body);
+        if (payload && Array.isArray(payload.attachments)) {
+            const signedAttachments = [];
+            for (const att of payload.attachments) {
+                let key = null;
+                if (att.url) {
+                    try {
+                        const parsed = new URL(att.url);
+                        if (parsed.hostname.includes('s3.amazonaws.com') || parsed.hostname.includes('.s3.')) {
+                            key = decodeURIComponent(parsed.pathname.substring(1));
+                        }
+                    } catch (e) {
+                        // Ignore
+                    }
+                }
+                if (key) {
+                    try {
+                        const signedRes = await getFileUrl({ key });
+                        if (signedRes.success) {
+                            signedAttachments.push({ ...att, url: signedRes.url });
+                            continue;
+                        }
+                    } catch (err) {
+                        console.error("Error signing S3 key for system card:", key, err);
+                    }
+                }
+                signedAttachments.push(att);
+            }
+            payload.attachments = signedAttachments;
+            return `${header} ${JSON.stringify(payload)}`;
+        }
+    } catch (e) {
+        // Ignore JSON parsing errors for legacy text fallback
+    }
+    return messageText;
+};
 
 /**
  * Helper to get or create a direct chat room between two users
@@ -83,11 +130,13 @@ export async function sendSystemAlert({ org_id, sender_id, recipient_id, card_ty
                 .select('user_name', 'profile_image_url')
                 .first();
 
+            const signedMessageText = await signSystemCardAttachments(messageText);
+
             const formattedResponseMsg = {
                 message_id: messageId,
                 room_id: Number(roomId),
                 sender_id: Number(sender_id),
-                message_text: messageText,
+                message_text: signedMessageText,
                 created_at: newMsg.created_at,
                 user_name: sender ? sender.user_name : 'System Alert',
                 profile_image_url: sender ? sender.profile_image_url : null

@@ -3,8 +3,81 @@ import catchAsync from '../../utils/catchAsync.js';
 import AppError from '../../utils/AppError.js';
 import { handleMentions } from '../../services/collaboration/mentionService.js';
 import { encryptText, decryptText } from '../../utils/encryption.js';
-import { uploadFile } from '../../services/s3/s3Service.js';
+import { uploadFile, getFileUrl } from '../../services/s3/s3Service.js';
 import EventBus from '../../utils/EventBus.js';
+
+// Helper to sign chat attachments (extract key from URL if missing)
+const getSignedAttachment = async (attachment) => {
+    if (!attachment) return null;
+    let key = attachment.key;
+    if (!key && attachment.url) {
+        try {
+            const parsed = new URL(attachment.url);
+            if (parsed.hostname.includes('s3.amazonaws.com') || parsed.hostname.includes('.s3.')) {
+                key = decodeURIComponent(parsed.pathname.substring(1));
+            }
+        } catch (e) {
+            // Ignore
+        }
+    }
+    if (key) {
+        try {
+            const signedRes = await getFileUrl({ key });
+            if (signedRes.success) {
+                return { ...attachment, url: signedRes.url };
+            }
+        } catch (err) {
+            console.error("Error signing S3 key:", key, err);
+        }
+    }
+    return attachment;
+};
+
+// Helper to parse system card and sign its attachments
+const signSystemCardAttachments = async (messageText) => {
+    if (!messageText || !messageText.startsWith("[SYSTEM_CARD:")) return messageText;
+    const closeBracketIdx = messageText.indexOf("]");
+    if (closeBracketIdx === -1) return messageText;
+
+    const header = messageText.substring(0, closeBracketIdx + 1);
+    const body = messageText.substring(closeBracketIdx + 1).trim();
+    try {
+        const payload = JSON.parse(body);
+        if (payload && Array.isArray(payload.attachments)) {
+            const signedAttachments = [];
+            for (const att of payload.attachments) {
+                let key = null;
+                if (att.url) {
+                    try {
+                        const parsed = new URL(att.url);
+                        if (parsed.hostname.includes('s3.amazonaws.com') || parsed.hostname.includes('.s3.')) {
+                            key = decodeURIComponent(parsed.pathname.substring(1));
+                        }
+                    } catch (e) {
+                        // Ignore
+                    }
+                }
+                if (key) {
+                    try {
+                        const signedRes = await getFileUrl({ key });
+                        if (signedRes.success) {
+                            signedAttachments.push({ ...att, url: signedRes.url });
+                            continue;
+                        }
+                    } catch (err) {
+                        console.error("Error signing S3 key for system card:", key, err);
+                    }
+                }
+                signedAttachments.push(att);
+            }
+            payload.attachments = signedAttachments;
+            return `${header} ${JSON.stringify(payload)}`;
+        }
+    } catch (e) {
+        // Ignore JSON parsing errors for legacy text fallback
+    }
+    return messageText;
+};
 
 // Helper to enrich a raw chat room with members info, last message, unread count, etc.
 const enrichRoomDetails = async (room, userId) => {
@@ -544,19 +617,30 @@ export const getRoomMessages = catchAsync(async (req, res, next) => {
         .whereIn('user_id', allQueryIds)
         .select('user_id', 'user_name', 'profile_image_url');
 
-    const enrichedMessages = msgs.map(msg => {
+    const enrichedMessages = await Promise.all(msgs.map(async msg => {
         const sender = members.find(m => Number(m.user_id) === Number(msg.sender_id));
+        
+        let attachment = msg.attachment || null;
+        if (attachment) {
+            attachment = await getSignedAttachment(attachment);
+        }
+        
+        let messageText = msg.message_text;
+        if (messageText && messageText.startsWith("[SYSTEM_CARD:")) {
+            messageText = await signSystemCardAttachments(messageText);
+        }
+
         return {
             message_id: msg.message_id,
             room_id: Number(roomId),
             sender_id: Number(msg.sender_id),
-            message_text: msg.message_text,
-            attachment: msg.attachment || null,
+            message_text: messageText,
+            attachment,
             created_at: msg.created_at,
             user_name: sender ? sender.user_name : 'Unknown Colleague',
             profile_image_url: sender ? sender.profile_image_url : null
         };
-    });
+    }));
 
     res.json({
         success: true,
@@ -641,12 +725,17 @@ export const sendMessage = catchAsync(async (req, res, next) => {
         .select('user_name', 'profile_image_url')
         .first();
 
+    let signedAttachment = newMsg.attachment;
+    if (signedAttachment) {
+        signedAttachment = await getSignedAttachment(signedAttachment);
+    }
+
     const formattedResponseMsg = {
         message_id: messageId,
         room_id: Number(roomId),
         sender_id: Number(userId),
         message_text: newMsg.message_text,
-        attachment: newMsg.attachment,
+        attachment: signedAttachment,
         created_at: newMsg.created_at,
         user_name: sender ? sender.user_name : 'Unknown Colleague',
         profile_image_url: sender ? sender.profile_image_url : null
