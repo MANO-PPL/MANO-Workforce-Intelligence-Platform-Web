@@ -41,6 +41,7 @@ import PublicJobOpening from "./pages/recruitment/PublicJobOpening";
 import EmployeeMaster from "./pages/employees/EmployeeMaster";
 import DocumentGenerator from "./pages/documents/DocumentGenerator";
 import Documentation from "./pages/documentation/Documentation";
+import EmployeeUnifiedMaster from "./pages/employees/EmployeeUnifiedMaster";
 
 // Organization Pages Imports
 
@@ -313,8 +314,8 @@ function App() {
               <Route path="/reports" element={<ResponsiveRoute DesktopComponent={Reports} MobileComponent={MobileReports} />} />
               <Route path="/shift-management" element={<ResponsiveRoute DesktopComponent={ShiftManagement} MobileComponent={MobileShiftManagement} />} />
               <Route path="/geofencing" element={<ResponsiveRoute DesktopComponent={GeoFencing} MobileComponent={MobileGeoFencing} />} />
-              <Route path="/employee-master" element={<EmployeeMaster />} />
-              <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeList} MobileComponent={MobileEmployeeList} />} />
+              <Route path="/employee-master" element={<Navigate to="/employees" replace />} />
+              <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeUnifiedMaster} MobileComponent={MobileEmployeeList} />} />>
               <Route path="/employees/add" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
               <Route path="/employees/edit/:id" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
               <Route path="/employees/bulk" element={<ResponsiveRoute DesktopComponent={BulkUpload} MobileComponent={MobileBulkUpload} />} />

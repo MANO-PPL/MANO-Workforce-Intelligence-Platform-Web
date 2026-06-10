@@ -67,7 +67,6 @@ const getNavItems = (userType) => {
         { icon: <ShieldAlert size={18} />, text: "Security Alerts", to: "/super-admin/alerts", roles: ['super_admin'] },
         { icon: <MessageSquare size={18} />, text: "User Feedback", to: "/super-admin/feedback", roles: ['super_admin'] },
         { icon: <Code size={18} />, text: "System Logs", to: "/super-admin/logs", roles: ['super_admin'] },
-        { icon: <ClipboardCheck size={18} />, text: "Employee Master", to: "/employee-master", roles: ['admin', 'hr'] },
         { icon: <Users size={18} />, text: "Employees", to: "/employees", roles: ['admin', 'hr'] },
         { icon: <Calendar size={18} />, text: "Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
         { icon: <Clock size={18} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
