@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getColumnPreferences, updateColumnPreferences } from '../../services/userService';
 import EmployeeFormContent from '../../components/employees/EmployeeFormContent';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
-import { KpiGoalSheets, ReviewsAndRatings, AiPerformanceAnalyzer } from '../performance/PerformanceViews';
+import { PerformanceHub, AiPerformanceAnalyzer } from '../performance/PerformanceViews';
 
 // Document categories and checklist items redefined as templates
 const DEFAULT_CHECKLIST_TEMPLATES = [
@@ -200,7 +200,18 @@ const EmployeeUnifiedMaster = () => {
 
     // Performance Appraisals Cycle state
     const [selectedCycleId, setSelectedCycleId] = useState('cycle-2');
-    const [cycles, setCycles] = useState(DEFAULT_CYCLES);
+    const [cycles, setCycles] = useState(() => {
+        const stored = localStorage.getItem('mano_performance_cycles');
+        if (stored) {
+            try {
+                return JSON.parse(stored);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        return DEFAULT_CYCLES;
+    });
+
 
     // AI Document Auditor states
     const [activeOcrDoc, setActiveOcrDoc] = useState('');
@@ -314,9 +325,10 @@ const EmployeeUnifiedMaster = () => {
 
     // Template Modals & Forms States
     const [showTemplatesModal, setShowTemplatesModal] = useState(false);
-    const [templatesModalTab, setTemplatesModalTab] = useState('checklist'); // 'checklist' | 'document'
+    const [templatesModalTab, setTemplatesModalTab] = useState('checklist'); // 'checklist' | 'document' | 'appraisal_cycles'
     const [selectedChecklistTemplateId, setSelectedChecklistTemplateId] = useState('');
     const [selectedDocTemplateId, setSelectedDocTemplateId] = useState('');
+    const [selectedCyclesManagerId, setSelectedCyclesManagerId] = useState('');
 
     const [newChecklistItemText, setNewChecklistItemText] = useState('');
     const [newDocCatText, setNewDocCatText] = useState('');
@@ -334,6 +346,61 @@ const EmployeeUnifiedMaster = () => {
             setSelectedDocTemplateId(documentTemplates[0].id);
         }
     }, [documentTemplates, selectedDocTemplateId]);
+
+    useEffect(() => {
+        if (cycles.length > 0 && !selectedCyclesManagerId) {
+            setSelectedCyclesManagerId(cycles[0].id);
+        }
+    }, [cycles, selectedCyclesManagerId]);
+
+    const handleCreateNewCycleInManager = () => {
+        const newId = `cycle-${Date.now()}`;
+        const newCycle = {
+            id: newId,
+            name: 'New Appraisal Cycle',
+            type: 'Quarterly',
+            status: 'Active',
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            targetEmployeeType: 'All'
+        };
+        const updated = [...cycles, newCycle];
+        setCycles(updated);
+        localStorage.setItem('mano_performance_cycles', JSON.stringify(updated));
+        setSelectedCyclesManagerId(newId);
+        toast.success('New Appraisal Cycle created in manager');
+    };
+
+    const handleUpdateCycleField = (id, field, value) => {
+        const updated = cycles.map(c => {
+            if (c.id === id) {
+                return { ...c, [field]: value };
+            }
+            return c;
+        });
+        setCycles(updated);
+        localStorage.setItem('mano_performance_cycles', JSON.stringify(updated));
+    };
+
+    const handleDeleteCycleFromManager = (id) => {
+        const updated = cycles.filter(c => c.id !== id);
+        setCycles(updated);
+        localStorage.setItem('mano_performance_cycles', JSON.stringify(updated));
+        
+        // Select next available or empty
+        if (updated.length > 0) {
+            setSelectedCyclesManagerId(updated[0].id);
+            if (selectedCycleId === id) {
+                setSelectedCycleId(updated[0].id);
+            }
+        } else {
+            setSelectedCyclesManagerId('');
+            if (selectedCycleId === id) {
+                setSelectedCycleId('');
+            }
+        }
+        toast.info('Performance cycle deleted');
+    };
 
     // Checklist Template Handler functions
     const handleAddChecklistTemplate = () => {
@@ -1440,6 +1507,8 @@ const EmployeeUnifiedMaster = () => {
         toast.info("Override revoked.");
     };
 
+
+
     const handleFormSuccess = () => {
         fetchEmployees(selectedEmployee.id);
         setEditMode(false);
@@ -1992,8 +2061,7 @@ const EmployeeUnifiedMaster = () => {
                                     { id: 'checklist', label: 'Onboarding Checklist', icon: <CheckCircle2 size={14} /> },
                                     { id: 'documents', label: 'Document Files', icon: <FileText size={14} /> },
                                     { id: 'ai_verify', label: 'AI Auditor', icon: <Sparkles size={14} /> },
-                                    { id: 'perf_goals', label: 'KPI & Goals', icon: <Award size={14} /> },
-                                    { id: 'perf_reviews', label: 'Reviews & Ratings', icon: <FileText size={14} /> },
+                                    { id: 'perf_hub', label: 'Performance Hub', icon: <Award size={14} /> },
                                     { id: 'perf_analyzer', label: 'AI Performance', icon: <Sparkles size={14} /> }
                                 ].map(tab => (
                                     <button
@@ -2720,43 +2788,39 @@ const EmployeeUnifiedMaster = () => {
                                     );
                                 })()}
 
-                                {/* 5. KPI & Goals Tab */}
-                                {drawerTab === 'perf_goals' && (
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center bg-slate-50 dark:bg-github-dark-subtle/25 p-3 rounded-lg border border-slate-200 dark:border-github-dark-border mb-4">
-                                            <span className="font-bold text-slate-700 dark:text-github-dark-text">Select Performance Cycle</span>
-                                            <select 
-                                                value={selectedCycleId} 
-                                                onChange={(e) => setSelectedCycleId(e.target.value)}
-                                                className="px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded text-xs focus:outline-none"
-                                            >
-                                                {cycles.map(c => (
-                                                    <option key={c.id} value={c.id}>{c.name} ({c.status})</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <KpiGoalSheets employeeId={selectedEmployee.id} cycleId={selectedCycleId} />
-                                    </div>
-                                )}
+                                {/* 5. Performance Hub Tab */}
+                                {drawerTab === 'perf_hub' && (() => {
+                                    const empType = selectedEmployee?.profile?.employment_type || 'Full-time';
+                                    const filteredCycles = cycles.filter(c => {
+                                        if (!c.targetEmployeeType || c.targetEmployeeType === 'All') return true;
+                                        return c.targetEmployeeType.toLowerCase() === empType.toLowerCase();
+                                    });
+                                    const activeCycleId = filteredCycles.some(c => c.id === selectedCycleId) ? selectedCycleId : (filteredCycles[0]?.id || '');
 
-                                {/* 6. Reviews & Ratings Tab */}
-                                {drawerTab === 'perf_reviews' && (
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center bg-slate-50 dark:bg-github-dark-subtle/25 p-3 rounded-lg border border-slate-200 dark:border-github-dark-border mb-4">
-                                            <span className="font-bold text-slate-700 dark:text-github-dark-text">Select Performance Cycle</span>
-                                            <select 
-                                                value={selectedCycleId} 
-                                                onChange={(e) => setSelectedCycleId(e.target.value)}
-                                                className="px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded text-xs focus:outline-none"
-                                            >
-                                                {cycles.map(c => (
-                                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                                ))}
-                                            </select>
+                                    return (
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-github-dark-subtle/25 p-3 rounded-lg border border-slate-200 dark:border-github-dark-border mb-4">
+                                                <span className="font-bold text-slate-700 dark:text-github-dark-text">Select Performance Cycle</span>
+                                                <select 
+                                                    value={activeCycleId} 
+                                                    onChange={(e) => setSelectedCycleId(e.target.value)}
+                                                    className="px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded text-xs focus:outline-none cursor-pointer font-semibold"
+                                                >
+                                                    {filteredCycles.map(c => (
+                                                        <option key={c.id} value={c.id}>{c.name} ({c.type} - {c.status})</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {activeCycleId ? (
+                                                <PerformanceHub employee={selectedEmployee} selectedCycleId={activeCycleId} />
+                                            ) : (
+                                                <div className="p-8 text-center text-slate-400 italic">
+                                                    No appraisal cycles configured targeting {empType} employees. Configure appraisal cycles in templates settings.
+                                                </div>
+                                            )}
                                         </div>
-                                        <ReviewsAndRatings employeeId={selectedEmployee.id} cycleId={selectedCycleId} />
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 {/* 7. AI Performance Analyzer Tab */}
                                 {drawerTab === 'perf_analyzer' && (
@@ -2920,6 +2984,17 @@ const EmployeeUnifiedMaster = () => {
                                 <FileText size={14} />
                                 <span>Required Documents Templates</span>
                             </button>
+                            <button
+                                onClick={() => setTemplatesModalTab('appraisal_cycles')}
+                                className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold transition-all ${
+                                    templatesModalTab === 'appraisal_cycles'
+                                        ? 'border-indigo-600 text-indigo-650 dark:border-indigo-400 dark:text-[#f0f6fc]'
+                                        : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-github-dark-muted dark:hover:text-slate-200'
+                                }`}
+                            >
+                                <Award size={14} />
+                                <span>Performance Appraisal Cycles</span>
+                            </button>
                         </div>
 
                         {/* Main Layout: Split Screen */}
@@ -2944,7 +3019,7 @@ const EmployeeUnifiedMaster = () => {
                                                 <ArrowRight size={14} className={selectedChecklistTemplateId === t.id ? "opacity-100 text-indigo-600" : "opacity-0"} />
                                             </button>
                                         ))
-                                    ) : (
+                                    ) : templatesModalTab === 'document' ? (
                                         documentTemplates.map(t => (
                                             <button
                                                 key={t.id}
@@ -2959,15 +3034,58 @@ const EmployeeUnifiedMaster = () => {
                                                 <ArrowRight size={14} className={selectedDocTemplateId === t.id ? "opacity-100 text-indigo-600" : "opacity-0"} />
                                             </button>
                                         ))
+                                    ) : (
+                                        cycles.map(c => (
+                                            <button
+                                                key={c.id}
+                                                onClick={() => setSelectedCyclesManagerId(c.id)}
+                                                className={`w-full text-left p-3 rounded-xl border font-bold transition-all flex flex-col gap-1 ${
+                                                    selectedCyclesManagerId === c.id
+                                                        ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-500 text-indigo-650 dark:text-indigo-400'
+                                                        : 'bg-white dark:bg-github-dark-subtle/35 border-slate-200 dark:border-github-dark-border text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850/20'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between w-full">
+                                                    <span>{c.name}</span>
+                                                    <ArrowRight size={14} className={selectedCyclesManagerId === c.id ? "opacity-100 text-indigo-600" : "opacity-0"} />
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase ${
+                                                        c.status === 'Active'
+                                                            ? 'bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400'
+                                                            : c.status === 'Evaluating'
+                                                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400'
+                                                            : c.status === 'Upcoming'
+                                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-400'
+                                                            : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}>
+                                                        {c.status}
+                                                    </span>
+                                                    <span className="text-[9px] text-slate-400 font-normal">{c.type}</span>
+                                                </div>
+                                            </button>
+                                        ))
                                     )}
                                 </div>
 
                                 <button
-                                    onClick={templatesModalTab === 'checklist' ? handleAddChecklistTemplate : handleAddDocTemplate}
+                                    onClick={
+                                        templatesModalTab === 'checklist' 
+                                            ? handleAddChecklistTemplate 
+                                            : templatesModalTab === 'document' 
+                                            ? handleAddDocTemplate 
+                                            : handleCreateNewCycleInManager
+                                    }
                                     className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-605 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-sm mt-4 shrink-0"
                                 >
                                     <Plus size={14} />
-                                    <span>Create New Template</span>
+                                    <span>
+                                        {templatesModalTab === 'checklist' 
+                                            ? 'Create New Template' 
+                                            : templatesModalTab === 'document' 
+                                            ? 'Create New Template' 
+                                            : 'Create New Cycle'}
+                                    </span>
                                 </button>
                             </div>
 
@@ -3060,7 +3178,7 @@ const EmployeeUnifiedMaster = () => {
                                             </div>
                                         </div>
                                     );
-                                })() : (() => {
+                                })() : templatesModalTab === 'document' ? (() => {
                                     const template = documentTemplates.find(t => t.id === selectedDocTemplateId) || documentTemplates[0];
                                     if (!template) return <div className="text-slate-400 italic p-6">No template selected</div>;
                                     return (
@@ -3201,6 +3319,110 @@ const EmployeeUnifiedMaster = () => {
                                             </div>
                                         </div>
                                     );
+                                })() : (() => {
+                                     const cycle = cycles.find(c => c.id === selectedCyclesManagerId) || cycles[0];
+                                     if (!cycle) return <div className="text-slate-400 italic p-6">No cycle selected</div>;
+                                     return (
+                                         <div className="space-y-6 flex-1 flex flex-col justify-between">
+                                             <div className="space-y-5">
+                                                 {/* Cycle Name */}
+                                                 <div>
+                                                     <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Cycle Name</label>
+                                                     <input
+                                                         type="text"
+                                                         value={cycle.name}
+                                                         onChange={(e) => handleUpdateCycleField(cycle.id, 'name', e.target.value)}
+                                                         className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                     />
+                                                 </div>
+
+                                                 {/* Cycle Type & Status */}
+                                                 <div className="grid grid-cols-2 gap-4">
+                                                     <div>
+                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Cycle Type</label>
+                                                         <select
+                                                             value={cycle.type}
+                                                             onChange={(e) => handleUpdateCycleField(cycle.id, 'type', e.target.value)}
+                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
+                                                         >
+                                                             <option value="Quarterly">Quarterly</option>
+                                                             <option value="Half Yearly">Half Yearly</option>
+                                                             <option value="Yearly">Yearly</option>
+                                                             <option value="Custom">Custom</option>
+                                                         </select>
+                                                     </div>
+                                                     <div>
+                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Status</label>
+                                                         <select
+                                                             value={cycle.status}
+                                                             onChange={(e) => handleUpdateCycleField(cycle.id, 'status', e.target.value)}
+                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
+                                                         >
+                                                             <option value="Active">Active</option>
+                                                             <option value="Evaluating">Evaluating</option>
+                                                             <option value="Upcoming">Upcoming</option>
+                                                             <option value="Closed">Closed</option>
+                                                         </select>
+                                                     </div>
+                                                 </div>
+
+                                                 {/* Target Employee Group */}
+                                                 <div>
+                                                     <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Target Employee Group</label>
+                                                     <select
+                                                         value={cycle.targetEmployeeType || 'All'}
+                                                         onChange={(e) => handleUpdateCycleField(cycle.id, 'targetEmployeeType', e.target.value)}
+                                                         className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
+                                                     >
+                                                         <option value="All">All Staff (General)</option>
+                                                         <option value="Intern">Interns Only</option>
+                                                         <option value="Full-time">Permanent / Full-Time</option>
+                                                         <option value="Management">Management / Leads</option>
+                                                     </select>
+                                                     <p className="text-[10px] text-slate-450 dark:text-github-dark-muted mt-1">
+                                                         This cycle will only filter/appear for employees matching this employment type.
+                                                     </p>
+                                                 </div>
+
+                                                 {/* Start & End Dates */}
+                                                 <div className="grid grid-cols-2 gap-4">
+                                                     <div>
+                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Start Date</label>
+                                                         <input
+                                                             type="date"
+                                                             value={cycle.startDate}
+                                                             onChange={(e) => handleUpdateCycleField(cycle.id, 'startDate', e.target.value)}
+                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                                                         />
+                                                     </div>
+                                                     <div>
+                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">End Date</label>
+                                                         <input
+                                                             type="date"
+                                                             value={cycle.endDate}
+                                                             onChange={(e) => handleUpdateCycleField(cycle.id, 'endDate', e.target.value)}
+                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                                                         />
+                                                     </div>
+                                                 </div>
+                                             </div>
+
+                                             {/* Delete Cycle button */}
+                                             <div className="pt-5 border-t border-slate-100 dark:border-github-dark-border flex justify-end">
+                                                 <button
+                                                     onClick={() => {
+                                                         if (confirm(`Are you sure you want to delete cycle "${cycle.name}"?`)) {
+                                                             handleDeleteCycleFromManager(cycle.id);
+                                                         }
+                                                     }}
+                                                     className="px-4 py-2 text-red-500 hover:text-red-600 border border-red-200 dark:border-red-950/40 hover:bg-red-50 dark:hover:bg-red-950/10 font-bold rounded-xl flex items-center gap-1.5 transition-all"
+                                                 >
+                                                     <Trash2 size={13} />
+                                                     <span>Delete Cycle</span>
+                                                 </button>
+                                             </div>
+                                         </div>
+                                     );
                                 })()}
 
                             </div>
@@ -3229,6 +3451,8 @@ const EmployeeUnifiedMaster = () => {
                     />
                 )}
             </AnimatePresence>
+
+
         </DashboardLayout>
     );
 };

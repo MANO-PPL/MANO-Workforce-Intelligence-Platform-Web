@@ -1,30 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Award, FileText, Sparkles, CheckCircle2, Check, RefreshCw, User, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Award, FileText, Sparkles, CheckCircle2, Check, RefreshCw, User, AlertCircle, Star } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
-
-// Presets for Department KPIs
-const DEPARTMENT_KPI_PRESETS = {
-    'Software Developer': [
-        { name: 'Tasks Completed', description: 'Percentage of sprint tasks delivered successfully' },
-        { name: 'Bug Resolution Rate', description: 'Average time taken to resolve assigned bug tickets' },
-        { name: 'Code Quality', description: 'Peer code review scores and low code smell metrics' },
-        { name: 'Sprint Velocity', description: 'Consistency in story points delivered per sprint' }
-    ],
-    'HR': [
-        { name: 'Hiring Time', description: 'Average days taken to fill open career roles' },
-        { name: 'Retention Rate', description: 'Percentage of staff retained over the cycle' },
-        { name: 'Employee Satisfaction', description: 'Average score on quarterly feedback surveys' }
-    ],
-    'Sales': [
-        { name: 'Revenue Generated', description: 'Total sales value closed in INR' },
-        { name: 'Leads Converted', description: 'Ratio of prospect leads successfully converted' }
-    ],
-    'General': [
-        { name: 'Attendance Consistency', description: 'Adherence to check-in/check-out policies' },
-        { name: 'Team Collaboration', description: 'Participation in shared tasks and channels' }
-    ]
-};
 
 // HELPER: Fetch goals for an employee & cycle
 const getEmployeeGoalsFromStorage = (empId, cycleId) => {
@@ -36,20 +13,20 @@ const getEmployeeGoalsFromStorage = (empId, cycleId) => {
 
     if (variant === 0) {
         defaultGoals = [
-            { id: 'g-1', title: 'Complete Core Module Sprint Tasks', weightage: 30, deadline: '2026-06-15', kpiName: 'Tasks Completed', status: 'Completed' },
-            { id: 'g-2', title: 'Achieve 95% Bug Resolution within SLA', weightage: 35, deadline: '2026-06-20', kpiName: 'Bug Resolution Rate', status: 'Completed' },
-            { id: 'g-3', title: 'Refactor Legacy Code and reduce smells', weightage: 35, deadline: '2026-06-30', kpiName: 'Code Quality', status: 'Completed' }
+            { id: 'g-1', title: 'Complete Core Module Sprint Tasks', deadline: '2026-06-15', status: 'Completed', rating: 9, comments: 'Delivered all geofencing modules on time.' },
+            { id: 'g-2', title: 'Achieve 95% Bug Resolution within SLA', deadline: '2026-06-20', status: 'Completed', rating: 8, comments: 'Resolved critical blocker tickets inside SLA limits.' },
+            { id: 'g-3', title: 'Refactor Legacy Code and reduce smells', deadline: '2026-06-30', status: 'Completed', rating: 9, comments: 'Cleaned up CSS variables and reduced build sizes.' }
         ];
     } else if (variant === 1) {
         defaultGoals = [
-            { id: 'g-1', title: 'Review and fix CSS scaling on tablet screens', weightage: 40, deadline: '2026-06-15', kpiName: 'Tasks Completed', status: 'Completed' },
-            { id: 'g-2', title: 'Conduct user feedback sessions for DAR logging', weightage: 30, deadline: '2026-06-20', kpiName: 'Team Collaboration', status: 'In-Progress' },
-            { id: 'g-3', title: 'Improve unit test coverage by 15%', weightage: 30, deadline: '2026-06-30', kpiName: 'Code Quality', status: 'Pending' }
+            { id: 'g-1', title: 'Review and fix CSS scaling on tablet screens', deadline: '2026-06-15', status: 'Completed', rating: 7, comments: 'Fixed layout queries, but took extra time.' },
+            { id: 'g-2', title: 'Conduct user feedback sessions for DAR logging', deadline: '2026-06-20', status: 'In-Progress', rating: 0, comments: '' },
+            { id: 'g-3', title: 'Improve unit test coverage by 15%', deadline: '2026-06-30', status: 'Pending', rating: 0, comments: '' }
         ];
     } else {
         defaultGoals = [
-            { id: 'g-1', title: 'Complete compliance training courses', weightage: 40, deadline: '2026-06-10', kpiName: 'Attendance Consistency', status: 'Pending' },
-            { id: 'g-2', title: 'Update API endpoint error handling structures', weightage: 60, deadline: '2026-06-25', kpiName: 'Tasks Completed', status: 'In-Progress' }
+            { id: 'g-1', title: 'Complete compliance training courses', deadline: '2026-06-10', status: 'Pending', rating: 0, comments: '' },
+            { id: 'g-2', title: 'Update API endpoint error handling structures', deadline: '2026-06-25', status: 'In-Progress', rating: 0, comments: '' }
         ];
     }
 
@@ -76,7 +53,6 @@ const getEmployeeReviewFromStorage = (empId, cycleId) => {
             selfAchievements: 'Delivered the attendance logging geofencing module ahead of the sprint timeline and verified all check-in edge cases. Mentored two interns.',
             selfChallenges: 'Faced layout scaling problems on specific tablet screen queries, but resolved them by refactoring index.css layout classes.',
             selfLearning: 'Learned HSL color palette designs, advanced Socket.io logic, and local storage state sync layouts.',
-            managerRating: '9',
             managerComments: 'Consistently check-in on time. Excelled at frontend delivery. Suresh has shown superior engineering quality and was a great mentor this cycle.',
             managerRec: 'Promote to Senior Role',
             lastUpdated: '2026-06-05 11:10:00'
@@ -86,7 +62,6 @@ const getEmployeeReviewFromStorage = (empId, cycleId) => {
             selfAchievements: 'Resolved CSS scaling query errors and updated client pages. Set up active DAR notifications.',
             selfChallenges: 'Struggled with unit testing frameworks configuration due to legacy mock setup libraries.',
             selfLearning: 'Learned CSS flexbox grid layouts and Jest mock testing suites.',
-            managerRating: '7',
             managerComments: 'Good work on UI modifications. Need to show more speed in test cases and complete pending goals.',
             managerRec: 'Retain with Standard Increment',
             lastUpdated: '2026-06-05 13:40:00'
@@ -96,7 +71,6 @@ const getEmployeeReviewFromStorage = (empId, cycleId) => {
             selfAchievements: 'Started refactoring error check routes in backend API systems.',
             selfChallenges: 'Faced frequent connectivity and local check-in deployment blockers.',
             selfLearning: 'Read express API routing documentation and basic node crash logs.',
-            managerRating: '5',
             managerComments: 'Appraisal progress has been slow. Check-in records have also been irregular this quarter. Needs to show improvement in sprint velocity.',
             managerRec: 'Retain with Performance Improvement Plan',
             lastUpdated: '2026-06-05 16:20:00'
@@ -113,14 +87,31 @@ const getEmployeeReviewFromStorage = (empId, cycleId) => {
     return defaultReview;
 };
 
-// 1. KPI & GOAL SHEET MANAGEMENT VIEW
-export const KpiGoalSheets = ({ employee, selectedCycleId }) => {
+// =====================================================================
+// CONSOLIDATED PerformanceHub COMPONENT
+// =====================================================================
+export const PerformanceHub = ({ employee, selectedCycleId }) => {
     const [goals, setGoals] = useState([]);
-    const [newGoalForm, setNewGoalForm] = useState({ title: '', weightage: '20', deadline: '', kpiName: '' });
+    const [review, setReview] = useState(null);
+    const [newGoalForm, setNewGoalForm] = useState({ title: '', deadline: '' });
+    
+    // Rating / Recommendation state
+    const [comments, setComments] = useState('');
+    const [rec, setRec] = useState('Retain with Standard Increment');
+
+    // Goal currently being edited for rating/comments
+    const [editingGoalId, setEditingGoalId] = useState(null);
+    const [goalRatingInput, setGoalRatingInput] = useState('8');
+    const [goalCommentsInput, setGoalCommentsInput] = useState('');
 
     useEffect(() => {
         if (employee?.id) {
             setGoals(getEmployeeGoalsFromStorage(employee.id, selectedCycleId));
+            const rev = getEmployeeReviewFromStorage(employee.id, selectedCycleId);
+            setReview(rev);
+            setComments(rev.managerComments || '');
+            setRec(rev.managerRec || 'Retain with Standard Increment');
+            setEditingGoalId(null);
         }
     }, [employee?.id, selectedCycleId]);
 
@@ -131,357 +122,388 @@ export const KpiGoalSheets = ({ employee, selectedCycleId }) => {
 
     const handleAddGoal = (e) => {
         e.preventDefault();
-        if (!newGoalForm.title || !newGoalForm.deadline || !newGoalForm.kpiName) {
-            toast.error("Please fill in Goal Title, Deadline and KPI Category");
-            return;
-        }
-
-        const currentSum = goals.reduce((sum, g) => sum + parseInt(g.weightage), 0);
-        const addedWeight = parseInt(newGoalForm.weightage);
-        if (currentSum + addedWeight > 100) {
-            toast.warning(`Total Goal Weightage cannot exceed 100% (Currently at ${currentSum}%)`);
+        if (!newGoalForm.title || !newGoalForm.deadline) {
+            toast.error("Please fill in Goal Title and Due Deadline.");
             return;
         }
 
         const newGoal = {
             id: `goal-${Date.now()}`,
             title: newGoalForm.title,
-            weightage: addedWeight,
             deadline: newGoalForm.deadline,
-            kpiName: newGoalForm.kpiName,
-            status: 'Pending'
+            status: 'Pending',
+            rating: 0,
+            comments: ''
         };
 
         const updated = [...goals, newGoal];
         saveGoals(updated);
-        setNewGoalForm({ title: '', weightage: '20', deadline: '', kpiName: '' });
-        toast.success("Goal added successfully!");
+        setNewGoalForm({ title: '', deadline: '' });
+        toast.success("Appraisal Goal assigned successfully!");
     };
 
-    const updateGoalStatus = (goalId, nextStatus) => {
+    const updateGoalField = (goalId, key, value) => {
         const updated = goals.map(g => {
             if (g.id === goalId) {
-                return { ...g, status: nextStatus };
+                return { ...g, [key]: value };
             }
             return g;
         });
         saveGoals(updated);
-        toast.success(`Goal status updated to: ${nextStatus}`);
     };
 
     const handleDeleteGoal = (goalId) => {
         const updated = goals.filter(g => g.id !== goalId);
         saveGoals(updated);
-        toast.info("Goal removed from cycle sheets");
+        toast.info("Goal removed from sheet");
+        if (editingGoalId === goalId) setEditingGoalId(null);
     };
 
-    const getKpiOptions = () => {
-        const dept = employee?.department || 'General';
-        const key = DEPARTMENT_KPI_PRESETS[dept] ? dept : 'General';
-        return DEPARTMENT_KPI_PRESETS[key];
+    const handleSaveGoalReview = (goalId) => {
+        const updated = goals.map(g => {
+            if (g.id === goalId) {
+                return {
+                    ...g,
+                    rating: parseInt(goalRatingInput),
+                    comments: goalCommentsInput
+                };
+            }
+            return g;
+        });
+        saveGoals(updated);
+        setEditingGoalId(null);
+        toast.success("Goal rating and comments saved.");
     };
 
-    const totalWeight = goals.reduce((sum, g) => sum + g.weightage, 0);
-
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs items-start">
-            {/* Goal Assignment Worksheet Card */}
-            <div className="lg:col-span-7 bg-slate-50/50 dark:bg-github-dark-subtle/10 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-github-dark-border pb-3 flex-wrap gap-2">
-                    <div>
-                        <h4 className="font-bold text-slate-800 dark:text-github-dark-text text-sm">Goal Assignment Worksheet</h4>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">{employee?.name} ({employee?.department})</p>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-500">Weight Total:</span>
-                        <span className={`px-2 py-0.5 rounded-full font-bold ${
-                            totalWeight === 100 
-                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400' 
-                                : 'bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400'
-                        }`}>
-                            {totalWeight}% / 100%
-                        </span>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    {goals.length > 0 ? (
-                        goals.map(goal => (
-                            <div key={goal.id} className="p-3 border border-slate-200 dark:border-github-dark-border rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-dark-card">
-                                <div className="space-y-1.5 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-bold text-slate-800 dark:text-github-dark-text text-xs">{goal.title}</span>
-                                        <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded text-[9px] font-bold">
-                                            Weight: {goal.weightage}%
-                                        </span>
-                                        <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded text-[9px] font-mono">
-                                            {goal.kpiName}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono">
-                                        <span>Deadline: {goal.deadline}</span>
-                                        <span className="flex items-center gap-1">
-                                            Status: 
-                                            <select
-                                                value={goal.status}
-                                                onChange={(e) => updateGoalStatus(goal.id, e.target.value)}
-                                                className="bg-transparent border-b border-slate-200 dark:border-github-dark-border font-bold text-slate-655 dark:text-slate-300 focus:outline-none cursor-pointer"
-                                            >
-                                                <option value="Pending">Pending</option>
-                                                <option value="In-Progress">In-Progress</option>
-                                                <option value="Completed">Completed</option>
-                                                <option value="Deferred">Deferred</option>
-                                            </select>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => handleDeleteGoal(goal.id)}
-                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-850 text-slate-400 hover:text-red-500 rounded self-end sm:self-auto"
-                                    title="Delete Goal"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                        ))
-                    ) : (
-                        <p className="py-8 text-center text-slate-400 italic">No goals mapped to this appraisal cycle yet.</p>
-                    )}
-                </div>
-            </div>
-
-            {/* Goal Creation Form */}
-            <div className="lg:col-span-5 bg-slate-50/50 dark:bg-github-dark-subtle/10 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
-                <h4 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2">Add Appraisal Goal</h4>
-                <form onSubmit={handleAddGoal} className="space-y-3">
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block uppercase">Goal Title *</label>
-                        <input
-                            type="text"
-                            required
-                            value={newGoalForm.title}
-                            onChange={(e) => setNewGoalForm({ ...newGoalForm, title: e.target.value })}
-                            placeholder="e.g. Speed up React dashboard paint times"
-                            className="w-full px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-bold block uppercase">Goal Weightage (%) *</label>
-                            <select
-                                value={newGoalForm.weightage}
-                                onChange={(e) => setNewGoalForm({ ...newGoalForm, weightage: e.target.value })}
-                                className="w-full px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
-                            >
-                                <option value="10">10%</option>
-                                <option value="15">15%</option>
-                                <option value="20">20%</option>
-                                <option value="25">25%</option>
-                                <option value="30">30%</option>
-                                <option value="35">35%</option>
-                                <option value="40">40%</option>
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-bold block uppercase">KPI Metric Category *</label>
-                            <select
-                                value={newGoalForm.kpiName}
-                                onChange={(e) => setNewGoalForm({ ...newGoalForm, kpiName: e.target.value })}
-                                className="w-full px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
-                            >
-                                <option value="">Select Category</option>
-                                {getKpiOptions().map(kpi => (
-                                    <option key={kpi.name} value={kpi.name}>{kpi.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block uppercase">Due Deadline *</label>
-                        <input
-                            type="date"
-                            required
-                            value={newGoalForm.deadline}
-                            onChange={(e) => setNewGoalForm({ ...newGoalForm, deadline: e.target.value })}
-                            className="w-full px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="w-full py-2 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-lg font-bold flex justify-center items-center gap-1 shadow-sm transition-all mt-2"
-                    >
-                        <Plus size={14} /> Assign Goal
-                    </button>
-                </form>
-
-                {/* Preset References */}
-                <div className="border-t border-slate-100 dark:border-github-dark-border pt-3 space-y-2">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase block">Available Presets ({employee?.department}):</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {getKpiOptions().map(kpi => (
-                            <div key={kpi.name} className="p-2 border border-slate-100 dark:border-github-dark-border/50 bg-white dark:bg-dark-card rounded-lg">
-                                <span className="font-bold text-indigo-600 dark:text-indigo-400 block">{kpi.name}</span>
-                                <p className="text-[9px] text-slate-400 leading-tight mt-0.5">{kpi.description}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// 2. REVIEWS & RATINGS VIEW
-export const ReviewsAndRatings = ({ employee, selectedCycleId }) => {
-    const [review, setReview] = useState(null);
-    const [rating, setRating] = useState('8');
-    const [rec, setRec] = useState('Retain with Standard Increment');
-    const [comments, setComments] = useState('');
-
-    useEffect(() => {
-        if (employee?.id) {
-            const rev = getEmployeeReviewFromStorage(employee.id, selectedCycleId);
-            setReview(rev);
-            setRating(rev.managerRating || '8');
-            setRec(rev.managerRec || 'Retain with Standard Increment');
-            setComments(rev.managerComments || '');
-        }
-    }, [employee?.id, selectedCycleId]);
-
-    const handleManagerReviewSubmit = (e) => {
+    const handleSaveOverallAppraisal = (e) => {
         e.preventDefault();
         const updatedReview = {
             ...review,
-            managerRating: rating,
             managerComments: comments,
             managerRec: rec,
             lastUpdated: new Date().toLocaleString()
         };
-
         setReview(updatedReview);
         localStorage.setItem(`mano_perf_review_${employee.id}_${selectedCycleId}`, JSON.stringify(updatedReview));
-        toast.success("Manager review submitted successfully!");
+        toast.success("Appraisal report updated successfully!");
     };
 
+    // Calculate arithmetic average score
+    const ratedGoals = goals.filter(g => g.rating > 0);
+    const totalRating = ratedGoals.reduce((sum, g) => sum + g.rating, 0);
+    const averageScore = ratedGoals.length > 0 ? (totalRating / ratedGoals.length) : 0;
+    const formattedAverageScore = Math.round(averageScore * 10) / 10;
+
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs items-start">
-            {/* Employee Self-Appraisal Submission (Read-Only HR Panel) */}
-            <div className="bg-slate-50/50 dark:bg-github-dark-subtle/10 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-github-dark-border pb-2">
-                    <h4 className="font-bold text-slate-800 dark:text-github-dark-text text-sm flex items-center gap-1.5">
-                        <User size={16} className="text-[#0969da] dark:text-github-dark-accent" />
-                        Employee Self-Review Report
-                    </h4>
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 rounded text-[9px] font-bold uppercase">
-                        Submitted
+        <div className="space-y-6 text-xs">
+            {/* KPI Performance Header Score Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2 p-4 bg-slate-50 dark:bg-[#161b22]/30 border border-slate-200 dark:border-github-dark-border rounded-xl flex flex-col justify-between">
+                    <div>
+                        <h4 className="font-bold text-sm text-slate-800 dark:text-github-dark-text flex items-center gap-1.5">
+                            <Award size={16} className="text-indigo-500" />
+                            Performance Hub & Appraisal Panel
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                            Assign goals to employees, track execution progress, and record manager review feedback. The overall rating is calculated as a simple arithmetic average of all rated goals.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3 mt-4 text-[10px] font-mono text-slate-455">
+                        <span>Staff: <strong>{employee?.name}</strong> ({employee?.designation})</span>
+                        <span>•</span>
+                        <span>Dept: <strong>{employee?.department}</strong></span>
+                    </div>
+                </div>
+
+                <div className="p-4 border border-indigo-100 dark:border-indigo-950/60 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-xl flex flex-col items-center justify-center text-center">
+                    <span className="text-[9px] uppercase font-black tracking-wider text-slate-400 dark:text-slate-500">Average Performance Rating</span>
+                    <div className="text-3xl font-extrabold text-indigo-655 dark:text-indigo-400 my-1.5">
+                        {formattedAverageScore > 0 ? `${formattedAverageScore} / 10` : 'Unrated'}
+                    </div>
+                    <div className="w-full bg-slate-200/50 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mb-1.5">
+                        <div className="h-full bg-indigo-500" style={{ width: `${formattedAverageScore * 10}%` }}></div>
+                    </div>
+                    <span className="text-[9px] text-slate-400 font-mono">
+                        {ratedGoals.length} of {goals.length} goals rated
                     </span>
                 </div>
-
-                {review ? (
-                    <div className="space-y-3">
-                        <div className="p-3 bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border/50 rounded-lg space-y-1">
-                            <span className="font-bold text-slate-400 text-[10px] uppercase block">1. Key Achievements</span>
-                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-semibold">
-                                "{review.selfAchievements || 'None reported.'}"
-                            </p>
-                        </div>
-
-                        <div className="p-3 bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border/50 rounded-lg space-y-1">
-                            <span className="font-bold text-slate-400 text-[10px] uppercase block">2. Core Obstacles & Challenges</span>
-                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-semibold">
-                                "{review.selfChallenges || 'None reported.'}"
-                            </p>
-                        </div>
-
-                        <div className="p-3 bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border/50 rounded-lg space-y-1">
-                            <span className="font-bold text-slate-400 text-[10px] uppercase block">3. Competencies & Learnings</span>
-                            <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-semibold">
-                                "{review.selfLearning || 'None reported.'}"
-                            </p>
-                        </div>
-                    </div>
-                ) : (
-                    <p className="py-4 text-center text-slate-400 italic">No self review details registered.</p>
-                )}
             </div>
 
-            {/* Manager Appraisal Review Form */}
-            <div className="bg-slate-50/50 dark:bg-github-dark-subtle/10 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-github-dark-border pb-2">
-                    <h4 className="font-bold text-slate-800 dark:text-github-dark-text text-sm flex items-center gap-1.5">
-                        <Award size={16} className="text-[#0969da] dark:text-github-dark-accent" />
-                        Manager Audit Review & Ratings
-                    </h4>
-                    {review?.lastUpdated && (
-                        <span className="text-[9px] text-slate-400 font-mono">
-                            Last Saved: {review.lastUpdated}
-                        </span>
-                    )}
+            {/* Main Content splits */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                
+                {/* Column A: Goals List & Review Matrix (8 Cols) */}
+                <div className="lg:col-span-8 space-y-4">
+                    
+                    {/* Goal Assignment Matrix */}
+                    <div className="bg-white dark:bg-[#161b22]/30 border border-slate-205 dark:border-github-dark-border rounded-xl p-4 space-y-4">
+                        <div className="border-b border-slate-100 dark:border-github-dark-border pb-3 flex-wrap gap-2">
+                            <h5 className="font-bold text-slate-800 dark:text-github-dark-text">Assigned Performance Goals</h5>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Establish targets, check completion status, and rate execution.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            {goals.length > 0 ? (
+                                goals.map(goal => {
+                                    const isEditing = editingGoalId === goal.id;
+                                    return (
+                                        <div key={goal.id} className="p-4 border border-slate-200 dark:border-github-dark-border rounded-xl bg-slate-50/50 dark:bg-github-dark-subtle/5 space-y-3">
+                                            <div className="flex justify-between items-start gap-4">
+                                                <div className="space-y-1.5 flex-1">
+                                                    <span className="font-bold text-slate-850 dark:text-github-dark-text text-[13px] block">{goal.title}</span>
+                                                    <div className="text-[10px] text-slate-400 flex items-center gap-3 font-mono">
+                                                        <span>Due: {goal.deadline}</span>
+                                                        <span>•</span>
+                                                        <span className="flex items-center gap-1">
+                                                            Status:
+                                                            <select
+                                                                value={goal.status}
+                                                                onChange={(e) => updateGoalField(goal.id, 'status', e.target.value)}
+                                                                className="bg-transparent border-b border-slate-200 dark:border-github-dark-border font-bold text-slate-600 dark:text-slate-350 focus:outline-none cursor-pointer"
+                                                            >
+                                                                <option value="Pending">Pending</option>
+                                                                <option value="In-Progress">In-Progress</option>
+                                                                <option value="Completed">Completed</option>
+                                                                <option value="Deferred">Deferred</option>
+                                                            </select>
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5">
+                                                    {!isEditing && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingGoalId(goal.id);
+                                                                setGoalRatingInput(String(goal.rating || 8));
+                                                                setGoalCommentsInput(goal.comments || '');
+                                                            }}
+                                                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-github-dark-subtle dark:hover:bg-[#30363d] text-slate-700 dark:text-github-dark-text rounded text-[10px] font-bold shadow-sm"
+                                                        >
+                                                            {goal.rating > 0 ? 'Edit Review' : 'Rate Goal'}
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => handleDeleteGoal(goal.id)}
+                                                        className="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-slate-400 hover:text-red-500 rounded"
+                                                        title="Remove Goal"
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Rating and comments output */}
+                                            {goal.rating > 0 && !isEditing && (
+                                                <div className="p-3 bg-white dark:bg-dark-card border border-slate-150 dark:border-github-dark-border rounded-xl space-y-2">
+                                                    <div className="flex justify-between items-center text-[10px]">
+                                                        <span className="text-slate-450 uppercase font-black tracking-wider block">Goal Score</span>
+                                                        <span className="font-bold text-indigo-650 dark:text-indigo-400 flex items-center gap-0.5"><Star size={11} fill="currentColor" /> {goal.rating} / 10</span>
+                                                    </div>
+                                                    {goal.comments && (
+                                                        <p className="text-slate-600 dark:text-slate-350 leading-relaxed font-semibold italic text-[11px]">
+                                                            "{goal.comments}"
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Interactive editing review panel */}
+                                            {isEditing && (
+                                                <div className="p-3 bg-white dark:bg-dark-card border border-indigo-150 dark:border-indigo-950/40 rounded-xl space-y-3 shadow-inner">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div className="space-y-1">
+                                                            <label className="text-[9px] uppercase font-black text-slate-400 tracking-wider block">Goal Score (1-10)</label>
+                                                            <select
+                                                                value={goalRatingInput}
+                                                                onChange={(e) => setGoalRatingInput(e.target.value)}
+                                                                className="w-full px-2 py-1 bg-slate-50 dark:bg-[#161b22] border border-slate-250 dark:border-github-dark-border rounded focus:outline-none"
+                                                            >
+                                                                {[...Array(10)].map((_, i) => (
+                                                                    <option key={i+1} value={i+1}>{i+1} / 10</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div className="flex items-end justify-end gap-2">
+                                                            <button
+                                                                onClick={() => setEditingGoalId(null)}
+                                                                className="px-2 py-1 text-slate-450 hover:text-slate-700"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleSaveGoalReview(goal.id)}
+                                                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold transition-all shadow-sm"
+                                                            >
+                                                                Save
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[9px] uppercase font-black text-slate-400 tracking-wider block">Feedback Comments & Notes</label>
+                                                        <textarea
+                                                            value={goalCommentsInput}
+                                                            onChange={(e) => setGoalCommentsInput(e.target.value)}
+                                                            placeholder="Enter feedback comments for this goal..."
+                                                            className="w-full p-2 text-xs bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                            rows={2}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <p className="py-12 text-center text-slate-450 italic">No goals assigned to this appraisal cycle yet.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Overall Summary appraisal comments */}
+                    <div className="bg-white dark:bg-[#161b22]/30 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
+                        <div className="border-b border-slate-100 dark:border-github-dark-border pb-2">
+                            <h5 className="font-bold text-slate-800 dark:text-github-dark-text">Cycle Audit Recommendation & Summary</h5>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Submit the official recommendation and summary appraisal comments.</p>
+                        </div>
+                        
+                        <form onSubmit={handleSaveOverallAppraisal} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400 font-bold block uppercase">Official Recommendation *</label>
+                                    <select
+                                        value={rec}
+                                        onChange={(e) => setRec(e.target.value)}
+                                        required
+                                        className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
+                                    >
+                                        <option value="Promote to Senior Role">Promote to Senior Role</option>
+                                        <option value="Retain with Standard Increment">Retain with Standard Increment</option>
+                                        <option value="Retain with Performance Improvement Plan">Retain with Performance Improvement Plan (PIP)</option>
+                                        <option value="Cycle Deferred">Cycle Deferred</option>
+                                    </select>
+                                </div>
+                                
+                                {review?.lastUpdated && (
+                                    <div className="flex items-end justify-end text-[9px] text-slate-400 font-mono pb-2">
+                                        Last saved: {review.lastUpdated}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-bold block uppercase">Overall Appraisal Comments & Summary Feedback *</label>
+                                <textarea
+                                    value={comments}
+                                    onChange={(e) => setComments(e.target.value)}
+                                    required
+                                    rows={3}
+                                    placeholder="Detail overall strengths, achievements, and feedback metrics..."
+                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl text-xs focus:outline-none"
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="px-4 py-2 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-sm active:scale-98 transition-all"
+                            >
+                                <Check size={14} /> Submit Final Appraisal Review
+                            </button>
+                        </form>
+                    </div>
+
                 </div>
 
-                <form onSubmit={handleManagerReviewSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-bold block uppercase">Rating Score (1-10) *</label>
-                            <select
-                                value={rating}
-                                onChange={(e) => setRating(e.target.value)}
-                                required
-                                className="w-full px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
-                            >
-                                {[...Array(10)].map((_, i) => (
-                                    <option key={i+1} value={i+1}>{i+1} / 10</option>
-                                ))}
-                            </select>
-                        </div>
+                {/* Column B: Goal Creation Form & Self-Appraisal (4 Cols) */}
+                <div className="lg:col-span-4 space-y-4">
+                    
+                    {/* Goal Creation Form */}
+                    <div className="bg-white dark:bg-[#161b22]/30 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
+                        <h5 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2">Assign Appraisal Goal</h5>
+                        
+                        <form onSubmit={handleAddGoal} className="space-y-3">
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-bold block uppercase">Goal Title *</label>
+                                <textarea
+                                    required
+                                    value={newGoalForm.title}
+                                    onChange={(e) => setNewGoalForm({ ...newGoalForm, title: e.target.value })}
+                                    placeholder="e.g. Optimize React rendering and decrease LCP index speed"
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    rows={3}
+                                />
+                            </div>
 
-                        <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-bold block uppercase">Official Recommendation *</label>
-                            <select
-                                value={rec}
-                                onChange={(e) => setRec(e.target.value)}
-                                required
-                                className="w-full px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-bold block uppercase">Due Deadline *</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={newGoalForm.deadline}
+                                    onChange={(e) => setNewGoalForm({ ...newGoalForm, deadline: e.target.value })}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="w-full py-2.5 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-lg font-bold flex justify-center items-center gap-1 shadow-sm transition-all mt-2"
                             >
-                                <option value="Promote to Senior Role">Promote to Senior Role</option>
-                                <option value="Retain with Standard Increment">Retain with Standard Increment</option>
-                                <option value="Retain with Performance Improvement Plan">Retain with Performance Improvement Plan (PIP)</option>
-                                <option value="Cycle Deferred">Cycle Deferred</option>
-                            </select>
-                        </div>
+                                <Plus size={14} /> Assign Goal
+                            </button>
+                        </form>
                     </div>
 
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block uppercase">Appraisal Comments & Feedback *</label>
-                        <textarea
-                            value={comments}
-                            onChange={(e) => setComments(e.target.value)}
-                            required
-                            rows="4"
-                            placeholder="Detail employee strengths, achievements, and feedback metrics..."
-                            className="w-full px-3 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl text-xs focus:outline-none"
-                        />
+                    {/* Employee Self appraisal report card */}
+                    <div className="bg-white dark:bg-[#161b22]/30 border border-slate-200 dark:border-github-dark-border rounded-xl p-4 space-y-4">
+                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-github-dark-border pb-2">
+                            <h5 className="font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-1.5">
+                                <User size={15} className="text-[#0969da]" />
+                                Employee Self-Review
+                            </h5>
+                            <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-400 rounded text-[9px] font-bold uppercase border border-emerald-500/20">
+                                Submitted
+                            </span>
+                        </div>
+
+                        {review ? (
+                            <div className="space-y-3">
+                                <div className="space-y-1">
+                                    <span className="font-bold text-slate-450 text-[9px] uppercase block">1. Key Achievements</span>
+                                    <p className="text-slate-655 dark:text-slate-300 leading-relaxed font-semibold bg-slate-50 dark:bg-github-dark-subtle/10 p-2.5 rounded-lg">
+                                        "{review.selfAchievements || 'None reported.'}"
+                                    </p>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <span className="font-bold text-slate-450 text-[9px] uppercase block">2. Obstacles & Challenges</span>
+                                    <p className="text-slate-655 dark:text-slate-300 leading-relaxed font-semibold bg-slate-50 dark:bg-github-dark-subtle/10 p-2.5 rounded-lg">
+                                        "{review.selfChallenges || 'None reported.'}"
+                                    </p>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <span className="font-bold text-slate-450 text-[9px] uppercase block">3. Competencies & Learnings</span>
+                                    <p className="text-slate-655 dark:text-slate-300 leading-relaxed font-semibold bg-slate-50 dark:bg-github-dark-subtle/10 p-2.5 rounded-lg">
+                                        "{review.selfLearning || 'None reported.'}"
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="py-4 text-center text-slate-450 italic">No self review details registered.</p>
+                        )}
                     </div>
 
-                    <button
-                        type="submit"
-                        className="w-full py-2.5 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-lg font-bold flex justify-center items-center gap-1.5 shadow-sm transition-all"
-                    >
-                        <Check size={14} /> Submit Appraisal Review
-                    </button>
-                </form>
+                </div>
+
             </div>
         </div>
     );
 };
 
-// 3. AI PERFORMANCE ANALYZER VIEW
+// =====================================================================
+// AI PERFORMANCE ANALYZER VIEW
+// =====================================================================
 export const AiPerformanceAnalyzer = ({ employee, selectedCycleId }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiResult, setAiResult] = useState(null);
@@ -514,18 +536,20 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId }) => {
             const completedGoals = goals.filter(g => g.status === 'Completed').length;
             const completionRate = totalGoals > 0 ? (completedGoals / totalGoals) : 1;
             
-            const ratingScore = parseFloat(review.managerRating || 8.0);
+            // Calculate actual average rating score from goals, fallback to 8.0 if unrated
+            const ratedGoals = goals.filter(g => g.rating > 0);
+            const totalRating = ratedGoals.reduce((sum, g) => sum + g.rating, 0);
+            const ratingScore = ratedGoals.length > 0 ? (totalRating / ratedGoals.length) : 8.0;
             
             // Weight dynamic results
             let overallScore = ((completionRate * 10) + ratingScore) / 2;
-            overallScore = Math.round(overallScore * 10) / 10; // decimal formatting
+            overallScore = Math.round(overallScore * 10) / 10;
 
             // Determine readiness
             let readiness = 'Medium';
             if (overallScore >= 8.5) readiness = 'High';
             if (overallScore < 7.0) readiness = 'Low';
 
-            // Custom bullet points based on rating and inputs
             const strengths = [];
             const improvements = [];
 
@@ -610,7 +634,7 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId }) => {
                         <div className="flex items-center gap-4">
                             <div className="text-right">
                                 <span className="text-[9px] text-slate-400 font-bold block uppercase">Overall Rating</span>
-                                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">{aiResult.score} / 10</span>
+                                <span className="text-lg font-black text-indigo-650 dark:text-indigo-400">{aiResult.score} / 10</span>
                             </div>
                             <div className="text-right">
                                 <span className="text-[9px] text-slate-400 font-bold block uppercase">Promotion Readiness</span>
@@ -663,4 +687,17 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId }) => {
             )}
         </div>
     );
+};
+
+// =====================================================================
+// BACKWARD COMPATIBILITY EXPORTS
+// =====================================================================
+export const KpiGoalSheets = ({ employeeId, cycleId }) => {
+    const mockEmployee = { id: employeeId, department: 'General' };
+    return <PerformanceHub employee={mockEmployee} selectedCycleId={cycleId} />;
+};
+
+export const ReviewsAndRatings = ({ employeeId, cycleId }) => {
+    const mockEmployee = { id: employeeId, department: 'General' };
+    return <PerformanceHub employee={mockEmployee} selectedCycleId={cycleId} />;
 };
