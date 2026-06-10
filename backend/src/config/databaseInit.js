@@ -192,6 +192,18 @@ export const initDatabase = async () => {
             console.log('✅ "recruitment_candidates" table initialized.');
         }
 
+        // 8. Add column_preferences to users table
+        const hasUsers = await db.schema.hasTable('users');
+        if (hasUsers) {
+            const hasCol = await db.schema.hasColumn('users', 'column_preferences');
+            if (!hasCol) {
+                await db.schema.table('users', (table) => {
+                    table.text('column_preferences').nullable();
+                });
+                console.log('✅ Column "column_preferences" added to "users" table.');
+            }
+        }
+
     } catch (error) {
         console.error('Error during database table initialization:', error);
     }

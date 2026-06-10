@@ -60,3 +60,34 @@ export const getMyProfile = catchAsync(async (req, res) => {
         }
     });
 });
+
+/**
+ * GET /profile/preferences - Get column preferences
+ */
+export const getColumnPreferences = catchAsync(async (req, res) => {
+    const { user_id } = req.user;
+    const preferences = await profileService.getColumnPreferences(user_id);
+    res.json({
+        ok: true,
+        preferences
+    });
+});
+
+/**
+ * PUT /profile/preferences - Update column preferences
+ */
+export const updateColumnPreferences = catchAsync(async (req, res) => {
+    const { user_id } = req.user;
+    const { preferences } = req.body;
+    
+    if (!preferences || typeof preferences !== 'object') {
+        throw new AppError('Invalid preferences data', 400);
+    }
+    
+    const updated = await profileService.updateColumnPreferences(user_id, preferences);
+    res.json({
+        ok: true,
+        message: 'Column preferences updated successfully',
+        preferences: updated
+    });
+});

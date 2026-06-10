@@ -11,5 +11,7 @@ router.use(authenticateJWT);
 router.post('/', upload.single('avatar'), profileController.uploadProfilePicture);
 router.delete('/', profileController.deleteProfilePicture);
 router.get('/me', profileController.getMyProfile);
+router.get('/preferences', profileController.getColumnPreferences);
+router.put('/preferences', profileController.updateColumnPreferences);
 
 export default router;

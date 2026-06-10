@@ -74,3 +74,36 @@ export async function getMyProfile(user_id) {
         .where('u.user_id', user_id)
         .first();
 }
+
+/**
+ * Get user column preferences.
+ */
+export async function getColumnPreferences(user_id) {
+    const user = await attendanceDB('users')
+        .where({ user_id })
+        .select('column_preferences')
+        .first();
+    
+    if (!user) return null;
+    
+    try {
+        return user.column_preferences ? JSON.parse(user.column_preferences) : null;
+    } catch (e) {
+        console.error('Failed to parse column preferences:', e);
+        return null;
+    }
+}
+
+/**
+ * Update user column preferences.
+ */
+export async function updateColumnPreferences(user_id, preferences) {
+    const serialized = JSON.stringify(preferences);
+    await attendanceDB('users')
+        .where({ user_id })
+        .update({
+            column_preferences: serialized,
+            updated_at: attendanceDB.fn.now()
+        });
+    return preferences;
+}
