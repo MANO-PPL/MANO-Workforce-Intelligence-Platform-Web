@@ -63,3 +63,27 @@ export const updateLocationAssignments = async (assignments) => {
     throw new Error(error.response?.data?.message || "Failed to update assignments");
   }
 };
+
+/**
+ * Get user column preferences
+ */
+export const getColumnPreferences = async () => {
+  try {
+    const res = await api.get('/profile/preferences');
+    return res.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Failed to fetch column preferences");
+  }
+};
+
+/**
+ * Update user column preferences
+ */
+export const updateColumnPreferences = async (preferences) => {
+  try {
+    const res = await api.put('/profile/preferences', { preferences });
+    return res.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || "Failed to update column preferences");
+  }
+};
