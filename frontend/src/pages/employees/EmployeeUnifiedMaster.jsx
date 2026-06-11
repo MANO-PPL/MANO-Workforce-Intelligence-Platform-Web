@@ -2055,28 +2055,41 @@ const EmployeeUnifiedMaster = () => {
                             </div>
 
                             {/* Drawer Navigation Tabs (Merged HRM + List views) */}
-                            <div className="flex overflow-x-auto whitespace-nowrap scrollbar-none border-b border-slate-100 dark:border-github-dark-border text-xs bg-slate-50/50 dark:bg-github-dark-subtle/10 px-2">
+                            <div className="flex items-center overflow-x-auto whitespace-nowrap scrollbar-none border-b border-slate-100 dark:border-github-dark-border text-xs bg-slate-50/50 dark:bg-github-dark-subtle/10 px-2">
                                 {[
                                     { id: 'profile', label: 'Profile Information', icon: <User size={14} /> },
+                                    { type: 'separator' },
                                     { id: 'checklist', label: 'Onboarding Checklist', icon: <CheckCircle2 size={14} /> },
                                     { id: 'documents', label: 'Document Files', icon: <FileText size={14} /> },
                                     { id: 'ai_verify', label: 'AI Auditor', icon: <Sparkles size={14} /> },
+                                    { type: 'separator' },
                                     { id: 'perf_hub', label: 'Performance Hub', icon: <Award size={14} /> },
                                     { id: 'perf_analyzer', label: 'AI Performance', icon: <Sparkles size={14} /> }
-                                ].map(tab => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => { setDrawerTab(tab.id); setEditMode(false); }}
-                                        className={`flex items-center gap-1.5 px-4 py-3 border-b-2 font-semibold transition-all shrink-0 ${
-                                            drawerTab === tab.id
-                                                ? 'border-[#0969da] text-[#0969da] dark:border-github-dark-accent dark:text-[#f0f6fc]'
-                                                : 'border-transparent text-slate-500 hover:text-slate-850 dark:text-github-dark-muted dark:hover:text-slate-200'
-                                        }`}
-                                    >
-                                        {tab.icon}
-                                        {tab.label}
-                                    </button>
-                                ))}
+                                ].map((tab, idx) => {
+                                    if (tab.type === 'separator') {
+                                        return (
+                                            <div 
+                                                key={`sep-${idx}`}
+                                                className="self-center h-4 w-px bg-slate-300 dark:bg-github-dark-border mx-2.5 shrink-0" 
+                                                aria-hidden="true" 
+                                            />
+                                        );
+                                    }
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => { setDrawerTab(tab.id); setEditMode(false); }}
+                                            className={`flex items-center gap-1.5 px-4 py-3 border-b-2 font-semibold transition-all shrink-0 ${
+                                                drawerTab === tab.id
+                                                    ? 'border-[#0969da] text-[#0969da] dark:border-github-dark-accent dark:text-[#f0f6fc]'
+                                                    : 'border-transparent text-slate-500 hover:text-slate-850 dark:text-github-dark-muted dark:hover:text-slate-200'
+                                            }`}
+                                        >
+                                            {tab.icon}
+                                            <span>{tab.label}</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             {/* Drawer Body Container */}
