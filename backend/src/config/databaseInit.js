@@ -202,9 +202,202 @@ export const initDatabase = async () => {
                 });
                 console.log('✅ Column "column_preferences" added to "users" table.');
             }
+            
+            const hasChecklistCol = await db.schema.hasColumn('users', 'checklist_template_id');
+            if (!hasChecklistCol) {
+                await db.schema.table('users', (table) => {
+                    table.integer('checklist_template_id').unsigned().nullable();
+                });
+                console.log('✅ Column "checklist_template_id" added to "users" table.');
+            }
+            const hasDocCol = await db.schema.hasColumn('users', 'document_template_id');
+            if (!hasDocCol) {
+                await db.schema.table('users', (table) => {
+                    table.integer('document_template_id').unsigned().nullable();
+                });
+                console.log('✅ Column "document_template_id" added to "users" table.');
+            }
+        }
+
+        // 9. Onboarding Checklist Templates
+        const hasChecklistTemplates = await db.schema.hasTable('onboarding_checklist_templates');
+        if (!hasChecklistTemplates) {
+            console.log('Creating "onboarding_checklist_templates" table...');
+            await db.schema.createTable('onboarding_checklist_templates', (table) => {
+                table.increments('id').primary();
+                table.integer('org_id').notNullable();
+                table.string('template_name', 255).notNullable();
+                table.text('description').nullable();
+                table.integer('created_by').nullable();
+                table.timestamp('created_at').defaultTo(db.fn.now());
+                table.timestamp('updated_at').defaultTo(db.fn.now());
+                
+                table.index(['org_id']);
+            });
+            console.log('✅ "onboarding_checklist_templates" table initialized.');
+        }
+
+        // 10. Onboarding Checklist Items
+        const hasChecklistItems = await db.schema.hasTable('onboarding_checklist_items');
+        if (!hasChecklistItems) {
+            console.log('Creating "onboarding_checklist_items" table...');
+            await db.schema.createTable('onboarding_checklist_items', (table) => {
+                table.increments('id').primary();
+                table.integer('template_id').unsigned().notNullable();
+                table.string('task_key', 100).notNullable();
+                table.string('task_label', 255).notNullable();
+                table.integer('sort_order').defaultTo(0);
+                table.timestamp('created_at').defaultTo(db.fn.now());
+
+                table.foreign('template_id').references('onboarding_checklist_templates.id').onDelete('CASCADE');
+                table.index(['template_id']);
+            });
+            console.log('✅ "onboarding_checklist_items" table initialized.');
+        }
+
+        // 11. Employee Checklist Progress
+        const hasChecklistProgress = await db.schema.hasTable('employee_checklist_progress');
+        if (!hasChecklistProgress) {
+            console.log('Creating "employee_checklist_progress" table...');
+            await db.schema.createTable('employee_checklist_progress', (table) => {
+                table.increments('id').primary();
+                table.integer('employee_id').notNullable();
+                table.string('task_key', 100).notNullable();
+                table.boolean('is_completed').defaultTo(false);
+                table.timestamp('completed_at').nullable();
+                table.integer('completed_by').nullable();
+                
+                table.index(['employee_id']);
+            });
+            console.log('✅ "employee_checklist_progress" table initialized.');
+        }
+
+        // 12. Required Document Templates
+        const hasDocTemplates = await db.schema.hasTable('required_document_templates');
+        if (!hasDocTemplates) {
+            console.log('Creating "required_document_templates" table...');
+            await db.schema.createTable('required_document_templates', (table) => {
+                table.increments('id').primary();
+                table.integer('org_id').notNullable();
+                table.string('template_name', 255).notNullable();
+                table.text('description').nullable();
+                table.integer('created_by').nullable();
+                table.timestamp('created_at').defaultTo(db.fn.now());
+                table.timestamp('updated_at').defaultTo(db.fn.now());
+
+                table.index(['org_id']);
+            });
+            console.log('✅ "required_document_templates" table initialized.');
+        }
+
+        // 13. Required Document Items
+        const hasDocItems = await db.schema.hasTable('required_document_items');
+        if (!hasDocItems) {
+            console.log('Creating "required_document_items" table...');
+            await db.schema.createTable('required_document_items', (table) => {
+                table.increments('id').primary();
+                table.integer('template_id').unsigned().notNullable();
+                table.string('category', 100).notNullable();
+                table.string('doc_key', 100).notNullable();
+                table.string('doc_label', 255).notNullable();
+                table.boolean('is_mandatory').defaultTo(true);
+                table.integer('sort_order').defaultTo(0);
+                table.timestamp('created_at').defaultTo(db.fn.now());
+
+                table.foreign('template_id').references('required_document_templates.id').onDelete('CASCADE');
+                table.index(['template_id']);
+            });
+            console.log('✅ "required_document_items" table initialized.');
+        }
+
+        // 14. Employee Uploaded Documents
+        const hasUploadedDocs = await db.schema.hasTable('employee_uploaded_documents');
+        if (!hasUploadedDocs) {
+            console.log('Creating "employee_uploaded_documents" table...');
+            await db.schema.createTable('employee_uploaded_documents', (table) => {
+                table.increments('id').primary();
+                table.integer('employee_id').notNullable();
+                table.string('doc_key', 100).notNullable();
+                table.string('file_name', 255).notNullable();
+                table.string('file_key', 500).notNullable();
+                table.string('file_type', 100).nullable();
+                table.timestamp('uploaded_at').defaultTo(db.fn.now());
+                table.string('verified_status', 50).defaultTo('Pending');
+                table.text('verification_comments').nullable();
+                table.integer('verified_by').nullable();
+                table.timestamp('verified_at').nullable();
+
+                table.index(['employee_id', 'doc_key']);
+            });
+            console.log('✅ "employee_uploaded_documents" table initialized.');
+        }
+
+        // 15. Performance Cycles
+        const hasPerfCycles = await db.schema.hasTable('performance_cycles');
+        if (!hasPerfCycles) {
+            console.log('Creating "performance_cycles" table...');
+            await db.schema.createTable('performance_cycles', (table) => {
+                table.string('id', 100).primary();
+                table.integer('org_id').notNullable();
+                table.string('name', 255).notNullable();
+                table.string('type', 50).notNullable();
+                table.string('status', 50).notNullable();
+                table.string('target_group', 50).notNullable();
+                table.date('start_date').nullable();
+                table.date('end_date').nullable();
+                table.timestamp('created_at').defaultTo(db.fn.now());
+                table.timestamp('updated_at').defaultTo(db.fn.now());
+
+                table.index(['org_id']);
+            });
+            console.log('✅ "performance_cycles" table initialized.');
+        }
+
+        // 16. Employee Performance Goals (KPIs)
+        const hasPerfGoals = await db.schema.hasTable('employee_performance_goals');
+        if (!hasPerfGoals) {
+            console.log('Creating "employee_performance_goals" table...');
+            await db.schema.createTable('employee_performance_goals', (table) => {
+                table.increments('id').primary();
+                table.integer('employee_id').notNullable();
+                table.string('cycle_id', 100).notNullable();
+                table.string('title', 255).notNullable();
+                table.date('deadline').notNullable();
+                table.string('status', 50).defaultTo('Pending');
+                table.integer('rating').defaultTo(0);
+                table.text('comments').nullable();
+                table.timestamp('created_at').defaultTo(db.fn.now());
+                table.timestamp('updated_at').defaultTo(db.fn.now());
+
+                table.foreign('cycle_id').references('performance_cycles.id').onDelete('CASCADE');
+                table.index(['employee_id', 'cycle_id']);
+            });
+            console.log('✅ "employee_performance_goals" table initialized.');
+        }
+
+        // 17. Employee Performance Reviews
+        const hasPerfReviews = await db.schema.hasTable('employee_performance_reviews');
+        if (!hasPerfReviews) {
+            console.log('Creating "employee_performance_reviews" table...');
+            await db.schema.createTable('employee_performance_reviews', (table) => {
+                table.increments('id').primary();
+                table.integer('employee_id').notNullable();
+                table.string('cycle_id', 100).notNullable();
+                table.text('self_achievements').nullable();
+                table.text('self_challenges').nullable();
+                table.text('self_learning').nullable();
+                table.text('manager_comments').nullable();
+                table.string('manager_recommendation', 255).nullable();
+                table.timestamp('updated_at').defaultTo(db.fn.now());
+
+                table.unique(['employee_id', 'cycle_id']);
+                table.foreign('cycle_id').references('performance_cycles.id').onDelete('CASCADE');
+            });
+            console.log('✅ "employee_performance_reviews" table initialized.');
         }
 
     } catch (error) {
+
         console.error('Error during database table initialization:', error);
     }
 };
