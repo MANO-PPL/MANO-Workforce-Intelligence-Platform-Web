@@ -37,7 +37,9 @@ import DARAdmin from "./pages/dar/DARAdmin"
 import LeaveApplication from "./pages/holidays/LeaveApplication"
 import ChatPage from "./pages/collaboration/ChatPage";
 import RecruitmentDashboard from "./pages/recruitment/RecruitmentDashboard";
+import RecruitmentDashboardMobile from "./pages/recruitment/RecruitmentDashboard-mv";
 import PublicJobOpening from "./pages/recruitment/PublicJobOpening";
+import PublicJobOpeningMobile from "./pages/recruitment/PublicJobOpening-mv";
 import EmployeeMaster from "./pages/employees/EmployeeMaster";
 import DocumentGenerator from "./pages/documents/DocumentGenerator";
 import Documentation from "./pages/documentation/Documentation";
@@ -273,7 +275,7 @@ function App() {
 
           {/* Website Landing (shown first when not logged in) */}
           <Route path="/" element={<RootHandler />} />
-          <Route path="/careers/:slug" element={<PublicJobOpening />} />
+          <Route path="/careers/:slug" element={<ResponsiveRoute DesktopComponent={PublicJobOpening} MobileComponent={PublicJobOpeningMobile} />} />
           <Route path="/get-started" element={<Navigate to="/login" replace />} />
 
           {/* Public Route: Login */}
@@ -321,7 +323,7 @@ function App() {
               <Route path="/employees/bulk" element={<ResponsiveRoute DesktopComponent={BulkUpload} MobileComponent={MobileBulkUpload} />} />
               <Route path="/holidays/bulk" element={<ResponsiveRoute DesktopComponent={BulkHolidayImport} MobileComponent={MobileBulkHolidayImport} />} />
               <Route path="/dar-admin" element={<DARAdmin />} />
-              <Route path="/recruitment" element={<RecruitmentDashboard />} />
+              <Route path="/recruitment" element={<ResponsiveRoute DesktopComponent={RecruitmentDashboard} MobileComponent={RecruitmentDashboardMobile} />} />
               <Route path="/documents" element={<DocumentGenerator />} />
             </Route>
 
