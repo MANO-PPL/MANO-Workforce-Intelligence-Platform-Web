@@ -5,6 +5,34 @@ import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { requestAllPlatformPermissions, requestAndRegisterFCMToken, onForegroundMessage } from '../services/fcm';
 
+const MacOSNotification = ({ title, message }) => {
+    return (
+        <div className="flex flex-col w-full text-slate-800 font-sans select-none">
+            {/* Header: Icon, App Name, Time */}
+            <div className="flex items-center justify-between border-b border-black/5 pb-1.5 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className="flex items-center gap-2">
+                    {/* Platform/App Icon */}
+                    <img 
+                        src="/mano-logo.svg" 
+                        alt="Mano" 
+                        className="w-4 h-4 object-contain"
+                        onError={(e) => {
+                            e.target.style.display = 'none';
+                        }}
+                    />
+                    <span>Mano Portal</span>
+                </div>
+                <span>now</span>
+            </div>
+            {/* Body */}
+            <div className="flex flex-col gap-0.5 text-left">
+                <span className="font-extrabold text-[12px] text-slate-900 leading-tight">{title}</span>
+                <span className="text-[11px] text-slate-600 leading-normal font-medium line-clamp-3">{message}</span>
+            </div>
+        </div>
+    );
+};
+
 const NotificationContext = createContext({
     notifications: [],
     unreadCount: 0,
@@ -82,27 +110,20 @@ export const NotificationProvider = ({ children }) => {
                 });
                 setUnreadCount(prev => prev + 1);
 
-                // Trigger in-app toast notification aligned with the dark theme
+                // Trigger in-app toast notification aligned with macOS liquid glass theme
                 toast.info(
-                    <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold text-[13px] text-white">{notif.title}</span>
-                        <span className="text-[12px] text-gray-300 line-clamp-2">{notif.message}</span>
-                    </div>,
+                    <MacOSNotification title={notif.title} message={notif.message} />,
                     {
                         position: "top-right",
                         autoClose: 5000,
-                        hideProgressBar: false,
+                        hideProgressBar: true,
                         closeOnClick: true,
                         pauseOnHover: true,
                         draggable: true,
-                        progressClassName: "bg-indigo-500",
-                        bodyClassName: "text-sm font-sans",
-                        style: {
-                            background: '#1A1A1A',
-                            border: '1px solid #333333',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
-                        }
+                        icon: false,
+                        className: "!bg-white/70 !backdrop-blur-xl !shadow-[0_10px_30px_rgba(0,0,0,0.08)] !rounded-[16px] !border !border-white/60 !p-4 !text-slate-800 !mx-4 md:!mx-0 !my-2",
+                        bodyClassName: "!p-0 !m-0",
+                        closeButton: false,
                     }
                 );
             };
@@ -138,23 +159,21 @@ export const NotificationProvider = ({ children }) => {
             const unsubscribeFCM = onForegroundMessage((payload) => {
                 if (!socket || !socket.connected) {
                     toast.info(
-                        <div className="flex flex-col gap-0.5">
-                            <span className="font-semibold text-[13px] text-white">
-                                {payload.notification?.title || 'New Notification'}
-                            </span>
-                            <span className="text-[12px] text-gray-300 line-clamp-2">
-                                {payload.notification?.body || ''}
-                            </span>
-                        </div>,
+                        <MacOSNotification 
+                            title={payload.notification?.title || 'New Notification'} 
+                            message={payload.notification?.body || ''} 
+                        />,
                         {
                             position: "top-right",
                             autoClose: 5000,
-                            style: {
-                                background: '#1A1A1A',
-                                border: '1px solid #333333',
-                                borderRadius: '8px',
-                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
-                            }
+                            hideProgressBar: true,
+                            closeOnClick: true,
+                            pauseOnHover: true,
+                            draggable: true,
+                            icon: false,
+                            className: "!bg-white/70 !backdrop-blur-xl !shadow-[0_10px_30px_rgba(0,0,0,0.08)] !rounded-[16px] !border !border-white/60 !p-4 !text-slate-800 !mx-4 md:!mx-0 !my-2",
+                            bodyClassName: "!p-0 !m-0",
+                            closeButton: false,
                         }
                     );
                 }
