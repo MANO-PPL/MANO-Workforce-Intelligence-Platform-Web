@@ -235,19 +235,27 @@ const Reports = () => {
                 {/* Main Content Area: Tabs + Full Width Table */}
                 <div className="space-y-4">
                     {/* Tabs */}
-                    <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-lg w-fit">
+                    <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
                         {[
                             { id: 'preview', label: 'Data Preview', icon: Eye },
                             { id: 'history', label: 'Export History', icon: DownloadCloud }
-                        ].map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'}`}
-                            >
-                                <tab.icon size={16} /> {tab.label}
-                            </button>
-                        ))}
+                        ].map((tab) => {
+                            const isSelected = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                                        isSelected
+                                            ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
+                                            : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-202'
+                                    }`}
+                                >
+                                    <tab.icon size={15} className={`${isSelected ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                                    <span className="leading-none">{tab.label}</span>
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* Full Width Card - Responsive Height */}
