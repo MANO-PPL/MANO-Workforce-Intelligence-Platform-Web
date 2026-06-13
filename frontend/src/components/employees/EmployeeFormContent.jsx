@@ -178,7 +178,6 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                 return;
             }
 
-            const selectedLoc = availableLocations.find(l => l.location_name === formData.work_location);
             const payload = {
                 user_name: formData.user_name,
                 email: formData.email,
@@ -189,8 +188,7 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                 user_type: formData.user_type,
                 joining_date: formData.joining_date || null,
                 reporting_manager: formData.reporting_manager || null,
-                work_location: formData.work_location || null,
-                work_locations: selectedLoc ? [selectedLoc.location_id] : []
+                work_location: formData.work_location || null
             };
 
             if (formData.user_password) {
@@ -447,19 +445,15 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
 
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Work Location</label>
-                                    <div className="relative">
-                                        <select
+                                    <div>
+                                        <input
+                                            type="text"
                                             name="work_location"
+                                            placeholder="Type work location..."
                                             value={formData.work_location}
                                             onChange={handleChange}
-                                            className="w-full pl-4 pr-10 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none cursor-pointer text-slate-800 dark:text-github-dark-text"
-                                        >
-                                            <option value="">Select Work Location</option>
-                                            {availableLocations.map(loc => (
-                                                <option key={loc.location_id} value={loc.location_name}>{loc.location_name}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                            className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-300 dark:border-slate-700/80 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-slate-800 dark:text-github-dark-text"
+                                        />
                                     </div>
                                 </div>
 

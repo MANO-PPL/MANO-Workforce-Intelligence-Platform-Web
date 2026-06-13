@@ -166,25 +166,23 @@ export const createUser = async (userData, authInfo, profileImageBuffer = null) 
             shift_id: shift_id || null, user_type: user_type || "employee",
             joining_date: userData.joining_date || null,
             reporting_manager: userData.reporting_manager || null,
-            work_location: ''
+            work_location: userData.work_location || null
         });
 
         if (!insertedId) throw new AppError("Failed to create user", 500);
         newUserId = insertedId;
 
-        if (userData.work_locations && Array.isArray(userData.work_locations) && userData.work_locations.length > 0) {
-            const inserts = userData.work_locations.map(locId => ({
-                user_id: newUserId,
-                location_id: locId
-            }));
-            await trx('user_work_locations').insert(inserts);
-
-            const locNames = await trx('work_locations')
-                .whereIn('location_id', userData.work_locations)
-                .select('location_name');
-            const workLocationStr = locNames.map(l => l.location_name).join(', ');
-
-            await trx('users').where('user_id', newUserId).update({ work_location: workLocationStr });
+        // Smart match: If the typed work_location matches a geofence name, link it
+        if (userData.work_location) {
+            const matchedLoc = await trx('work_locations')
+                .where({ org_id: authInfo.orgId, location_name: userData.work_location.trim() })
+                .first();
+            if (matchedLoc) {
+                await trx('user_work_locations').insert({
+                    user_id: newUserId,
+                    location_id: matchedLoc.location_id
+                });
+            }
         }
 
         try {
@@ -194,8 +192,8 @@ export const createUser = async (userData, authInfo, profileImageBuffer = null) 
                 description: `Created user ${user_name} (${user_type || "employee"})`,
                 request_ip: authInfo.clientIp, user_agent: authInfo.userAgent
             });
-        } catch (logErr) {
-            console.error("Failed to log activity:", logErr);
+        } catch (e) {
+            console.error(e);
         }
     });
 
@@ -264,22 +262,19 @@ export const updateUser = async (userId, updatesData, authInfo, profileImageBuff
     }
 
     await attendanceDB.transaction(async (trx) => {
-        if (updatesData.work_locations !== undefined) {
+        if (updatesData.work_location !== undefined) {
             await trx('user_work_locations').where('user_id', userId).del();
-            let workLocationStr = '';
-            if (Array.isArray(updatesData.work_locations) && updatesData.work_locations.length > 0) {
-                const inserts = updatesData.work_locations.map(locId => ({
-                    user_id: userId,
-                    location_id: locId
-                }));
-                await trx('user_work_locations').insert(inserts);
-
-                const locNames = await trx('work_locations')
-                    .whereIn('location_id', updatesData.work_locations)
-                    .select('location_name');
-                workLocationStr = locNames.map(l => l.location_name).join(', ');
+            if (updatesData.work_location) {
+                const matchedLoc = await trx('work_locations')
+                    .where({ org_id: authInfo.orgId, location_name: updatesData.work_location.trim() })
+                    .first();
+                if (matchedLoc) {
+                    await trx('user_work_locations').insert({
+                        user_id: userId,
+                        location_id: matchedLoc.location_id
+                    });
+                }
             }
-            updates.work_location = workLocationStr;
         }
 
         if (Object.keys(updates).length > 0) {
@@ -713,6 +708,7 @@ export const bulkCreateUsers = async (file, authInfo) => {
             const joiningDateRaw = getVal(row, "joining_date") || getVal(row, "date_of_joining") || getVal(row, "date of joining") || getVal(row, "joining date");
             const joiningDate = parseImportDate(joiningDateRaw);
             const rawManager = getVal(row, "reporting_manager") || getVal(row, "reporting manager") || getVal(row, "manager");
+            const rawWorkLocation = getVal(row, "work_location") || getVal(row, "work location") || getVal(row, "location");
 
             const hashedPassword = await bcrypt.hash(password, 10);
             nextUserNumber++;
@@ -734,8 +730,21 @@ export const bulkCreateUsers = async (file, authInfo) => {
                 desg_id: desgId,
                 shift_id: shiftId,
                 joining_date: joiningDate,
-                reporting_manager: rawManager || null
+                reporting_manager: rawManager || null,
+                work_location: rawWorkLocation || null
             });
+
+            if (rawWorkLocation) {
+                const matchedLoc = await trx('work_locations')
+                    .where({ org_id: authInfo.orgId, location_name: rawWorkLocation.trim() })
+                    .first();
+                if (matchedLoc) {
+                    await trx('user_work_locations').insert({
+                        user_id: newUserId,
+                        location_id: matchedLoc.location_id
+                    });
+                }
+            }
 
             insertedUsers.push({
                 user_id: newUserId,
@@ -752,19 +761,32 @@ export const bulkCreateUsers = async (file, authInfo) => {
         }
 
         // Pass 2: Resolve Reporting Managers
+        // Helper: fuzzy name match — typed value matches if it exactly equals, starts-with,
+        // or the stored name starts-with the typed value (case-insensitive)
+        const nameMatches = (stored, typed) => {
+            const s = stored.toLowerCase().trim();
+            const t = typed.toLowerCase().trim();
+            return s === t || s.startsWith(t) || t.startsWith(s);
+        };
+
         for (const u of insertedUsers) {
             if (!u.raw_manager) continue;
 
             const rawManagerLower = u.raw_manager.toLowerCase().trim();
 
-            // 1. Look up in the batch
+            // 1. Look up in the batch — try exact then fuzzy name prefix
             let matchedManager = insertedUsers.find(
                 item => item.user_name.toLowerCase().trim() === rawManagerLower ||
                         item.email?.toLowerCase().trim() === rawManagerLower ||
                         item.user_code.toLowerCase().trim() === rawManagerLower
             );
+            if (!matchedManager) {
+                matchedManager = insertedUsers.find(
+                    item => nameMatches(item.user_name, u.raw_manager)
+                );
+            }
 
-            // 2. Look up in the DB
+            // 2. Look up in the DB — exact match first, then LIKE prefix
             if (!matchedManager) {
                 matchedManager = await trx("users as usr")
                     .leftJoin("designations as d", "usr.desg_id", "d.desg_id")
@@ -773,6 +795,18 @@ export const bulkCreateUsers = async (file, authInfo) => {
                         this.where(trx.raw("LOWER(usr.user_name)"), rawManagerLower)
                             .orWhere(trx.raw("LOWER(usr.email)"), rawManagerLower)
                             .orWhere(trx.raw("LOWER(usr.user_code)"), rawManagerLower);
+                    })
+                    .select("usr.user_name", "d.desg_name")
+                    .first();
+            }
+            // 2b. DB prefix / starts-with LIKE search if still not found
+            if (!matchedManager) {
+                matchedManager = await trx("users as usr")
+                    .leftJoin("designations as d", "usr.desg_id", "d.desg_id")
+                    .where("usr.org_id", authInfo.orgId)
+                    .andWhere(function() {
+                        this.whereRaw("LOWER(usr.user_name) LIKE ?", [`${rawManagerLower}%`])
+                            .orWhereRaw("LOWER(usr.user_name) LIKE ?", [`%${rawManagerLower}%`]);
                     })
                     .select("usr.user_name", "d.desg_name")
                     .first();
@@ -1027,6 +1061,7 @@ export const bulkCreateUsersFromJson = async (users, authInfo) => {
                 const joiningDateRaw = row['Joining Date'] || row['joining_date'] || row['date_of_joining'] || row['date of joining'] || row['joining date'];
                 const joiningDate = parseImportDate(joiningDateRaw);
                 const rawManager = row['Reporting Manager'] || row['reporting_manager'] || row['reporting manager'] || row['manager'];
+                const rawWorkLocation = row['Work Location'] || row['work_location'] || row['work location'] || row['location'] || row.workLocation;
 
                 const hashedPassword = await bcrypt.hash(password, 10);
                 const deptId = deptName ? deptMap[deptName.toLowerCase()] : null;
@@ -1048,8 +1083,21 @@ export const bulkCreateUsersFromJson = async (users, authInfo) => {
                     desg_id: desgId,
                     shift_id: shiftId,
                     joining_date: joiningDate,
-                    reporting_manager: rawManager || null
+                    reporting_manager: rawManager || null,
+                    work_location: rawWorkLocation || null
                 });
+
+                if (rawWorkLocation) {
+                    const matchedLoc = await trx('work_locations')
+                        .where({ org_id: orgId, location_name: rawWorkLocation.trim() })
+                        .first();
+                    if (matchedLoc) {
+                        await trx('user_work_locations').insert({
+                            user_id: newUserId,
+                            location_id: matchedLoc.location_id
+                        });
+                    }
+                }
 
                 insertedUsers.push({
                     user_id: newUserId,
@@ -1070,19 +1118,32 @@ export const bulkCreateUsersFromJson = async (users, authInfo) => {
         }
 
         // Pass 2: Resolve Reporting Managers
+        // Helper: fuzzy name match — typed value matches if it exactly equals, starts-with,
+        // or the stored name starts-with the typed value (case-insensitive)
+        const nameMatchesJson = (stored, typed) => {
+            const s = stored.toLowerCase().trim();
+            const t = typed.toLowerCase().trim();
+            return s === t || s.startsWith(t) || t.startsWith(s);
+        };
+
         for (const u of insertedUsers) {
             if (!u.raw_manager) continue;
 
             const rawManagerLower = u.raw_manager.toLowerCase().trim();
 
-            // 1. Look up in the batch
+            // 1. Look up in the batch — try exact then fuzzy name prefix
             let matchedManager = insertedUsers.find(
                 item => item.user_name.toLowerCase().trim() === rawManagerLower ||
                         item.email?.toLowerCase().trim() === rawManagerLower ||
                         item.user_code.toLowerCase().trim() === rawManagerLower
             );
+            if (!matchedManager) {
+                matchedManager = insertedUsers.find(
+                    item => nameMatchesJson(item.user_name, u.raw_manager)
+                );
+            }
 
-            // 2. Look up in the DB
+            // 2. Look up in the DB — exact match first
             if (!matchedManager) {
                 matchedManager = await trx("users as usr")
                     .leftJoin("designations as d", "usr.desg_id", "d.desg_id")
@@ -1091,6 +1152,18 @@ export const bulkCreateUsersFromJson = async (users, authInfo) => {
                         this.where(trx.raw("LOWER(usr.user_name)"), rawManagerLower)
                             .orWhere(trx.raw("LOWER(usr.email)"), rawManagerLower)
                             .orWhere(trx.raw("LOWER(usr.user_code)"), rawManagerLower);
+                    })
+                    .select("usr.user_name", "d.desg_name")
+                    .first();
+            }
+            // 2b. DB prefix / starts-with LIKE search if still not found
+            if (!matchedManager) {
+                matchedManager = await trx("users as usr")
+                    .leftJoin("designations as d", "usr.desg_id", "d.desg_id")
+                    .where("usr.org_id", orgId)
+                    .andWhere(function() {
+                        this.whereRaw("LOWER(usr.user_name) LIKE ?", [`${rawManagerLower}%`])
+                            .orWhereRaw("LOWER(usr.user_name) LIKE ?", [`%${rawManagerLower}%`]);
                     })
                     .select("usr.user_name", "d.desg_name")
                     .first();

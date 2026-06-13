@@ -56,6 +56,9 @@ const BulkUpload = () => {
                     const phone = row['Phone'] || row['phone'] || row['phone_no'];
                     const dept = row['Department'] || row['department'] || row['dept_name'];
                     const desg = row['Designation'] || row['designation'] || row['desg_name'] || row['Role'] || row['role'];
+                    const joiningDate = row['Joining Date'] || row['joining_date'] || row['date_of_joining'] || row['date of joining'] || row['joining date'];
+                    const reportingManager = row['Reporting Manager'] || row['reporting_manager'] || row['reporting manager'] || row['manager'];
+                    const workLocation = row['Work Location'] || row['work_location'] || row['work location'] || row['location'];
 
                     // Basic validation check for preview
                     let status = (name && (email || phone)) ? 'Valid' : 'Error';
@@ -79,6 +82,9 @@ const BulkUpload = () => {
                         phone,
                         dept: dept || '-',
                         desg: desg || '-',
+                        joiningDate: joiningDate || '-',
+                        reportingManager: reportingManager || '-',
+                        workLocation: workLocation || '-',
                         status,
                         errorMsg
                     };
@@ -197,7 +203,7 @@ const BulkUpload = () => {
     };
 
     const downloadSample = () => {
-        const csvContent = "Name,Email,Phone,Department,Designation,Password,Joining Date,Reporting Manager\nJohn Doe,john@example.com,9876543210,Sales,Sales Exec,Pass@123,2026-06-01,Sourabh Sutar";
+        const csvContent = "Name,Email,Phone,Department,Designation,Password,Joining Date,Reporting Manager,Work Location\nJohn Doe,john@example.com,9876543210,Sales,Sales Exec,Pass@123,2026-06-01,Sourabh Sutar,Headquarters";
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
@@ -330,6 +336,9 @@ const BulkUpload = () => {
                                         <th className="px-6 py-3.5">Email</th>
                                         <th className="px-6 py-3.5">Role</th>
                                         <th className="px-6 py-3.5">Department</th>
+                                        <th className="px-6 py-3.5">Joining Date</th>
+                                        <th className="px-6 py-3.5">Reporting Manager</th>
+                                        <th className="px-6 py-3.5">Work Location</th>
                                         <th className="px-6 py-3.5">Validation</th>
                                     </tr>
                                 </thead>
@@ -340,6 +349,9 @@ const BulkUpload = () => {
                                             <td className="px-6 py-3.5 text-sm text-slate-500 dark:text-github-dark-muted">{row.email || '-'}</td>
                                             <td className="px-6 py-3.5 text-sm text-slate-500 dark:text-github-dark-muted">{row.desg}</td>
                                             <td className="px-6 py-3.5 text-sm text-slate-500 dark:text-github-dark-muted">{row.dept}</td>
+                                            <td className="px-6 py-3.5 text-sm text-slate-500 dark:text-github-dark-muted">{row.joiningDate}</td>
+                                            <td className="px-6 py-3.5 text-sm text-slate-500 dark:text-github-dark-muted">{row.reportingManager}</td>
+                                            <td className="px-6 py-3.5 text-sm text-slate-500 dark:text-github-dark-muted">{row.workLocation || row.work_location || '-'}</td>
                                             <td className="px-6 py-3.5">
                                                 {row.status === 'Valid' ? (
                                                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1 rounded-full border border-emerald-200/30 dark:border-emerald-800/20">
@@ -355,7 +367,7 @@ const BulkUpload = () => {
                                     ))}
                                     {previewData.length > 50 && (
                                         <tr>
-                                            <td colSpan="5" className="px-6 py-5 text-center text-xs text-slate-400 italic">
+                                            <td colSpan="8" className="px-6 py-5 text-center text-xs text-slate-400 italic">
                                                 ... and {previewData.length - 50} more rows
                                             </td>
                                         </tr>

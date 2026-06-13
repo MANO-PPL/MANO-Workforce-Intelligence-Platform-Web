@@ -57,6 +57,9 @@ const BulkUpload = () => {
                     const phone = row['Phone'] || row['phone'] || row['phone_no'];
                     const dept = row['Department'] || row['department'] || row['dept_name'];
                     const desg = row['Designation'] || row['designation'] || row['desg_name'] || row['Role'] || row['role'];
+                    const joiningDate = row['Joining Date'] || row['joining_date'] || row['date_of_joining'] || row['date of joining'] || row['joining date'];
+                    const reportingManager = row['Reporting Manager'] || row['reporting_manager'] || row['reporting manager'] || row['manager'];
+                    const workLocation = row['Work Location'] || row['work_location'] || row['work location'] || row['location'];
 
                     let status = (name && (email || phone)) ? 'Valid' : 'Error';
                     let errorMsg = status === 'Error' ? 'Missing (Name & Contact)' : '';
@@ -78,6 +81,9 @@ const BulkUpload = () => {
                         phone,
                         dept: dept || '-',
                         desg: desg || '-',
+                        joiningDate: joiningDate || '-',
+                        reportingManager: reportingManager || '-',
+                        workLocation: workLocation || '-',
                         status,
                         errorMsg
                     };
@@ -187,7 +193,7 @@ const BulkUpload = () => {
     };
 
     const downloadSample = () => {
-        const csvContent = "Name,Email,Phone,Department,Designation,Password,Joining Date,Reporting Manager\nJohn Doe,john@example.com,9876543210,Sales,Sales Exec,Pass@123,2026-06-01,Sourabh Sutar";
+        const csvContent = "Name,Email,Phone,Department,Designation,Password,Joining Date,Reporting Manager,Work Location\nJohn Doe,john@example.com,9876543210,Sales,Sales Exec,Pass@123,2026-06-01,Sourabh Sutar,Headquarters";
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
@@ -310,6 +316,9 @@ const BulkUpload = () => {
                                             <div className="flex-1 min-w-0 text-left">
                                                 <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{row.name || '-'}</p>
                                                 <p className="text-[11px] text-slate-400 truncate">{row.email || row.phone} • {row.desg}</p>
+                                                <p className="text-[10px] text-slate-400 dark:text-github-dark-muted mt-0.5 truncate">
+                                                    Joined: {row.joiningDate || '-'} • Mgr: {row.reportingManager || '-'} • Loc: {row.workLocation || row.work_location || '-'}
+                                                </p>
                                             </div>
                                             <div>
                                                 {row.status === 'Valid' ? (
