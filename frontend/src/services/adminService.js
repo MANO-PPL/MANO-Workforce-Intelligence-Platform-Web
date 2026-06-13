@@ -236,17 +236,17 @@ export const adminService = {
             throw error;
         }
     },
-    async getReportPreview(month, type, date = "") {
+    async getReportPreview(month, type, date = "", userId = "", startDate = "", endDate = "", columns = "") {
         try {
-            const res = await api.get(`${ADMIN_API_URL}/reports/preview?month=${month}&type=${type}&date=${date}`);
+            const res = await api.get(`${ADMIN_API_URL}/reports/preview?month=${month}&type=${type}&date=${date}${userId ? `&user_id=${userId}` : ""}${startDate ? `&startDate=${startDate}` : ""}${endDate ? `&endDate=${endDate}` : ""}${columns ? `&columns=${encodeURIComponent(columns)}` : ""}&_t=${Date.now()}`);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch report preview");
         }
     },
-    async downloadReport(month, type, format = "xlsx", userId = "", date = "") {
+    async downloadReport(month, type, format = "xlsx", userId = "", date = "", startDate = "", endDate = "") {
         try {
-            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
+            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}${startDate ? `&startDate=${startDate}` : ""}${endDate ? `&endDate=${endDate}` : ""}&_t=${Date.now()}`;
             const response = await api.get(url, { responseType: 'blob' });
             return response.data;
         } catch (error) {
@@ -254,9 +254,9 @@ export const adminService = {
         }
     },
 
-    async queueReport(month, type, format = "xlsx", userId = "", date = "") {
+    async queueReport(month, type, format = "xlsx", userId = "", date = "", startDate = "", endDate = "", columns = "") {
         try {
-            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
+            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}${startDate ? `&startDate=${startDate}` : ""}${endDate ? `&endDate=${endDate}` : ""}${columns ? `&columns=${encodeURIComponent(columns)}` : ""}&_t=${Date.now()}`;
             const response = await api.get(url);
             return response.data;
         } catch (error) {
