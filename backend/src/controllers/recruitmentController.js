@@ -8,6 +8,41 @@ import { uploadFile } from '../services/s3/s3Service.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper to detect correct Python executable
+let cachedPythonPath = null;
+const getPythonExecutable = () => {
+  if (cachedPythonPath) return cachedPythonPath;
+
+  const candidates = ['python3.12', 'python3', 'python'];
+  for (const cmd of candidates) {
+    try {
+      const process = spawnSync(cmd, ['-c', 'import pydantic, groq; print("OK")'], { encoding: 'utf-8' });
+      if (process.status === 0 && process.stdout.trim() === 'OK') {
+        cachedPythonPath = cmd;
+        return cmd;
+      }
+    } catch (e) {
+      // cmd not found or errored
+    }
+  }
+
+  // Fallback to python3, then python
+  for (const cmd of ['python3', 'python']) {
+    try {
+      const process = spawnSync(cmd, ['--version']);
+      if (process.status === 0) {
+        cachedPythonPath = cmd;
+        return cmd;
+      }
+    } catch (e) {
+      // cmd not found
+    }
+  }
+
+  cachedPythonPath = 'python3'; // Default fallback
+  return cachedPythonPath;
+};
+
 // Helper to safely parse JSON strings from database
 const safeParseJSON = (data, fallback = []) => {
   if (!data) return fallback;
@@ -482,7 +517,7 @@ export const applyForJob = async (req, res) => {
         args.push('--resume-path', resumeFilepath);
       }
 
-      const pythonProcess = spawnSync('python', args, {
+      const pythonProcess = spawnSync(getPythonExecutable(), args, {
         encoding: 'utf-8',
         env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
       });
@@ -825,7 +860,7 @@ export const generateAIJobDescription = async (req, res) => {
       '--role-prompt', rolePrompt
     ];
 
-    const pythonProcess = spawnSync('python', args, {
+    const pythonProcess = spawnSync(getPythonExecutable(), args, {
       encoding: 'utf-8',
       env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
     });
