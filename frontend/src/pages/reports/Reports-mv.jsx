@@ -25,6 +25,120 @@ import { toast } from 'react-toastify';
 import MonthPicker from '../../components/MonthPicker';
 import MobileDatePicker from '../../components/MobileDatePicker';
 
+const getAlignmentClass = (colHeader) => {
+    if (!colHeader) return 'center';
+    const header = colHeader.toLowerCase();
+    if (['name', 'department', 'dept', 'employee', 'reason', 'location', 'in location', 'out location', 'email', 'phone', 'role', 'designation', 'position'].some(k => header.includes(k))) {
+        return 'left';
+    }
+    return 'center';
+};
+
+const getCellStyle = (cellValue, colHeader, isTotalsRow, isEven) => {
+    const val = cellValue?.toString().trim() || '';
+    const header = colHeader.toLowerCase();
+
+    // 1. Totals row styling
+    if (isTotalsRow) {
+        return {
+            fontWeight: 'bold',
+            color: '#1F4E78',
+            backgroundColor: '#F2F4F7',
+            borderTop: '2px solid #1F4E78',
+            borderBottom: '4px double #1F4E78',
+            borderLeft: '1px solid #CBD5E1',
+            borderRight: '1px solid #CBD5E1',
+            paddingTop: '6px',
+            paddingBottom: '6px',
+        };
+    }
+
+    // Default borders
+    const defaultBorder = '1px solid #CBD5E1';
+
+    // 2. Conditional formatting based on cell values (Excel replica colors)
+    // Present or 1.0 status (Green)
+    if (val === 'Present' || val === '1.0') {
+        return {
+            backgroundColor: '#E6F4EA',
+            color: '#137333',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    // Absent or 0.0 status (Red)
+    if (val === 'Absent' || val === '0.0') {
+        return {
+            backgroundColor: '#FCE8E6',
+            color: '#C5221F',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    // Late or Late Minutes/Count > 0 (Orange)
+    if (val.toLowerCase().includes('late') || (header.includes('late') && Number(val) > 0)) {
+        return {
+            backgroundColor: '#FEF7E0',
+            color: '#B06000',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    // Weekend Sat/Sun (Lavender)
+    if (val === 'Sun' || val === 'Sat') {
+        return {
+            backgroundColor: '#F1F3F4',
+            color: '#5F6368',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    // Leaves status
+    if (val.toLowerCase() === 'on leave' || val.toLowerCase() === 'leave' || val.toLowerCase() === 'half day') {
+        return {
+            backgroundColor: '#E8F0FE',
+            color: '#1A73E8',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+
+    // Default Zebra Striping Styles
+    return {
+        backgroundColor: isEven ? '#F8FAFC' : '#FFFFFF',
+        color: '#333333',
+        border: defaultBorder
+    };
+};
+
+const getWeeksOfMonth = (monthStr) => {
+    if (!monthStr) return [];
+    const [year, monthNum] = monthStr.split('-').map(Number);
+    const weeks = [];
+    const firstDate = new Date(year, monthNum - 1, 1);
+    const lastDate = new Date(year, monthNum, 0);
+
+    let currentStart = new Date(firstDate);
+    while (currentStart <= lastDate) {
+        let currentEnd = new Date(currentStart);
+        const dayOfWeek = currentStart.getDay(); // 0 is Sunday, 1 is Monday...
+        const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+        currentEnd.setDate(currentStart.getDate() + daysToSunday);
+
+        if (currentEnd > lastDate) {
+            currentEnd = new Date(lastDate);
+        }
+
+        const weekLabel = `Week ${weeks.length + 1} (${currentStart.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })} - ${currentEnd.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })})`;
+        const startVal = currentStart.toISOString().slice(0, 10);
+        weeks.push({ label: weekLabel, value: startVal });
+
+        currentStart = new Date(currentEnd);
+        currentStart.setDate(currentStart.getDate() + 1);
+    }
+    return weeks;
+};
+
 const MobileReports = () => {
     // State (Synchronized with Web)
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -34,6 +148,75 @@ const MobileReports = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [activeTab, setActiveTab] = useState('preview'); // 'preview' | 'history'
 
+    // New filters states
+    const [employees, setEmployees] = useState([]);
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+    const [useCustomRange, setUseCustomRange] = useState(false);
+    const [customStartDate, setCustomStartDate] = useState(new Date().toISOString().slice(0, 10));
+    const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().slice(0, 10));
+    const [selectedWeek, setSelectedWeek] = useState('');
+
+    // Searchable employee select states
+    const [isEmpDropdownOpen, setIsEmpDropdownOpen] = useState(false);
+    const [empSearchQuery, setEmpSearchQuery] = useState('');
+    const empDropdownRef = React.useRef(null);
+
+    // Custom dropdown states
+    const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
+    const [isWeekDropdownOpen, setIsWeekDropdownOpen] = useState(false);
+    const [isColsDropdownOpen, setIsColsDropdownOpen] = useState(false);
+
+    const typeDropdownRef = React.useRef(null);
+    const weekDropdownRef = React.useRef(null);
+    const colsDropdownRef = React.useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (empDropdownRef.current && !empDropdownRef.current.contains(event.target)) {
+                setIsEmpDropdownOpen(false);
+            }
+            if (typeDropdownRef.current && !typeDropdownRef.current.contains(event.target)) {
+                setIsTypeDropdownOpen(false);
+            }
+            if (weekDropdownRef.current && !weekDropdownRef.current.contains(event.target)) {
+                setIsWeekDropdownOpen(false);
+            }
+            if (colsDropdownRef.current && !colsDropdownRef.current.contains(event.target)) {
+                setIsColsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedEmployeeName = employees.find(emp => emp.user_id === selectedEmployeeId)?.user_name || 'All Employees';
+    const filteredEmployees = employees.filter(emp => 
+        emp.user_name.toLowerCase().includes(empSearchQuery.toLowerCase())
+    );
+
+    const weeks = React.useMemo(() => getWeeksOfMonth(selectedMonth), [selectedMonth]);
+
+    useEffect(() => {
+        if (weeks.length > 0) {
+            setSelectedWeek(weeks[0].value);
+        }
+    }, [weeks]);
+
+    useEffect(() => {
+        const fetchEmployees = async () => {
+            try {
+                const res = await adminService.getAllUsers();
+                if (res.success && res.users) {
+                    const sorted = [...res.users].sort((a, b) => a.user_name.localeCompare(b.user_name));
+                    setEmployees(sorted);
+                }
+            } catch (err) {
+                console.error("Failed to load employees for filtering", err);
+            }
+        };
+        fetchEmployees();
+    }, []);
+
     useEffect(() => {
         window.dispatchEvent(new CustomEvent('mano-active-tab', {
             detail: { tab: activeTab }
@@ -41,13 +224,16 @@ const MobileReports = () => {
     }, [activeTab]);
 
     const reportTypes = [
-        { id: 'matrix_daily', label: 'Daily Matrix' },
-        { id: 'matrix_weekly', label: 'Weekly Matrix' },
-        { id: 'matrix_monthly', label: 'Monthly Matrix' },
-        { id: 'lateness_report', label: 'Lateness Report' },
+        { id: 'attendance_matrix_daily', label: 'Daily Attendance Matrix' },
+        { id: 'matrix_daily', label: 'Daily Attendance Report' },
         { id: 'attendance_detailed', label: 'Detailed Log' },
-        { id: 'attendance_summary', label: 'Monthly Summary' },
-        { id: 'employee_master', label: 'Employee Master' }
+        { id: 'employee_master', label: 'Employee Master Data' },
+        { id: 'lateness_report', label: 'Lateness Report' },
+        { id: 'attendance_matrix_monthly', label: 'Monthly Attendance Matrix' },
+        { id: 'matrix_monthly', label: 'Monthly Attendance Report' },
+        { id: 'attendance_summary', label: 'Monthly Summary Report' },
+        { id: 'attendance_matrix_weekly', label: 'Weekly Attendance Matrix' },
+        { id: 'matrix_weekly', label: 'Weekly Attendance Report' }
     ];
 
     const fileFormats = [
@@ -66,37 +252,95 @@ const MobileReports = () => {
         localStorage.setItem('attendance_export_history', JSON.stringify(exportHistory));
     }, [exportHistory]);
 
+    const [exportColumns, setExportColumns] = useState({
+        timeIn: true,
+        timeOut: true,
+        workedHours: true,
+        requiredHours: true,
+        late: true,
+        location: true,
+        attendanceDays: true
+    });
+
     // Preview Data State
     const [previewData, setPreviewData] = useState({ columns: [], rows: [] });
     const [loadingPreview, setLoadingPreview] = useState(false);
 
+    // Stable string key so any checkbox toggle reliably re-fires the effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const exportColumnsKey = JSON.stringify(exportColumns);
+
     // Fetch Preview
     useEffect(() => {
         if (activeTab !== 'preview') return;
+        let cancelled = false;
         const fetchPreview = async () => {
+            console.log("fetchPreview triggered (mobile):", {
+                selectedMonth,
+                reportType,
+                dateToUse: (['matrix_weekly', 'attendance_matrix_weekly'].includes(reportType) && !useCustomRange) ? selectedWeek : selectedDate,
+                selectedEmployeeId,
+                useCustomRange,
+                customStartDate,
+                customEndDate,
+                exportColumns
+            });
             setLoadingPreview(true);
             try {
-                const res = await adminService.getReportPreview(selectedMonth, reportType, selectedDate);
-                if (res.ok) {
+                const isWeekly = ['matrix_weekly', 'attendance_matrix_weekly'].includes(reportType);
+                const dateToUse = (isWeekly && !useCustomRange) ? selectedWeek : selectedDate;
+
+                const qStart = useCustomRange ? customStartDate : "";
+                const qEnd = useCustomRange ? customEndDate : "";
+
+                const res = await adminService.getReportPreview(
+                    selectedMonth,
+                    reportType,
+                    dateToUse,
+                    selectedEmployeeId,
+                    qStart,
+                    qEnd,
+                    exportColumnsKey
+                );
+                if (!cancelled && res.ok) {
+                    console.log("fetchPreview success (mobile), columns count:", res.data.columns?.length);
                     setPreviewData(res.data);
                 }
             } catch (error) {
-                console.error(error);
-                toast.error("Failed to load preview data");
+                if (!cancelled) {
+                    console.error("fetchPreview failed (mobile):", error);
+                    toast.error("Failed to load preview data");
+                }
             } finally {
-                setLoadingPreview(false);
+                if (!cancelled) setLoadingPreview(false);
             }
         };
         fetchPreview();
-    }, [selectedMonth, reportType, selectedDate, activeTab]);
+        return () => { cancelled = true; };
+    }, [selectedMonth, reportType, selectedDate, selectedEmployeeId, useCustomRange, customStartDate, customEndDate, selectedWeek, activeTab, exportColumnsKey]);
 
     const handleGenerate = async () => {
         setIsGenerating(true);
         try {
-            const res = await adminService.queueReport(selectedMonth, reportType, fileFormat, "", selectedDate);
+            const isWeekly = ['matrix_weekly', 'attendance_matrix_weekly'].includes(reportType);
+            const dateToUse = (isWeekly && !useCustomRange) ? selectedWeek : selectedDate;
+
+            const qStart = useCustomRange ? customStartDate : "";
+            const qEnd = useCustomRange ? customEndDate : "";
+
+            const res = await adminService.queueReport(
+                selectedMonth,
+                reportType,
+                fileFormat,
+                selectedEmployeeId,
+                dateToUse,
+                qStart,
+                qEnd,
+                JSON.stringify(exportColumns)
+            );
             if (res.ok) {
                 const reportId = res.reportId;
-                const filename = `Report_${reportType}_${selectedMonth || selectedDate}.${fileFormat}`;
+                const filename = `Report_${reportType}_${useCustomRange ? `${customStartDate}_to_${customEndDate}` : (selectedMonth || dateToUse)}.${fileFormat}`;
                 const reportTypeLabel = reportTypes.find(r => r.id === reportType)?.label || reportType;
                 const newReport = {
                     id: reportId || Date.now().toString(),
@@ -173,6 +417,13 @@ const MobileReports = () => {
         return () => clearInterval(interval);
     }, [exportHistory]);
 
+    const isWeekly = ['matrix_weekly', 'attendance_matrix_weekly'].includes(reportType);
+    const dateToUse = (isWeekly && !useCustomRange) ? selectedWeek : selectedDate;
+    const displayedPeriod = useCustomRange 
+        ? `${customStartDate} to ${customEndDate}` 
+        : ((isWeekly && !useCustomRange) ? (weeks.find(w => w.value === selectedWeek)?.label || selectedWeek) : (selectedMonth || selectedDate));
+    const selectedReportTypeLabel = reportTypes.find(opt => opt.id === reportType)?.label || reportType;
+
     return (
         <MobileDashboardLayout title="Reports & Exports">
             <div className="min-h-screen bg-slate-50 dark:bg-black pb-24 transition-colors duration-300">
@@ -208,13 +459,13 @@ const MobileReports = () => {
                                 <FileText size={16} />
                             </div>
                             <div>
-                                <h3 className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">{reportType.replace('_', ' ')}</h3>
+                                <h3 className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">{reportType.replace(/_/g, ' ')}</h3>
                                 <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{activeTab === 'preview' ? 'Live Data View' : 'Past Exports'}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-white/5 rounded-full">
                             <Clock size={10} className="text-slate-400" />
-                            <span className="text-[9px] font-black text-slate-500">{selectedMonth || selectedDate}</span>
+                            <span className="text-[9px] font-black text-slate-500">{displayedPeriod}</span>
                         </div>
                     </div>
                 </div>
@@ -223,40 +474,268 @@ const MobileReports = () => {
                     {/* --- CONFIGURATION PANEL (Matched Size) --- */}
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-white/5 shadow-sm space-y-5">
                         <div className="grid grid-cols-2 gap-4">
-                            {/* Date Picker */}
-                            <div className="space-y-0 flex-1">
-                                {['matrix_monthly', 'lateness_report', 'attendance_detailed', 'attendance_summary'].includes(reportType) ? (
-                                    <MonthPicker
-                                        label="Period"
-                                        value={selectedMonth}
-                                        onChange={setSelectedMonth}
-                                    />
-                                ) : (
-                                    <MobileDatePicker
-                                        label="Period"
-                                        value={selectedDate}
-                                        onChange={setSelectedDate}
-                                    />
+                            {/* Custom Report Type Dropdown */}
+                            <div className="space-y-1.5 relative animate-none" ref={typeDropdownRef}>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Type</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
+                                    className="w-full flex items-center justify-between pl-3 pr-4 h-10 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-slate-800 dark:text-white cursor-pointer text-left"
+                                >
+                                    <span className="truncate">{selectedReportTypeLabel}</span>
+                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${isTypeDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {isTypeDropdownOpen && (
+                                    <div className="absolute left-0 mt-1 w-full bg-white dark:bg-github-dark-subtle border border-slate-100 dark:border-white/5 rounded-xl shadow-xl z-50 p-2 max-h-48 overflow-y-auto no-scrollbar space-y-0.5">
+                                        {reportTypes.map((t) => (
+                                            <button
+                                                key={t.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setReportType(t.id);
+                                                    setIsTypeDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-lg font-bold transition-colors ${
+                                                    reportType === t.id 
+                                                        ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400' 
+                                                        : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                                }`}
+                                            >
+                                                {t.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
 
-                            {/* Report Type */}
-                            <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Type</label>
-                                <div className="relative group">
-                                    <select
-                                        value={reportType}
-                                        onChange={(e) => setReportType(e.target.value)}
-                                        className="w-full pl-3 pr-8 h-10 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl text-xs font-bold appearance-none focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-slate-800 dark:text-white cursor-pointer"
-                                    >
-                                        {reportTypes.map(t => (
-                                            <option key={t.id} value={t.id} className="bg-white dark:bg-github-dark-subtle text-slate-800 dark:text-white">{t.label}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-                                </div>
+                            {/* Employee Selector */}
+                            <div className="space-y-1.5 relative animate-none" ref={empDropdownRef}>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Employee</label>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsEmpDropdownOpen(!isEmpDropdownOpen);
+                                        setEmpSearchQuery('');
+                                    }}
+                                    className="w-full flex items-center justify-between pl-3 pr-4 h-10 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-slate-800 dark:text-white cursor-pointer text-left"
+                                >
+                                    <span className="truncate">{selectedEmployeeName}</span>
+                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${isEmpDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {isEmpDropdownOpen && (
+                                    <div className="absolute left-0 mt-1 w-full bg-white dark:bg-github-dark-subtle border border-slate-100 dark:border-white/5 rounded-xl shadow-xl z-50 p-2 flex flex-col">
+                                        <div className="relative mb-2">
+                                            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search..."
+                                                value={empSearchQuery}
+                                                onChange={(e) => setEmpSearchQuery(e.target.value)}
+                                                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto no-scrollbar space-y-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedEmployeeId('');
+                                                    setIsEmpDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-lg font-bold transition-colors ${
+                                                    selectedEmployeeId === '' 
+                                                        ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400' 
+                                                        : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                                }`}
+                                            >
+                                                All Employees
+                                            </button>
+                                            {filteredEmployees.length > 0 ? (
+                                                filteredEmployees.map(emp => (
+                                                    <button
+                                                        key={emp.user_id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedEmployeeId(emp.user_id);
+                                                            setIsEmpDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-xs rounded-lg font-bold transition-colors ${
+                                                            selectedEmployeeId === emp.user_id 
+                                                                ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400' 
+                                                                : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                                        }`}
+                                                    >
+                                                        {emp.user_name}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="text-[10px] text-slate-400 dark:text-github-dark-muted text-center py-3 font-bold uppercase tracking-widest">
+                                                    No results
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
+
+                        {/* Date Picker Section */}
+                        {useCustomRange ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <MobileDatePicker
+                                    label="Start Date"
+                                    value={customStartDate}
+                                    onChange={setCustomStartDate}
+                                />
+                                <MobileDatePicker
+                                    label="End Date"
+                                    value={customEndDate}
+                                    onChange={setCustomEndDate}
+                                />
+                            </div>
+                        ) : (
+                            reportType !== 'employee_master' && (
+                                <div className="w-full">
+                                    {['matrix_monthly', 'attendance_matrix_monthly', 'lateness_report', 'attendance_detailed', 'attendance_summary'].includes(reportType) ? (
+                                        <MonthPicker
+                                            label="Period"
+                                            value={selectedMonth}
+                                            onChange={setSelectedMonth}
+                                        />
+                                    ) : ['matrix_weekly', 'attendance_matrix_weekly'].includes(reportType) ? (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <MonthPicker
+                                                label="Period"
+                                                value={selectedMonth}
+                                                onChange={setSelectedMonth}
+                                            />
+                                            <div className="space-y-1.5 relative" ref={weekDropdownRef}>
+                                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Select Week</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsWeekDropdownOpen(!isWeekDropdownOpen)}
+                                                    className="w-full flex items-center justify-between pl-3 pr-4 h-10 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-slate-800 dark:text-white cursor-pointer text-left"
+                                                >
+                                                    <span className="truncate">{weeks.find(w => w.value === selectedWeek)?.label || 'Select Week'}</span>
+                                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${isWeekDropdownOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                {isWeekDropdownOpen && (
+                                                    <div className="absolute left-0 mt-1 w-full bg-white dark:bg-github-dark-subtle border border-slate-100 dark:border-white/5 rounded-xl shadow-xl z-50 p-2 max-h-48 overflow-y-auto no-scrollbar space-y-0.5">
+                                                        {weeks.map((w, idx) => (
+                                                            <button
+                                                                key={idx}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedWeek(w.value);
+                                                                    setIsWeekDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-3 py-2 text-xs rounded-lg font-bold transition-colors ${
+                                                                    selectedWeek === w.value 
+                                                                        ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400' 
+                                                                        : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                                                }`}
+                                                            >
+                                                                {w.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <MobileDatePicker
+                                            label="Period"
+                                            value={selectedDate}
+                                            onChange={setSelectedDate}
+                                        />
+                                    )}
+                                </div>
+                            )
+                        )}
+
+                        {/* Custom Date Range Toggle */}
+                        <button
+                            type="button"
+                            id="useCustomRangeMobile"
+                            onClick={() => setUseCustomRange(!useCustomRange)}
+                            className="flex items-center gap-2.5 px-1 cursor-pointer focus:outline-none"
+                        >
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                                useCustomRange
+                                    ? 'bg-indigo-500 border-indigo-500 text-white shadow-sm shadow-indigo-500/20'
+                                    : 'bg-white dark:bg-black border-slate-300 dark:border-white/10'
+                            }`}>
+                                {useCustomRange && (
+                                    <svg className="w-2.5 h-2.5 stroke-[3] stroke-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                )}
+                            </div>
+                            <span className="text-[10px] font-black text-slate-500 dark:text-github-dark-muted select-none uppercase tracking-widest">
+                                Use Custom Date Range
+                            </span>
+                        </button>
+
+                        {/* Columns Selection Dropdown */}
+                        {reportType !== 'employee_master' && (
+                            <div className="space-y-1.5 relative animate-none" ref={colsDropdownRef}>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Columns to Include</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsColsDropdownOpen(!isColsDropdownOpen)}
+                                    className="w-full flex items-center justify-between pl-3 pr-4 h-10 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-slate-800 dark:text-white cursor-pointer text-left"
+                                >
+                                    <span className="truncate">
+                                        {Object.values(exportColumns).filter(Boolean).length} Columns Selected
+                                    </span>
+                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${isColsDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {isColsDropdownOpen && (
+                                    <div className="absolute left-0 mt-1 w-full bg-white dark:bg-github-dark-subtle border border-slate-100 dark:border-white/5 rounded-xl shadow-xl z-50 p-3 space-y-3">
+                                        {[
+                                            { id: 'timeIn', label: 'Time In' },
+                                            { id: 'timeOut', label: 'Time Out' },
+                                            { id: 'workedHours', label: 'Worked Hours' },
+                                            { id: 'requiredHours', label: 'Required Hours' },
+                                            { id: 'late', label: 'Lateness Info' },
+                                            { id: 'location', label: 'Locations' },
+                                            { id: 'attendanceDays', label: 'Attendance Summary' }
+                                        ].map((col) => (
+                                            <button
+                                                key={col.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setExportColumns(prev => ({
+                                                        ...prev,
+                                                        [col.id]: !prev[col.id]
+                                                    }));
+                                                }}
+                                                className="w-full flex items-center gap-2.5 cursor-pointer focus:outline-none group text-left"
+                                            >
+                                                <div className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-all ${
+                                                    exportColumns[col.id]
+                                                        ? 'bg-indigo-500 border-indigo-500 text-white shadow-sm shadow-indigo-500/20'
+                                                        : 'bg-white dark:bg-black border-slate-300 dark:border-white/10 group-hover:border-indigo-400'
+                                                }`}>
+                                                    {exportColumns[col.id] && (
+                                                        <svg className="w-2.5 h-2.5 stroke-[3] stroke-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <polyline points="20 6 9 17 4 12" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-600 dark:text-github-dark-muted select-none">
+                                                    {col.label}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Format Selection */}
                         <div className="space-y-2">
@@ -321,31 +800,88 @@ const MobileReports = () => {
                                         )}
                                     </div>
 
-                                    <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[500px] no-scrollbar">
+                                    <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[500px] no-scrollbar bg-slate-100 p-3 border-t border-slate-200 dark:border-github-dark-border">
                                         {loadingPreview ? (
                                             <div className="h-full flex flex-col items-center justify-center py-20 gap-3">
                                                 <div className="w-8 h-8 border-3 border-indigo-100 dark:border-indigo-900/30 border-t-indigo-500 rounded-full animate-spin" />
                                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Crunching Data...</p>
                                             </div>
                                         ) : previewData.rows?.length > 0 ? (
-                                            <table className="w-full text-left border-collapse min-w-max">
+                                            <table className="w-full text-left border-collapse min-w-max bg-white text-slate-800 shadow-sm rounded border border-slate-300" style={{ fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
                                                 <thead className="sticky top-0 z-10 bg-white/95 dark:bg-github-dark-bg/95 backdrop-blur-md">
-                                                    <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-white/10">
-                                                        {previewData.columns.map((col, idx) => (
-                                                            <th key={idx} className="px-4 py-3 whitespace-nowrap">{col}</th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-50 dark:divide-white/5">
-                                                    {previewData.rows.map((row, rIdx) => (
-                                                        <tr key={rIdx} className="hover:bg-indigo-50/50 dark:hover:bg-white/5 transition-colors">
-                                                            {row.map((cell, cIdx) => (
-                                                                <td key={cIdx} className="px-4 py-3 text-[11px] font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                                                                    {cell}
-                                                                </td>
-                                                            ))}
+                                                    {previewData.headers ? (
+                                                        <>
+                                                            <tr className="text-[10px] uppercase font-bold border-b border-slate-200 dark:border-github-dark-border">
+                                                                {previewData.headers[0].map((cell, idx) => (
+                                                                    <th 
+                                                                        key={idx} 
+                                                                        rowSpan={cell.rowspan} 
+                                                                        colSpan={cell.colspan} 
+                                                                        className="px-3 py-2.5 whitespace-nowrap tracking-wider text-center border border-[#3A6085]"
+                                                                        style={{ backgroundColor: '#1F4E78', color: '#FFFFFF' }}
+                                                                    >
+                                                                        {cell.label}
+                                                                    </th>
+                                                                ))}
+                                                            </tr>
+                                                            <tr className="text-[10px] uppercase font-bold">
+                                                                {previewData.headers[1].map((cell, idx) => (
+                                                                    <th 
+                                                                        key={idx} 
+                                                                        className="px-3 py-2 whitespace-nowrap tracking-wider text-center border border-[#3A6085]"
+                                                                        style={{ backgroundColor: '#1F4E78', color: '#FFFFFF' }}
+                                                                    >
+                                                                        {cell.label}
+                                                                    </th>
+                                                                ))}
+                                                            </tr>
+                                                        </>
+                                                    ) : (
+                                                        <tr className="text-[10px] uppercase font-bold border-b border-slate-200 dark:border-github-dark-border">
+                                                            {previewData.columns.map((col, idx) => {
+                                                                const alignment = getAlignmentClass(col);
+                                                                return (
+                                                                    <th 
+                                                                        key={idx} 
+                                                                        className="px-3 py-2.5 whitespace-nowrap tracking-wider border border-[#3A6085]"
+                                                                        style={{ 
+                                                                            backgroundColor: '#1F4E78', 
+                                                                            color: '#FFFFFF',
+                                                                            textAlign: alignment
+                                                                        }}
+                                                                    >
+                                                                        {col}
+                                                                    </th>
+                                                                );
+                                                            })}
                                                         </tr>
-                                                    ))}
+                                                    )}
+                                                </thead>
+                                                <tbody>
+                                                    {previewData.rows.map((row, rIdx) => {
+                                                        const isTotalsRow = row[0]?.toString().toUpperCase() === 'TOTALS';
+                                                        const isEven = rIdx % 2 === 0;
+                                                        return (
+                                                            <tr key={rIdx} className="transition-colors hover:bg-slate-100/50">
+                                                                {row.map((cell, cIdx) => {
+                                                                    const colHeader = previewData.columns[cIdx]?.toString() || '';
+                                                                    const cellStyle = getCellStyle(cell, colHeader, isTotalsRow, isEven);
+                                                                    const alignment = getAlignmentClass(colHeader);
+                                                                    return (
+                                                                        <td 
+                                                                            key={cIdx} 
+                                                                            className="px-3 py-2 text-[11px] font-medium whitespace-nowrap transition-colors"
+                                                                            style={{ ...cellStyle, textAlign: alignment }}
+                                                                        >
+                                                                            {cell?.toString().split('\n').map((line, lIdx) => (
+                                                                                <div key={lIdx} className="leading-normal">{line}</div>
+                                                                            ))}
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         ) : (

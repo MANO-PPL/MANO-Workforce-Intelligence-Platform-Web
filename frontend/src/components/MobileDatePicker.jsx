@@ -112,7 +112,7 @@ const MobileDatePicker = ({ label, value, onChange, placeholder = "Select date" 
             </div>
 
             {isOpen && (
-                <div className="absolute left-0 right-0 mt-2 min-w-[260px] bg-white dark:bg-black rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[280px] bg-white dark:bg-black rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                     {/* Header */}
                     <div className="p-2 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-black/20">
                         <button 
@@ -149,16 +149,16 @@ const MobileDatePicker = ({ label, value, onChange, placeholder = "Select date" 
                     </div>
 
                     {/* Weekdays */}
-                    <div className="grid grid-cols-7 gap-0.5 px-3 pt-3 text-center">
+                    <div className="grid grid-cols-7 gap-0.5 px-3 pt-3 text-center justify-items-center">
                         {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                            <div key={day} className="text-[8px] uppercase font-black text-slate-400 tracking-tighter">
+                            <div key={day} className="text-[8px] uppercase font-black text-slate-400 tracking-tighter w-8 h-8 flex items-center justify-center">
                                 {day}
                             </div>
                         ))}
                     </div>
 
                     {/* Days Grid */}
-                    <div className="grid grid-cols-7 gap-0.5 p-3 pt-1">
+                    <div className="grid grid-cols-7 gap-0.5 p-3 pt-1 justify-items-center">
                         {renderCalendar()}
                     </div>
 

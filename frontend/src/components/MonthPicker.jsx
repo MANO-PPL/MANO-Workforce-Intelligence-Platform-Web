@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, X, ChevronDown } from 'lucide-react';
 
-const MonthPicker = ({ label, value, onChange, placeholder = "Select month" }) => {
+const MonthPicker = ({ label, value, onChange, placeholder = "Select month", compact = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const containerRef = useRef(null);
@@ -57,15 +57,31 @@ const MonthPicker = ({ label, value, onChange, placeholder = "Select month" }) =
 
     return (
         <div className="relative" ref={containerRef}>
-            {label && <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">{label}</label>}
+            {label && (
+                <label className={`block font-bold uppercase text-slate-500 dark:text-github-dark-muted ${
+                    compact 
+                        ? 'text-[10px] tracking-wider mb-1 ml-0.5' 
+                        : 'text-xs mb-1.5'
+                }`}>
+                    {label}
+                </label>
+            )}
 
             <div
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full py-2.5 px-4 bg-white dark:bg-dark-card border ${isOpen ? 'border-indigo-500 ring-2 ring-indigo-500/10' : 'border-slate-200 dark:border-github-dark-border'} rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-sm select-none`}
+                className={`w-full border ${
+                    isOpen 
+                        ? 'border-indigo-500 ring-2 ring-indigo-500/10' 
+                        : 'border-slate-200 dark:border-github-dark-border'
+                } rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-sm select-none ${
+                    compact 
+                        ? 'py-2 px-3 text-xs bg-slate-50 dark:bg-[#161b22] hover:bg-slate-100 dark:hover:bg-[#21262d]' 
+                        : 'py-2.5 px-4 text-sm bg-white dark:bg-dark-card hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
             >
                 <div className="flex items-center gap-2 overflow-hidden">
                     <Calendar size={18} className="text-indigo-500 shrink-0" />
-                    <span className={`text-sm font-medium ${value ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'} truncate`}>
+                    <span className={`${compact ? 'text-xs font-semibold' : 'text-sm font-medium'} ${value ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'} truncate`}>
                         {value ? formatDateDisplay(value) : placeholder}
                     </span>
                 </div>
