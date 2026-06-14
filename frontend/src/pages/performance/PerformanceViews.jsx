@@ -301,6 +301,16 @@ export const PerformanceHub = ({ employee, selectedCycleId }) => {
                                                 </div>
                                             </div>
 
+                                            {/* Employee status update comments */}
+                                            {goal.employee_comments && (
+                                                <div className="p-3 bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 rounded-xl space-y-1">
+                                                    <span className="text-[8.5px] text-indigo-500 font-bold uppercase tracking-wider block">Employee's Completion Notes</span>
+                                                    <p className="text-slate-650 dark:text-slate-350 leading-relaxed font-semibold italic text-[11px]">
+                                                        "{goal.employee_comments}"
+                                                    </p>
+                                                </div>
+                                            )}
+
                                             {/* Rating and comments output */}
                                             {goal.rating > 0 && !isEditing && (
                                                 <div className="p-3 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl space-y-2">
@@ -664,6 +674,17 @@ export const AiPerformanceAnalyzer = ({ employee, selectedCycleId, employeeId, e
                         setAiResult(analysisReport);
                         setIsAnalyzing(false);
                         localStorage.setItem(`mano_perf_ai_${empId}_${activeCycleId}`, JSON.stringify(analysisReport));
+                        
+                        try {
+                            await performanceGoalService.saveReview({
+                                employee_id: empId,
+                                cycle_id: activeCycleId,
+                                ai_analysis_report: analysisReport
+                            });
+                        } catch (saveErr) {
+                            console.error("Failed to persist AI report to DB:", saveErr);
+                        }
+
                         toast.success("AI performance audit complete!");
                     } catch (err) {
                         console.error(err);
