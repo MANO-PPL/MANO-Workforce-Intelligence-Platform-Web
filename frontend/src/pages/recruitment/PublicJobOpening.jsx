@@ -133,7 +133,7 @@ const PublicJobOpening = () => {
         );
       case 'textarea':
         return (
-          <div key={field.id} className="col-span-2">
+          <div key={field.id} className={field.width === 'half' ? 'col-span-2 sm:col-span-1' : 'col-span-2'}>
             <label className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted mb-1 block">
               {field.label} {field.required && ' *'}
             </label>
@@ -168,7 +168,7 @@ const PublicJobOpening = () => {
         );
       case 'radio_group':
         return (
-          <div key={field.id} className="col-span-2">
+          <div key={field.id} className={field.width === 'half' ? 'col-span-2 sm:col-span-1' : 'col-span-2'}>
             <label className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted mb-2 block">
               {field.label} {field.required && ' *'}
             </label>
@@ -191,7 +191,7 @@ const PublicJobOpening = () => {
         );
       case 'checkbox_group':
         return (
-          <div key={field.id} className="col-span-2">
+          <div key={field.id} className={field.width === 'half' ? 'col-span-2 sm:col-span-1' : 'col-span-2'}>
             <label className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted mb-2 block">
               {field.label} {field.required && ' *'}
             </label>
@@ -221,7 +221,7 @@ const PublicJobOpening = () => {
         );
       case 'file':
         return (
-          <div key={field.id} className="col-span-2">
+          <div key={field.id} className={field.width === 'half' ? 'col-span-2 sm:col-span-1' : 'col-span-2'}>
             <label className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted mb-1 block">
               {field.label} {field.required && ' *'}
             </label>

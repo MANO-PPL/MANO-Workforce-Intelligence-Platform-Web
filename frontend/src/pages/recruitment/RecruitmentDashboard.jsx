@@ -9,7 +9,7 @@ import {
   Sliders, Grid, List, CheckCircle2, ChevronRight, X, FileText,
   Type, AtSign, Phone, Hash, AlignLeft, Link2, Heading, Minus,
   Save, LayoutTemplate, Bookmark, Upload, MoveUp, MoveDown,
-  CheckSquare, ChevronDown, CircleDot, Trash2, PenLine
+  CheckSquare, ChevronDown, CircleDot, Trash2, PenLine, Lock
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -66,6 +66,13 @@ const PIPELINE_COLOR_MAP = {
 
 // ─── APPLICATION FORM BUILDER CONSTANTS ─────────────────────────────────────
 
+const CORE_FIELDS = [
+  { id: 'core_name', type: 'text', label: 'Full Name', placeholder: 'John Doe', required: true, is_core: true, semantic_type: 'identity.name', width: 'full' },
+  { id: 'core_email', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, is_core: true, semantic_type: 'identity.email', width: 'full' },
+  { id: 'core_phone', type: 'tel', label: 'Mobile Number', placeholder: '+91 98765 43210', required: true, is_core: true, semantic_type: 'identity.phone', width: 'half' },
+  { id: 'core_resume', type: 'file', label: 'Resume Upload (PDF)', placeholder: '', required: true, is_core: true, semantic_type: 'application.resume', width: 'full' }
+];
+
 const PREDEFINED_FORM_TEMPLATES = [
   {
     id: 'tpl_tech_standard',
@@ -73,9 +80,9 @@ const PREDEFINED_FORM_TEMPLATES = [
     description: 'Ideal for engineering, software development, and IT positions.',
     color: 'blue',
     fields: [
-      { id: 'f1', type: 'text', label: 'Full Name', placeholder: 'John Doe', required: true, options: [], width: 'full' },
-      { id: 'f2', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, options: [], width: 'full' },
-      { id: 'f3', type: 'tel', label: 'Mobile Number', placeholder: '+91 98765 43210', required: true, options: [], width: 'half' },
+      { id: 'f1', type: 'text', label: 'Full Name', placeholder: 'John Doe', required: true, is_core: true, semantic_type: 'identity.name', options: [], width: 'full' },
+      { id: 'f2', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, is_core: true, semantic_type: 'identity.email', options: [], width: 'full' },
+      { id: 'f3', type: 'tel', label: 'Mobile Number', placeholder: '+91 98765 43210', required: true, is_core: true, semantic_type: 'identity.phone', options: [], width: 'half' },
       { id: 'f4', type: 'text', label: 'Current Company', placeholder: 'ACME Corp', required: false, options: [], width: 'half' },
       { id: 'f5', type: 'text', label: 'Current CTC', placeholder: '₹6 LPA', required: false, options: [], width: 'half' },
       { id: 'f6', type: 'text', label: 'Expected CTC', placeholder: '₹9 LPA', required: false, options: [], width: 'half' },
@@ -86,7 +93,7 @@ const PREDEFINED_FORM_TEMPLATES = [
       { id: 'f11', type: 'url', label: 'Portfolio / GitHub URL', placeholder: 'github.com/...', required: false, options: [], width: 'half' },
       { id: 'f12', type: 'section_header', label: 'Your Application', placeholder: '', required: false, options: [], width: 'full' },
       { id: 'f13', type: 'textarea', label: 'Cover Note', placeholder: "Brief note on why you're a great fit...", required: false, options: [], width: 'full' },
-      { id: 'f14', type: 'file', label: 'Resume Upload (PDF)', placeholder: '', required: true, options: [], width: 'full' },
+      { id: 'f14', type: 'file', label: 'Resume Upload (PDF)', placeholder: '', required: true, is_core: true, semantic_type: 'application.resume', options: [], width: 'full' },
     ]
   },
   {
@@ -95,9 +102,9 @@ const PREDEFINED_FORM_TEMPLATES = [
     description: 'Designed for managerial, director, and C-suite level applications.',
     color: 'purple',
     fields: [
-      { id: 'g1', type: 'text', label: 'Full Name', placeholder: 'John Doe', required: true, options: [], width: 'full' },
-      { id: 'g2', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, options: [], width: 'full' },
-      { id: 'g3', type: 'tel', label: 'Mobile Number', placeholder: '+91 98765 43210', required: true, options: [], width: 'full' },
+      { id: 'g1', type: 'text', label: 'Full Name', placeholder: 'John Doe', required: true, is_core: true, semantic_type: 'identity.name', options: [], width: 'full' },
+      { id: 'g2', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, is_core: true, semantic_type: 'identity.email', options: [], width: 'full' },
+      { id: 'g3', type: 'tel', label: 'Mobile Number', placeholder: '+91 98765 43210', required: true, is_core: true, semantic_type: 'identity.phone', options: [], width: 'full' },
       { id: 'g4', type: 'section_header', label: 'Professional Profile', placeholder: '', required: false, options: [], width: 'full' },
       { id: 'g5', type: 'text', label: 'Current Designation', placeholder: 'VP of Engineering', required: true, options: [], width: 'half' },
       { id: 'g6', type: 'text', label: 'Current Organisation', placeholder: 'ACME Corp', required: true, options: [], width: 'half' },
@@ -110,7 +117,7 @@ const PREDEFINED_FORM_TEMPLATES = [
       { id: 'g13', type: 'section_header', label: 'References & Identity', placeholder: '', required: false, options: [], width: 'full' },
       { id: 'g14', type: 'url', label: 'LinkedIn Profile', placeholder: 'linkedin.com/in/...', required: true, options: [], width: 'full' },
       { id: 'g15', type: 'textarea', label: 'Professional Reference (Name & Contact)', placeholder: 'Name — Company — Email/Phone', required: false, options: [], width: 'full' },
-      { id: 'g16', type: 'file', label: 'Resume / CV Upload', placeholder: '', required: true, options: [], width: 'full' },
+      { id: 'g16', type: 'file', label: 'Resume / CV Upload', placeholder: '', required: true, is_core: true, semantic_type: 'application.resume', options: [], width: 'full' },
     ]
   }
 ];
@@ -185,6 +192,8 @@ const RecruitmentDashboard = () => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [drawerTab, setDrawerTab] = useState('profile'); // 'profile' | 'form' | 'timeline'
+  const [newNoteText, setNewNoteText] = useState('');
   const [editingJobId, setEditingJobId] = useState(null);
   const [selectedJobForSidebar, setSelectedJobForSidebar] = useState(null);
 
@@ -304,6 +313,13 @@ const RecruitmentDashboard = () => {
     fetchData();
   }, []);
 
+  // Reset drawer tab when selected candidate changes
+  useEffect(() => {
+    if (selectedCandidate) {
+      setDrawerTab('profile');
+    }
+  }, [selectedCandidate?.id]);
+
   // Toggle opening status
   const toggleJobStatus = async (id) => {
     const job = openings.find(j => j.id === id);
@@ -331,6 +347,50 @@ const RecruitmentDashboard = () => {
       } catch (err) {
         console.error(err);
         toast.error('Failed to delete candidate application.');
+      }
+    }
+  };
+
+  const handleAddNote = async (candidateId) => {
+    if (!newNoteText.trim()) return;
+    try {
+      const res = await api.post(`/recruitment/candidates/${candidateId}/notes`, { text: newNoteText });
+      toast.success('Note added successfully.');
+      setNewNoteText('');
+      // Update selectedCandidate locally
+      setSelectedCandidate(prev => ({
+        ...prev,
+        recruiter_notes: [res.data.note, ...(prev.recruiter_notes || [])]
+      }));
+      // Also update candidates list
+      setCandidates(prev => prev.map(c => c.id === candidateId ? {
+        ...c,
+        recruiter_notes: [res.data.note, ...(c.recruiter_notes || [])]
+      } : c));
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to add recruiter note.');
+    }
+  };
+
+  const handleDeleteNote = async (candidateId, noteId) => {
+    if (window.confirm('Are you sure you want to delete this note?')) {
+      try {
+        await api.delete(`/recruitment/candidates/${candidateId}/notes/${noteId}`);
+        toast.success('Note deleted.');
+        // Update selectedCandidate locally
+        setSelectedCandidate(prev => ({
+          ...prev,
+          recruiter_notes: (prev.recruiter_notes || []).filter(n => n.id !== noteId)
+        }));
+        // Also update candidates list
+        setCandidates(prev => prev.map(c => c.id === candidateId ? {
+          ...c,
+          recruiter_notes: (c.recruiter_notes || []).filter(n => n.id !== noteId)
+        } : c));
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to delete recruiter note.');
       }
     }
   };
@@ -388,7 +448,7 @@ const RecruitmentDashboard = () => {
       setCurrentTemplateId(job.template_id);
       setCurrentTemplateSource(job.template_source || 'scratch');
     } else {
-      setFormComponents([]);
+      setFormComponents(CORE_FIELDS);
       setFormTitle('New Application Form');
       setCurrentTemplateId(null);
       setCurrentTemplateSource('scratch');
@@ -657,7 +717,7 @@ const RecruitmentDashboard = () => {
   const loadFormTemplate = (fields, title = 'Application Form', templateId = null, templateSource = 'scratch') => {
     const freshFields = fields.map((f, idx) => ({
       ...f,
-      id: `field_${Date.now()}_${idx}`
+      id: f.is_core ? (f.id || `core_${f.semantic_type.split('.')[1]}`) : `field_${Date.now()}_${idx}`
     }));
     setFormComponents(freshFields);
     setFormTitle(title);
@@ -685,6 +745,8 @@ const RecruitmentDashboard = () => {
   };
 
   const deleteField = (fieldId) => {
+    const field = formComponents.find(f => f.id === fieldId);
+    if (field && field.is_core) return;
     setFormComponents(prev => prev.filter(f => f.id !== fieldId));
     if (editingFieldId === fieldId) setEditingFieldId(null);
   };
@@ -1392,7 +1454,7 @@ const RecruitmentDashboard = () => {
 
                       {/* Build from Scratch */}
                       <div
-                        onClick={() => { setFormComponents([]); setFormTitle('New Application Form'); setEditingFieldId(null); setFormBuilderStep('build'); }}
+                        onClick={() => { setFormComponents(CORE_FIELDS); setFormTitle('New Application Form'); setEditingFieldId(null); setFormBuilderStep('build'); }}
                         className="bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#30363d] cursor-pointer p-8 rounded-2xl text-center group transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/5 dark:hover:shadow-blue-500/10 hover:-translate-y-1 hover:border-[#0969da] dark:hover:border-github-dark-accent relative overflow-hidden"
                       >
                         <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -1515,7 +1577,7 @@ const RecruitmentDashboard = () => {
                         <Bookmark size={44} className="mx-auto text-slate-300 mb-4" />
                         <h4 className="font-extrabold text-slate-600 text-sm mb-2">No Saved Templates Yet</h4>
                         <p className="text-xs text-slate-400 mb-5">Build a form and save it as a template to find it here.</p>
-                        <button onClick={() => { setFormComponents([]); setFormBuilderStep('build'); }} className="px-5 py-2.5 bg-[#0969da] text-white rounded-lg text-xs font-bold hover:bg-[#0969da]/90">Build Your First Form</button>
+                        <button onClick={() => { setFormComponents(CORE_FIELDS); setFormBuilderStep('build'); }} className="px-5 py-2.5 bg-[#0969da] text-white rounded-lg text-xs font-bold hover:bg-[#0969da]/90">Build Your First Form</button>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 font-sans">
@@ -1819,7 +1881,7 @@ const RecruitmentDashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
                 {/* Build from Scratch */}
                 <div
-                  onClick={() => { setFormComponents([]); setFormTitle('New Application Form'); setEditingFieldId(null); setFormBuilderStep('build'); }}
+                  onClick={() => { setFormComponents(CORE_FIELDS); setFormTitle('New Application Form'); setEditingFieldId(null); setFormBuilderStep('build'); }}
                   className="border-2 border-dashed border-slate-200 dark:border-github-dark-border hover:border-[#0969da] dark:hover:border-[#0969da] cursor-pointer p-7 rounded-2xl text-center group transition-all duration-200 hover:shadow-xl hover:shadow-blue-100/50 dark:hover:shadow-blue-950/20 hover:bg-blue-50/30 dark:hover:bg-blue-950/5"
                 >
                   <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/20 text-[#0969da] rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:bg-blue-100 dark:group-hover:bg-blue-950/30 transition-all duration-200">
@@ -2015,9 +2077,13 @@ const RecruitmentDashboard = () => {
                               {field.width === 'full' ? '⬛ Full' : '▪ Half'}
                             </button>
                             <button
-                              onClick={() => updateField(field.id, { required: !field.required })}
-                              className={`text-[9px] font-bold border rounded-lg px-2 py-1 transition-colors ${field.required ? 'border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/10' : 'border-slate-200 dark:border-github-dark-border text-slate-400 hover:text-slate-600 hover:border-slate-400'}`}
-                              title="Toggle required"
+                              onClick={() => {
+                                if (field.is_core && field.semantic_type !== 'application.resume') return;
+                                updateField(field.id, { required: !field.required });
+                              }}
+                              disabled={field.is_core && field.semantic_type !== 'application.resume'}
+                              className={`text-[9px] font-bold border rounded-lg px-2 py-1 transition-colors ${field.is_core && field.semantic_type !== 'application.resume' ? 'border-slate-100 dark:border-github-dark-border/40 text-slate-300 dark:text-slate-600 cursor-not-allowed bg-slate-50 dark:bg-[#161b22]' : field.required ? 'border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/10' : 'border-slate-200 dark:border-github-dark-border text-slate-400 hover:text-slate-600 hover:border-slate-400'}`}
+                              title={field.is_core && field.semantic_type !== 'application.resume' ? "Core fields must be required" : "Toggle required"}
                             >
                               {field.required ? '★ Req' : '☆ Opt'}
                             </button>
@@ -2034,9 +2100,15 @@ const RecruitmentDashboard = () => {
                             >
                               <PenLine size={12} />
                             </button>
-                            <button onClick={() => deleteField(field.id)} className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg text-slate-400 hover:text-rose-500 transition-colors" title="Delete field">
-                              <Trash2 size={12} />
-                            </button>
+                            {!field.is_core ? (
+                              <button onClick={() => deleteField(field.id)} className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg text-slate-400 hover:text-rose-500 transition-colors" title="Delete field">
+                                <Trash2 size={12} />
+                              </button>
+                            ) : (
+                              <span className="p-1.5 text-slate-300 dark:text-slate-600 cursor-not-allowed flex items-center justify-center" title="Core field cannot be deleted">
+                                <Lock size={12} />
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -2123,6 +2195,26 @@ const RecruitmentDashboard = () => {
                                 </div>
                               </div>
                             )}
+                            {!field.is_core && field.type !== 'section_header' && field.type !== 'divider' && (
+                              <div className="pt-2 border-t border-slate-100 dark:border-github-dark-border/40">
+                                <label className="text-[10px] font-extrabold text-slate-400 dark:text-github-dark-muted uppercase tracking-wider mb-1.5 block">Profile Field Mapping</label>
+                                <select
+                                  value={field.semantic_type || ''}
+                                  onChange={e => updateField(field.id, { semantic_type: e.target.value || null })}
+                                  className="w-full px-3 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#0969da]/20 focus:border-[#0969da] text-slate-700 dark:text-[#c9d1d9]"
+                                >
+                                  <option value="">None (Custom Questionnaire Field)</option>
+                                  <option value="professional.notice_period">Notice Period</option>
+                                  <option value="professional.current_company">Current Company</option>
+                                  <option value="professional.designation">Current Designation</option>
+                                  <option value="professional.experience">Total Experience (Years)</option>
+                                  <option value="professional.current_ctc">Current CTC / Salary</option>
+                                  <option value="professional.expected_ctc">Expected CTC / Salary</option>
+                                  <option value="identity.linkedin">LinkedIn Profile URL</option>
+                                  <option value="identity.portfolio">Portfolio / Website URL</option>
+                                </select>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2153,7 +2245,7 @@ const RecruitmentDashboard = () => {
                   </p>
                   <div className="flex gap-3 justify-center">
                     <button
-                      onClick={() => { setFormComponents([]); setFormTitle('New Application Form'); setEditingFieldId(null); setFormBuilderStep('build'); }}
+                      onClick={() => { setFormComponents(CORE_FIELDS); setFormTitle('New Application Form'); setEditingFieldId(null); setFormBuilderStep('build'); }}
                       className="px-5 py-2.5 bg-[#0969da] text-white rounded-lg text-xs font-bold hover:bg-[#0969da]/90 transition-all shadow-sm"
                     >
                       Build Your First Form
@@ -2378,161 +2470,342 @@ const RecruitmentDashboard = () => {
                   </button>
                 </div>
 
+                {/* Tabs */}
+                <div className="flex border-b border-slate-200 dark:border-github-dark-border px-6 bg-slate-50/50 dark:bg-github-dark-bg/40 shrink-0">
+                  <button
+                    onClick={() => setDrawerTab('profile')}
+                    className={`flex items-center gap-1.5 py-3 px-4 border-b-2 text-xs font-bold transition-all ${drawerTab === 'profile' ? 'border-[#0969da] text-[#0969da] dark:text-[#f0f6fc]' : 'border-transparent text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-[#c9d1d9]'}`}
+                  >
+                    <UserCheck size={14} /> Profile
+                  </button>
+                  <button
+                    onClick={() => setDrawerTab('form')}
+                    className={`flex items-center gap-1.5 py-3 px-4 border-b-2 text-xs font-bold transition-all ${drawerTab === 'form' ? 'border-[#0969da] text-[#0969da] dark:text-[#f0f6fc]' : 'border-transparent text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-[#c9d1d9]'}`}
+                  >
+                    <LayoutTemplate size={14} /> Form Responses
+                  </button>
+                  <button
+                    onClick={() => setDrawerTab('timeline')}
+                    className={`flex items-center gap-1.5 py-3 px-4 border-b-2 text-xs font-bold transition-all ${drawerTab === 'timeline' ? 'border-[#0969da] text-[#0969da] dark:text-[#f0f6fc]' : 'border-transparent text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-[#c9d1d9]'}`}
+                  >
+                    <Calendar size={14} /> Activity & Notes
+                  </button>
+                </div>
+
                 {/* Body */}
                 <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm custom-scrollbar">
-                  
-                  {/* Score bar */}
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="md:col-span-1 border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-2xl p-5 flex flex-col items-center justify-center text-center">
-                      <span className="text-[10px] text-indigo-500 dark:text-indigo-400 uppercase font-extrabold block">AI Score</span>
-                      <div className="w-20 h-20 rounded-full border-4 border-indigo-500 flex items-center justify-center text-2xl font-black text-indigo-700 dark:text-indigo-400 mt-2 bg-white dark:bg-github-dark-subtle shadow-sm animate-in zoom-in duration-300">
-                        {selectedCandidate.ai_score}%
-                      </div>
-                    </div>
+                  {drawerTab === 'profile' && (
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                      {/* Score bar */}
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div className="md:col-span-1 border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-2xl p-5 flex flex-col items-center justify-center text-center">
+                          <span className="text-[10px] text-indigo-500 dark:text-indigo-400 uppercase font-extrabold block">AI Score</span>
+                          <div className="w-20 h-20 rounded-full border-4 border-indigo-500 flex items-center justify-center text-2xl font-black text-indigo-700 dark:text-indigo-400 mt-2 bg-white dark:bg-github-dark-subtle shadow-sm animate-in zoom-in duration-300">
+                            {selectedCandidate.ai_score}%
+                          </div>
+                        </div>
 
-                    <div className="md:col-span-4 bg-slate-50 dark:bg-github-dark-bg/50 border border-slate-200 dark:border-github-dark-border rounded-2xl p-5 grid grid-cols-2 md:grid-cols-4 gap-4 items-center justify-center text-center">
-                      <div>
-                        <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Skills Match</span>
-                        <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.skill_match_score}%</p>
-                      </div>
-                      <div>
-                        <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Experience Match</span>
-                        <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.experience_match_score}%</p>
-                      </div>
-                      <div>
-                        <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Education Match</span>
-                        <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.education_match_score}%</p>
-                      </div>
-                      <div>
-                        <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Culture Fit</span>
-                        <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.culture_fit_score}%</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Strengths & Weaknesses */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-emerald-50/30 dark:bg-emerald-950/5 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-5">
-                      <h4 className="font-bold text-emerald-800 dark:text-emerald-400 text-sm flex items-center gap-1.5 mb-3">
-                        <ThumbsUp size={16} /> Strengths
-                      </h4>
-                      <ul className="space-y-2 list-disc pl-5 text-slate-600 dark:text-slate-300">
-                        {(selectedCandidate.ai_strengths || []).map((str, idx) => (
-                          <li key={idx}>{str}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="bg-red-50/30 dark:bg-red-950/5 border border-red-100 dark:border-red-900/30 rounded-2xl p-5">
-                      <h4 className="font-bold text-red-800 dark:text-red-400 text-sm flex items-center gap-1.5 mb-3">
-                        <ThumbsDown size={16} /> Weaknesses
-                      </h4>
-                      <ul className="space-y-2 list-disc pl-5 text-slate-600 dark:text-slate-300">
-                        {(selectedCandidate.ai_weaknesses || []).map((weak, idx) => (
-                          <li key={idx}>{weak}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Extracted Profile Details */}
-                  <div className="bg-white dark:bg-github-dark-bg/20 border border-slate-200 dark:border-github-dark-border rounded-2xl p-6 space-y-5">
-                    <h4 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2 flex items-center gap-1.5">
-                      <Sparkles size={16} className="text-indigo-500" /> Extracted Candidate Profile (AI Resume parsing)
-                    </h4>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase">Education</span>
-                        <p className="font-semibold text-slate-800 dark:text-github-dark-text mt-1">{selectedCandidate.education || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase">Experience</span>
-                        <p className="font-semibold text-slate-800 dark:text-github-dark-text mt-1">{selectedCandidate.total_experience || 'N/A'} (Relevant: {selectedCandidate.relevant_experience || 'N/A'})</p>
-                      </div>
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase">Current CTC &amp; Company</span>
-                        <p className="font-semibold text-slate-800 dark:text-github-dark-text mt-1">{(selectedCandidate.current_ctc || 'N/A') + ' • ' + (selectedCandidate.current_company || 'N/A')}</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Parsed Skills List</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(selectedCandidate.extracted_skills || []).map((skill, idx) => (
-                          <span key={idx} className="bg-slate-100 dark:bg-github-dark-border px-2.5 py-1 rounded text-xs font-mono font-medium">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {Array.isArray(selectedCandidate.projects) && selectedCandidate.projects.length > 0 && (
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Key Projects</span>
-                        <ul className="list-disc pl-5 text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                          {selectedCandidate.projects.map((proj, idx) => (
-                            <li key={idx} className="font-medium">{proj}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {Array.isArray(selectedCandidate.achievements) && selectedCandidate.achievements.length > 0 && (
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Top Achievements</span>
-                        <ul className="list-disc pl-5 text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                          {selectedCandidate.achievements.map((ach, idx) => (
-                            <li key={idx} className="font-medium text-indigo-600 dark:text-indigo-400">{ach}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {selectedCandidate.cover_letter && (
-                      <div className="pt-2">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Cover Note</span>
-                        <p className="p-3 bg-slate-50 dark:bg-github-dark-bg/60 rounded-xl text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line italic">
-                          "{selectedCandidate.cover_letter}"
-                        </p>
-                      </div>
-                    )}
-
-                    {selectedCandidate.form_responses && Object.keys(selectedCandidate.form_responses).length > 0 && (
-                      <div className="pt-3 border-t border-slate-100 dark:border-github-dark-border mt-4">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase block mb-2">Form Questionnaire Responses</span>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 dark:bg-github-dark-bg/30 p-4 rounded-xl">
-                          {Object.entries(selectedCandidate.form_responses).map(([label, val]) => {
-                            if (
-                              ['resume_name', 'resume_url'].includes(label) ||
-                              val === null || val === undefined || val === ''
-                            ) return null;
-                            
-                            const displayVal = Array.isArray(val) ? val.join(', ') : String(val);
-
-                            return (
-                              <div key={label} className="text-xs">
-                                <span className="font-semibold text-slate-400 dark:text-github-dark-muted block mb-0.5">{label}</span>
-                                <span className="font-medium text-slate-800 dark:text-[#c9d1d9]">{displayVal}</span>
-                              </div>
-                            );
-                          })}
+                        <div className="md:col-span-4 bg-slate-50 dark:bg-github-dark-bg/50 border border-slate-200 dark:border-github-dark-border rounded-2xl p-5 grid grid-cols-2 md:grid-cols-4 gap-4 items-center justify-center text-center">
+                          <div>
+                            <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Skills Match</span>
+                            <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.skill_match_score}%</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Experience Match</span>
+                            <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.experience_match_score}%</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Education Match</span>
+                            <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.education_match_score}%</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-slate-500 dark:text-github-dark-muted uppercase">Culture Fit</span>
+                            <p className="text-xl font-bold mt-1 text-slate-800 dark:text-[#f0f6fc]">{selectedCandidate.culture_fit_score}%</p>
+                          </div>
                         </div>
                       </div>
-                    )}
 
-                    {/* Visible PDF Resume Embedded Iframe */}
-                    {selectedCandidate.resume_path && (
-                      <div className="pt-4 border-t border-slate-100 dark:border-github-dark-border mt-4">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase block mb-2">Uploaded Resume PDF</span>
-                        <iframe
-                          src={`${api.defaults.baseURL || ''}/recruitment/resumes/${selectedCandidate.resume_path}`}
-                          className="w-full h-[600px] border border-slate-200 dark:border-github-dark-border rounded-xl shadow-inner bg-slate-50 dark:bg-github-dark-bg/50"
-                          title={`${selectedCandidate.full_name} Resume`}
-                        />
+                      {/* Strengths & Weaknesses */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-emerald-50/30 dark:bg-emerald-950/5 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-5">
+                          <h4 className="font-bold text-emerald-800 dark:text-emerald-400 text-sm flex items-center gap-1.5 mb-3">
+                            <ThumbsUp size={16} /> Strengths
+                          </h4>
+                          <ul className="space-y-2 list-disc pl-5 text-slate-600 dark:text-slate-300">
+                            {(selectedCandidate.ai_strengths || []).map((str, idx) => (
+                              <li key={idx}>{str}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="bg-red-50/30 dark:bg-red-950/5 border border-red-100 dark:border-red-900/30 rounded-2xl p-5">
+                          <h4 className="font-bold text-red-800 dark:text-red-400 text-sm flex items-center gap-1.5 mb-3">
+                            <ThumbsDown size={16} /> Weaknesses
+                          </h4>
+                          <ul className="space-y-2 list-disc pl-5 text-slate-600 dark:text-slate-300">
+                            {(selectedCandidate.ai_weaknesses || []).map((weak, idx) => (
+                              <li key={idx}>{weak}</li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      {/* Extracted Profile Details */}
+                      <div className="bg-white dark:bg-github-dark-bg/20 border border-slate-200 dark:border-github-dark-border rounded-2xl p-6 space-y-5">
+                        <h4 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2 flex items-center gap-1.5">
+                          <Sparkles size={16} className="text-indigo-500" /> Extracted Candidate Profile (AI Resume parsing)
+                        </h4>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase">Education</span>
+                            <p className="font-semibold text-slate-800 dark:text-github-dark-text mt-1">{selectedCandidate.education || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase">Experience</span>
+                            <p className="font-semibold text-slate-800 dark:text-github-dark-text mt-1">{selectedCandidate.total_experience || 'N/A'} (Relevant: {selectedCandidate.relevant_experience || 'N/A'})</p>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase">Current CTC &amp; Company</span>
+                            <p className="font-semibold text-slate-800 dark:text-github-dark-text mt-1">{(selectedCandidate.current_ctc || 'N/A') + ' • ' + (selectedCandidate.current_company || 'N/A')}</p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Parsed Skills List</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(selectedCandidate.extracted_skills || []).map((skill, idx) => (
+                              <span key={idx} className="bg-slate-100 dark:bg-github-dark-border px-2.5 py-1 rounded text-xs font-mono font-medium">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {Array.isArray(selectedCandidate.projects) && selectedCandidate.projects.length > 0 && (
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Key Projects</span>
+                            <ul className="list-disc pl-5 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                              {selectedCandidate.projects.map((proj, idx) => (
+                                <li key={idx} className="font-medium">{proj}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {Array.isArray(selectedCandidate.achievements) && selectedCandidate.achievements.length > 0 && (
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Top Achievements</span>
+                            <ul className="list-disc pl-5 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                              {selectedCandidate.achievements.map((ach, idx) => (
+                                <li key={idx} className="font-medium text-indigo-600 dark:text-indigo-400">{ach}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {selectedCandidate.cover_letter && (
+                          <div className="pt-2">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase block mb-1">Cover Note</span>
+                            <p className="p-3 bg-slate-50 dark:bg-github-dark-bg/60 rounded-xl text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line italic">
+                              "{selectedCandidate.cover_letter}"
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Visible PDF Resume Embedded Iframe */}
+                        {selectedCandidate.resume_path && (
+                          <div className="pt-4 border-t border-slate-100 dark:border-github-dark-border mt-4">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase block mb-2">Uploaded Resume PDF</span>
+                            <iframe
+                              src={`${api.defaults.baseURL || ''}/recruitment/resumes/${selectedCandidate.resume_path}`}
+                              className="w-full h-[600px] border border-slate-200 dark:border-github-dark-border rounded-xl shadow-inner bg-slate-50 dark:bg-github-dark-bg/50"
+                              title={`${selectedCandidate.full_name} Resume`}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {drawerTab === 'form' && (
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                      {/* Core Required Information Card */}
+                      <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl p-6">
+                        <h4 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2.5 mb-4 flex items-center gap-2">
+                          <UserCheck size={16} className="text-indigo-500" /> Core Required Information
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="bg-slate-50 dark:bg-github-dark-bg/30 p-3 rounded-xl border border-slate-100 dark:border-github-dark-border/40">
+                            <span className="font-semibold text-slate-400 dark:text-github-dark-muted text-[10px] uppercase block mb-1">Full Name</span>
+                            <span className="font-bold text-slate-800 dark:text-[#c9d1d9] text-xs">{selectedCandidate.full_name || 'N/A'}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-github-dark-bg/30 p-3 rounded-xl border border-slate-100 dark:border-github-dark-border/40">
+                            <span className="font-semibold text-slate-400 dark:text-github-dark-muted text-[10px] uppercase block mb-1">Email Address</span>
+                            <span className="font-bold text-[#0969da] dark:text-github-dark-accent text-xs">{selectedCandidate.email || 'N/A'}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-github-dark-bg/30 p-3 rounded-xl border border-slate-100 dark:border-github-dark-border/40">
+                            <span className="font-semibold text-slate-400 dark:text-github-dark-muted text-[10px] uppercase block mb-1">Mobile / Contact Info</span>
+                            <span className="font-bold text-slate-800 dark:text-[#c9d1d9] text-xs">{selectedCandidate.mobile || 'N/A'}</span>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-github-dark-bg/30 p-3 rounded-xl border border-slate-100 dark:border-github-dark-border/40 flex flex-col justify-center">
+                            <span className="font-semibold text-slate-400 dark:text-github-dark-muted text-[10px] uppercase block mb-1">Uploaded Resume Document</span>
+                            {selectedCandidate.resume_path ? (
+                              <a
+                                href={`${api.defaults.baseURL || ''}/recruitment/resumes/${selectedCandidate.resume_path}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-bold text-[#0969da] dark:text-github-dark-accent hover:underline mt-1"
+                              >
+                                <FileText size={13} /> View / Download Resume
+                              </a>
+                            ) : (
+                              <span className="text-slate-500 text-xs italic mt-1 block">Not Provided</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Custom/Additional Questionnaire Section */}
+                      <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl p-6">
+                        <h4 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2.5 mb-4 flex items-center gap-2">
+                          <LayoutTemplate size={16} className="text-indigo-500" /> Additional Questionnaire Answers
+                        </h4>
+                        <div className="space-y-4">
+                          {selectedCandidate.form_responses && Object.keys(selectedCandidate.form_responses).length > 0 ? (
+                            (() => {
+                              // Identify labels of core fields to filter them out
+                              const coreLabels = (selectedCandidate.template_snapshot || [])
+                                .filter(f => f.is_core)
+                                .map(f => f.label.toLowerCase());
+
+                              const list = Object.entries(selectedCandidate.form_responses).filter(([label, val]) => {
+                                if (['resume_name', 'resume_url'].includes(label)) return false;
+                                if (val === null || val === undefined || val === '') return false;
+                                // Fuzzy filter: check if label matches name, email, mobile, resume
+                                const lLower = label.toLowerCase();
+                                if (coreLabels.includes(lLower)) return false;
+                                if (lLower.includes('name') && !lLower.includes('company')) {
+                                  if (lLower.includes('full') || lLower.includes('first') || lLower.includes('last') || lLower === 'name') return false;
+                                }
+                                if (lLower.includes('email') || lLower.includes('gmail') || lLower.includes('mobile') || lLower.includes('phone') || lLower.includes('resume') || lLower.includes('cv')) {
+                                  return false;
+                                }
+                                return true;
+                              });
+
+                              if (list.length === 0) {
+                                  return (
+                                    <p className="text-xs text-slate-400 dark:text-github-dark-muted italic">No custom questionnaire fields were submitted.</p>
+                                  );
+                              }
+
+                              return (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                  {list.map(([label, val]) => {
+                                    const displayVal = Array.isArray(val) ? val.join(', ') : String(val);
+                                    return (
+                                      <div key={label} className="bg-slate-50 dark:bg-github-dark-bg/30 p-3 rounded-xl border border-slate-100 dark:border-github-dark-border/40">
+                                        <span className="font-semibold text-slate-400 dark:text-github-dark-muted text-xs block mb-1">{label}</span>
+                                        <span className="font-medium text-slate-800 dark:text-[#c9d1d9] text-xs whitespace-pre-wrap">{displayVal}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <p className="text-xs text-slate-400 dark:text-github-dark-muted italic">No custom questionnaire fields were submitted.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {drawerTab === 'timeline' && (
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                      {/* Recruiter Notes */}
+                      <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl p-5 space-y-4">
+                        <h4 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2.5 flex items-center gap-2">
+                          <FileText size={16} className="text-indigo-500" /> Recruiter Internal Notes
+                        </h4>
+                        
+                        <div className="space-y-3">
+                          <textarea
+                            value={newNoteText}
+                            onChange={(e) => setNewNoteText(e.target.value)}
+                            placeholder="Add a private note about this candidate..."
+                            className="w-full px-3 py-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#0969da]/20 focus:border-[#0969da] min-h-[60px] dark:text-[#f0f6fc]"
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => handleAddNote(selectedCandidate.id)}
+                              disabled={!newNoteText.trim()}
+                              className="px-4 py-1.5 bg-[#0969da] hover:bg-[#0969da]/90 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                            >
+                              Add Note
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                          {(selectedCandidate.recruiter_notes || []).length === 0 ? (
+                            <p className="text-xs text-slate-400 dark:text-github-dark-muted italic py-2">No notes have been added yet.</p>
+                          ) : (
+                            (selectedCandidate.recruiter_notes || []).map((note) => (
+                              <div key={note.id} className="bg-slate-50 dark:bg-github-dark-bg/20 border border-slate-100 dark:border-github-dark-border p-3 rounded-xl relative group">
+                                <div className="flex justify-between items-start mb-1">
+                                  <span className="text-[10px] font-bold text-slate-500 dark:text-github-dark-muted">{note.created_by}</span>
+                                  <span className="text-[9px] text-slate-400">{new Date(note.created_at).toLocaleString()}</span>
+                                </div>
+                                <p className="text-xs text-slate-700 dark:text-[#c9d1d9] pr-6 whitespace-pre-wrap">{note.text}</p>
+                                <button
+                                  onClick={() => handleDeleteNote(selectedCandidate.id, note.id)}
+                                  className="absolute top-2 right-2 p-1 text-slate-300 hover:text-rose-500 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all"
+                                  title="Delete Note"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Journey Timeline */}
+                      <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl p-5 space-y-4">
+                        <h4 className="font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-2.5 flex items-center gap-2">
+                          <Calendar size={16} className="text-indigo-500" /> Pipeline Journey Timeline
+                        </h4>
+
+                        <div className="relative pl-6 border-l-2 border-slate-100 dark:border-github-dark-border space-y-6 py-2 ml-3">
+                          {(selectedCandidate.stage_history || []).length === 0 ? (
+                            <div className="relative">
+                              <span className="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-indigo-500 border-4 border-white dark:border-github-dark-subtle" />
+                              <h5 className="text-xs font-bold text-slate-700 dark:text-[#f0f6fc]">Application Registered</h5>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Applied: {new Date(selectedCandidate.created_at).toLocaleString()}</p>
+                            </div>
+                          ) : (
+                            (selectedCandidate.stage_history || []).map((hist, idx) => {
+                              const isLast = idx === (selectedCandidate.stage_history || []).length - 1;
+                              return (
+                                <div key={idx} className="relative">
+                                  <span className={`absolute -left-[31px] top-0.5 w-4 h-4 rounded-full border-4 border-white dark:border-github-dark-subtle ${isLast ? 'bg-[#0969da] animate-pulse' : 'bg-slate-400'}`} />
+                                  <h5 className={`text-xs font-bold ${isLast ? 'text-[#0969da] dark:text-github-dark-accent' : 'text-slate-700 dark:text-[#f0f6fc]'}`}>
+                                    Stage: {hist.stage}
+                                  </h5>
+                                  <p className="text-[10px] text-slate-500 dark:text-github-dark-muted mt-0.5 flex flex-wrap gap-x-3">
+                                    <span>By: {hist.changed_by}</span>
+                                    <span>Date: {new Date(hist.changed_at).toLocaleString()}</span>
+                                  </p>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer Actions */}
@@ -2667,64 +2940,67 @@ const RecruitmentDashboard = () => {
               </button>
             </div>
             <div className="overflow-y-auto flex-1 p-6 custom-scrollbar">
-              <div className="space-y-4">
-                {formComponents.length === 0 ? (
-                  <div className="text-center py-10 text-slate-400 text-sm">No fields added yet.</div>
-                ) : (
-                  formComponents.map(field => (
-                    <div key={field.id}>
-                      {field.type === 'section_header' ? (
-                        <div className="border-t-2 border-slate-100 dark:border-github-dark-border pt-4 mt-2">
-                          <h4 className="font-extrabold text-sm text-slate-800 dark:text-github-dark-text">{field.label}</h4>
-                        </div>
-                      ) : field.type === 'divider' ? (
-                        <hr className="border-slate-200 dark:border-github-dark-border" />
-                      ) : (
-                        <div className={field.width === 'half' ? 'w-full md:w-1/2' : 'w-full'}>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-github-dark-text mb-1.5 block">
-                            {field.label} {field.required && <span className="text-rose-500">*</span>}
-                          </label>
-                          {field.type === 'textarea' ? (
-                            <textarea rows="3" disabled className="w-full px-3.5 py-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-xs text-slate-400 resize-none" placeholder={field.placeholder || 'Enter details...'} />
-                          ) : field.type === 'select' ? (
-                            <select disabled className="w-full px-3.5 py-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-xs text-slate-400">
-                              <option>— Select an option —</option>
-                              {field.options.map((o, i) => <option key={i}>{o}</option>)}
-                            </select>
-                          ) : field.type === 'radio_group' ? (
-                            <div className="space-y-2">
-                              {field.options.map((o, i) => (
-                                <label key={i} className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-not-allowed">
-                                  <input type="radio" disabled className="accent-[#0969da]" /> {o}
-                                </label>
-                              ))}
-                            </div>
-                          ) : field.type === 'checkbox_group' ? (
-                            <div className="space-y-2">
-                              {field.options.map((o, i) => (
-                                <label key={i} className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-not-allowed">
-                                  <input type="checkbox" disabled className="accent-[#0969da]" /> {o}
-                                </label>
-                              ))}
-                            </div>
-                          ) : field.type === 'file' ? (
-                            <div className="border-2 border-dashed border-slate-200 dark:border-github-dark-border rounded-xl p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                              <Upload size={16} /> Click to upload file
-                            </div>
-                          ) : (
-                            <input
-                              type={field.type === 'url' ? 'text' : field.type}
-                              disabled
-                              className="w-full px-3.5 py-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-xs text-slate-400"
-                              placeholder={field.placeholder || 'Enter text...'}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+              {formComponents.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 text-sm">No fields added yet.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {formComponents.map(field => {
+                    const isFullWidth = field.type === 'section_header' || field.type === 'divider' || field.width !== 'half';
+                    return (
+                      <div key={field.id} className={isFullWidth ? 'col-span-1 md:col-span-2' : 'col-span-1'}>
+                        {field.type === 'section_header' ? (
+                          <div className="border-t-2 border-slate-100 dark:border-github-dark-border pt-4 mt-2">
+                            <h4 className="font-extrabold text-sm text-slate-800 dark:text-github-dark-text">{field.label}</h4>
+                          </div>
+                        ) : field.type === 'divider' ? (
+                          <hr className="border-slate-200 dark:border-github-dark-border" />
+                        ) : (
+                          <div className="w-full">
+                            <label className="text-xs font-semibold text-slate-600 dark:text-github-dark-text mb-1.5 block">
+                              {field.label} {field.required && <span className="text-rose-500">*</span>}
+                            </label>
+                            {field.type === 'textarea' ? (
+                              <textarea rows="3" disabled className="w-full px-3.5 py-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-xs text-slate-400 resize-none" placeholder={field.placeholder || 'Enter details...'} />
+                            ) : field.type === 'select' ? (
+                              <select disabled className="w-full px-3.5 py-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-xs text-slate-400">
+                                <option>— Select an option —</option>
+                                {field.options.map((o, i) => <option key={i}>{o}</option>)}
+                              </select>
+                            ) : field.type === 'radio_group' ? (
+                              <div className="space-y-2">
+                                {field.options.map((o, i) => (
+                                  <label key={i} className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-not-allowed">
+                                    <input type="radio" disabled className="accent-[#0969da]" /> {o}
+                                  </label>
+                                ))}
+                              </div>
+                            ) : field.type === 'checkbox_group' ? (
+                              <div className="space-y-2">
+                                {field.options.map((o, i) => (
+                                  <label key={i} className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 cursor-not-allowed">
+                                    <input type="checkbox" disabled className="accent-[#0969da]" /> {o}
+                                  </label>
+                                ))}
+                              </div>
+                            ) : field.type === 'file' ? (
+                              <div className="border-2 border-dashed border-slate-200 dark:border-github-dark-border rounded-xl p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                                <Upload size={16} /> Click to upload file
+                              </div>
+                            ) : (
+                              <input
+                                type={field.type === 'url' ? 'text' : field.type}
+                                disabled
+                                className="w-full px-3.5 py-2 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-xl text-xs text-slate-400"
+                                placeholder={field.placeholder || 'Enter text...'}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div className="p-5 border-t border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-bg/30 flex justify-between items-center shrink-0">
               <span className="text-xs text-slate-400 dark:text-github-dark-muted">
