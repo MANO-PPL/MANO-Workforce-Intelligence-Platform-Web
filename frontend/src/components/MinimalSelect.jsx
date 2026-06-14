@@ -105,7 +105,7 @@ const MinimalSelect = ({
             {isOpen && createPortal(
                 <div
                     ref={dropdownRef}
-                    className="fixed z-[9999] bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-100 overflow-hidden flex flex-col"
+                    className="fixed z-[9999999] bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-100 overflow-hidden flex flex-col"
                     style={{
                         top: position.top,
                         left: position.left,
