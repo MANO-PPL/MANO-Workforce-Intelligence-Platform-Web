@@ -431,6 +431,7 @@ export const initDatabase = async () => {
                 table.string('status', 50).defaultTo('Pending');
                 table.integer('rating').defaultTo(0);
                 table.text('comments').nullable();
+                table.text('employee_comments').nullable();
                 table.timestamp('created_at').defaultTo(db.fn.now());
                 table.timestamp('updated_at').defaultTo(db.fn.now());
 
@@ -438,6 +439,15 @@ export const initDatabase = async () => {
                 table.index(['employee_id', 'cycle_id']);
             });
             console.log('✅ "employee_performance_goals" table initialized.');
+        } else {
+            const hasEmpCommentsCol = await db.schema.hasColumn('employee_performance_goals', 'employee_comments');
+            if (!hasEmpCommentsCol) {
+                console.log('Adding "employee_comments" column to "employee_performance_goals"...');
+                await db.schema.alterTable('employee_performance_goals', (table) => {
+                    table.text('employee_comments').nullable();
+                });
+                console.log('✅ "employee_comments" column added successfully.');
+            }
         }
 
         // 17. Employee Performance Reviews
@@ -453,12 +463,22 @@ export const initDatabase = async () => {
                 table.text('self_learning').nullable();
                 table.text('manager_comments').nullable();
                 table.string('manager_recommendation', 255).nullable();
+                table.text('ai_analysis_report').nullable();
                 table.timestamp('updated_at').defaultTo(db.fn.now());
 
                 table.unique(['employee_id', 'cycle_id']);
                 table.foreign('cycle_id').references('performance_cycles.id').onDelete('CASCADE');
             });
             console.log('✅ "employee_performance_reviews" table initialized.');
+        } else {
+            const hasAiReportCol = await db.schema.hasColumn('employee_performance_reviews', 'ai_analysis_report');
+            if (!hasAiReportCol) {
+                console.log('Adding "ai_analysis_report" column to "employee_performance_reviews"...');
+                await db.schema.alterTable('employee_performance_reviews', (table) => {
+                    table.text('ai_analysis_report').nullable();
+                });
+                console.log('✅ "ai_analysis_report" column added successfully.');
+            }
         }
 
     } catch (error) {

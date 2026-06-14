@@ -1,6 +1,10 @@
 import api from './api';
 
 export const performanceGoalService = {
+    async getPerformanceCycles() {
+        const res = await api.get('/performance/cycles');
+        return res.data;
+    },
     async getEmployeeGoals(employeeId, cycleId) {
         const res = await api.get(`/performance/goals/${employeeId}/${cycleId}`);
         return res.data;

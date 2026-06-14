@@ -28,6 +28,29 @@ const formatGoal = (goal) => {
     };
 };
 
+const formatCycle = (cycle) => {
+    if (!cycle) return cycle;
+    return {
+        ...cycle,
+        start_date: formatDate(cycle.start_date),
+        end_date: formatDate(cycle.end_date)
+    };
+};
+
+// GET /api/performance/cycles
+router.get('/cycles', async (req, res) => {
+    try {
+        const cycles = await attendanceDB('performance_cycles')
+            .where({ org_id: req.user.org_id })
+            .orderBy('created_at', 'desc');
+
+        res.json({ success: true, data: cycles.map(formatCycle) });
+    } catch (error) {
+        console.error("Error fetching performance cycles for employee:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // GET /api/performance/goals/:employee_id/:cycle_id
 router.get('/goals/:employee_id/:cycle_id', async (req, res) => {
     const { employee_id, cycle_id } = req.params;
@@ -103,7 +126,7 @@ router.post('/goals', async (req, res) => {
 // PUT /api/performance/goals/:id
 router.put('/goals/:id', async (req, res) => {
     const { id } = req.params;
-    const { title, deadline, status, rating, comments } = req.body;
+    const { title, deadline, status, rating, comments, employee_comments } = req.body;
 
     try {
         const goal = await attendanceDB('employee_performance_goals').where({ id }).first();
@@ -167,6 +190,7 @@ router.put('/goals/:id', async (req, res) => {
         if (status !== undefined) updates.status = status;
         if (rating !== undefined) updates.rating = rating;
         if (comments !== undefined) updates.comments = comments;
+        if (employee_comments !== undefined) updates.employee_comments = employee_comments;
 
         await attendanceDB('employee_performance_goals')
             .where({ id })
@@ -231,7 +255,8 @@ router.post('/reviews', async (req, res) => {
         self_challenges,
         self_learning,
         manager_comments,
-        manager_recommendation
+        manager_recommendation,
+        ai_analysis_report
     } = req.body;
 
     if (!employee_id || !cycle_id) {
@@ -272,13 +297,19 @@ router.post('/reviews', async (req, res) => {
         if (isAdminOrHr) {
             if (manager_comments !== undefined) updates.manager_comments = manager_comments;
             if (manager_recommendation !== undefined) updates.manager_recommendation = manager_recommendation;
+            if (ai_analysis_report !== undefined) {
+                updates.ai_analysis_report = typeof ai_analysis_report === 'object' ? JSON.stringify(ai_analysis_report) : ai_analysis_report;
+            }
         } else {
-            // Block employee from updating manager comments/recommendations
+            // Block employee from updating manager comments/recommendations/AI audit
             if (manager_comments !== undefined && manager_comments !== (existing?.manager_comments || null)) {
                 return res.status(403).json({ success: false, message: "Only administrators/managers can edit manager review comments." });
             }
             if (manager_recommendation !== undefined && manager_recommendation !== (existing?.manager_recommendation || null)) {
                 return res.status(403).json({ success: false, message: "Only administrators/managers can edit manager recommendations." });
+            }
+            if (ai_analysis_report !== undefined && ai_analysis_report !== (existing?.ai_analysis_report || null)) {
+                return res.status(403).json({ success: false, message: "Only administrators/managers can edit AI analysis report." });
             }
         }
 
