@@ -302,6 +302,20 @@ const MobileAttendancePage = () => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
     const [reportYear, setReportYear] = useState(new Date().getFullYear());
+
+    // Analytics Date Filter States
+    const [analyticsFilterType, setAnalyticsFilterType] = useState('this_month'); // 'this_month' | 'last_month' | 'select_month' | 'custom'
+    const [analyticsSelectedMonth, setAnalyticsSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [analyticsStartDate, setAnalyticsStartDate] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+    });
+    const [analyticsEndDate, setAnalyticsEndDate] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    });
+    const [analyticsSessions, setAnalyticsSessions] = useState([]);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
     const [showFullCalendar, setShowFullCalendar] = useState(false);
     const [scrollerDates, setScrollerDates] = useState([]);
 
@@ -362,6 +376,7 @@ const MobileAttendancePage = () => {
 
         fetchDailyRecords();
         fetchMonthlyRecords();
+        fetchAnalyticsRecords(true);
         fetchCorrectionHistory();
 
         return () => {
@@ -369,6 +384,10 @@ const MobileAttendancePage = () => {
             if (watchId) navigator.geolocation.clearWatch(watchId);
         };
     }, []);
+
+    useEffect(() => {
+        fetchAnalyticsRecords();
+    }, [fetchAnalyticsRecords]);
 
     useEffect(() => {
         // Auto-scroll to selected date in the scroller
@@ -470,6 +489,51 @@ const MobileAttendancePage = () => {
             setLoading(false);
         }
     };
+
+    const fetchAnalyticsRecords = useCallback(async (force = false) => {
+        if (!force && (mainTab !== 'my_attendance' || subTab !== 'analytics')) return;
+        setAnalyticsLoading(true);
+        try {
+            let start = '';
+            let end = '';
+            const today = new Date();
+
+            if (analyticsFilterType === 'this_month') {
+                const y = today.getFullYear();
+                const m = today.getMonth();
+                start = new Date(y, m, 1).toISOString().split('T')[0];
+                end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+            } else if (analyticsFilterType === 'last_month') {
+                const y = today.getFullYear();
+                const m = today.getMonth() - 1;
+                start = new Date(y, m, 1).toISOString().split('T')[0];
+                end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+            } else if (analyticsFilterType === 'select_month') {
+                if (analyticsSelectedMonth) {
+                    const [y, m] = analyticsSelectedMonth.split('-').map(Number);
+                    start = new Date(y, m - 1, 1).toISOString().split('T')[0];
+                    end = new Date(y, m, 0).toISOString().split('T')[0];
+                }
+            } else if (analyticsFilterType === 'custom') {
+                start = analyticsStartDate;
+                end = analyticsEndDate;
+            }
+
+            if (start && end) {
+                const res = await attendanceService.getMyRecords(start, end);
+                if (res.ok || res.data) {
+                    const records = res.data || res || [];
+                    setAnalyticsSessions(Array.isArray(records) ? records : []);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch analytics records", error);
+            toast.error("Failed to fetch analytics data");
+        } finally {
+            setAnalyticsLoading(false);
+        }
+    }, [mainTab, subTab, analyticsFilterType, analyticsSelectedMonth, analyticsStartDate, analyticsEndDate]);
+
 
     const fetchCorrectionHistory = async () => {
         try {
@@ -953,58 +1017,103 @@ const MobileAttendancePage = () => {
         return `${diffHrs}h ${diffMins}m`;
     };
 
+    const getSessionHours = (s) => {
+        const val = s.total_hours || s.hours;
+        if (val !== undefined && val !== null && val !== 0 && !isNaN(parseFloat(val))) {
+            return parseFloat(val);
+        }
+        if (!s.time_in || !s.time_out) return 0;
+        const start = new Date(s.time_in);
+        const end = new Date(s.time_out);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+        let diffMs = end - start;
+        if (diffMs < 0) {
+            diffMs += 24 * 60 * 60 * 1000;
+        }
+        if (diffMs <= 0) return 0;
+        return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+    };
+
     // Analytics Calcs
-    const totalRecords = monthlySessions.length;
-    let presentCount = 0;
-    let lateCount = 0;
-    let totalHours = 0;
+    const {
+        presentCount,
+        lateCount,
+        totalHours,
+        attendanceTrendData,
+        weeklyActivityData,
+        statusPieData,
+        avgHours,
+        presentPercentage,
+        latePercentage,
+        underHoursCount,
+        totalRecords
+    } = useMemo(() => {
+        const total = analyticsSessions.length;
+        let present = 0;
+        let late = 0;
+        let hrs = 0;
+        const trend = [];
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const wStats = { Sun: { hrs: 0, count: 0 }, Mon: { hrs: 0, count: 0 }, Tue: { hrs: 0, count: 0 }, Wed: { hrs: 0, count: 0 }, Thu: { hrs: 0, count: 0 }, Fri: { hrs: 0, count: 0 }, Sat: { hrs: 0, count: 0 } };
 
-    const attendanceTrendData = [];
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weekStats = { Sun: { hrs: 0, count: 0 }, Mon: { hrs: 0, count: 0 }, Tue: { hrs: 0, count: 0 }, Wed: { hrs: 0, count: 0 }, Thu: { hrs: 0, count: 0 }, Fri: { hrs: 0, count: 0 }, Sat: { hrs: 0, count: 0 } };
-
-    monthlySessions.forEach(session => {
-        const h = parseFloat(session.total_hours || session.hours || 0);
-        totalHours += h;
-        if (session.status !== 'ABSENT') {
-            presentCount++;
-            if (session.late_minutes > 0) lateCount++;
-        }
-
-        const dateString = session.time_in || session.date || session.shift_date;
-        const d = dateString ? new Date(dateString) : null;
-
-        if (d && !isNaN(d)) {
-            attendanceTrendData.push({ date: d.getDate(), hours: h });
-            const dayName = daysOfWeek[d.getDay()];
-            if (weekStats[dayName]) {
-                weekStats[dayName].hrs += h;
-                weekStats[dayName].count += 1;
+        analyticsSessions.forEach(session => {
+            const h = getSessionHours(session);
+            hrs += h;
+            if (session.status !== 'ABSENT') {
+                present++;
+                if (session.late_minutes > 0) late++;
             }
-        }
-    });
 
-    attendanceTrendData.sort((a, b) => a.date - b.date);
+            const dateString = session.time_in || session.date || session.shift_date;
+            const d = dateString ? new Date(dateString) : null;
 
-    const weeklyActivityData = daysOfWeek.map(day => ({
-        day,
-        hours: weekStats[day].count > 0 ? (weekStats[day].hrs / weekStats[day].count).toFixed(1) : 0
-    }));
+            if (d && !isNaN(d)) {
+                const label = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+                trend.push({ date: label, hours: h, rawDate: d });
+                const dayName = days[d.getDay()];
+                if (wStats[dayName]) {
+                    wStats[dayName].hrs += h;
+                    wStats[dayName].count += 1;
+                }
+            }
+        });
 
-    const statusPieData = [
-        { name: 'On Time', value: presentCount - lateCount, color: '#10b981' },
-        { name: 'Late', value: lateCount, color: '#f59e0b' }
-    ].filter(d => d.value > 0);
+        trend.sort((a, b) => a.rawDate - b.rawDate);
 
-    const avgHours = totalRecords > 0 ? (totalHours / totalRecords).toFixed(1) : '0.0';
-    const presentPercentage = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
-    const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+        const wActData = days.map(day => ({
+            day,
+            hours: wStats[day].count > 0 ? (wStats[day].hrs / wStats[day].count).toFixed(1) : 0
+        }));
 
-    let underHoursCount = 0;
-    monthlySessions.forEach(session => {
-        const h = parseFloat(session.total_hours || session.hours || 0);
-        if (session.status !== 'ABSENT' && h > 0 && h < 8) underHoursCount++;
-    });
+        const pie = [
+            { name: 'On Time', value: present - late, color: '#10b981' },
+            { name: 'Late', value: late, color: '#f59e0b' }
+        ].filter(d => d.value > 0);
+
+        const avg = total > 0 ? (hrs / total).toFixed(1) : '0.0';
+        const presentPct = total > 0 ? Math.round((present / total) * 100) : 0;
+        const latePct = present > 0 ? Math.round((late / present) * 100) : 0;
+
+        let underHours = 0;
+        analyticsSessions.forEach(session => {
+            const h = getSessionHours(session);
+            if (session.status !== 'ABSENT' && h > 0 && h < 8) underHours++;
+        });
+
+        return {
+            presentCount: present,
+            lateCount: late,
+            totalHours: hrs,
+            attendanceTrendData: trend,
+            weeklyActivityData: wActData,
+            statusPieData: pie,
+            avgHours: avg,
+            presentPercentage: presentPct,
+            latePercentage: latePct,
+            underHoursCount: underHours,
+            totalRecords: total
+        };
+    }, [analyticsSessions]);
 
     const filteredCorrections = correctionHistory.filter(item => {
         const status = (item.status || 'PENDING').toUpperCase();
@@ -1512,114 +1621,176 @@ const MobileAttendancePage = () => {
 
                                 {subTab === 'analytics' && (
                                     <div className="space-y-6">
-                                        {/* Month Selection */}
-                                        <div className="flex flex-col gap-1.5 w-full">
-                                            <MonthPicker
-                                                label="Select Month"
-                                                value={reportMonth}
-                                                onChange={(val) => setReportMonth(val)}
-                                            />
-                                        </div>
+                                        {/* Date Filters Bar */}
+                                        <div className="bg-white dark:bg-github-dark-subtle p-4 rounded-[2rem] border border-slate-100 dark:border-github-dark-border shadow-sm space-y-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                                                    <Calendar size={16} />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-[10px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-wider">Analytics Period</h4>
+                                                    <p className="text-[9px] text-slate-400 dark:text-github-dark-muted font-bold mt-0.5">Filter statistics and trend charts</p>
+                                                </div>
+                                            </div>
 
-                                        {/* Premium Stats Grid */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-600 mb-4">
-                                                    <CheckCircle size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Attendance</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{presentPercentage}%</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">{presentCount} Days Present</p>
-                                            </div>
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
-                                                    <Clock size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Avg Shift</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{avgHours}h</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">Per Working Day</p>
-                                            </div>
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-rose-50 dark:bg-rose-500/10 rounded-2xl flex items-center justify-center text-rose-600 mb-4">
-                                                    <AlertCircle size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Late Arrival</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{lateCount}</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">{latePercentage}% of shifts</p>
-                                            </div>
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-sky-50 dark:bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-600 mb-4">
-                                                    <BarChart3 size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Short Shifts</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{underHoursCount}</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">Under 8 Hours</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Trends Chart */}
-                                        <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                            <h3 className="text-[10px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-[0.2em] mb-8 flex items-center justify-between opacity-60">
-                                                Daily Work Hours
-                                                <div className="flex items-center gap-1.5 text-indigo-500 font-bold tracking-tight">
-                                                    <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                                                    Trend
-                                                </div>
-                                            </h3>
-                                            <div className="h-48 -ml-4">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <AreaChart data={attendanceTrendData}>
-                                                        <defs>
-                                                            <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" className="dark:opacity-10" />
-                                                        <XAxis dataKey="date" hide />
-                                                        <YAxis hide />
-                                                        <RechartsTooltip 
-                                                            contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', background: 'rgb(255 255 255 / 0.9)' }}
-                                                            itemStyle={{ color: '#6366f1', fontWeight: 'bold' }}
-                                                        />
-                                                        <Area type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
-                                                    </AreaChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </div>
-
-                                        {/* Download Action Section */}
-                                        <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-indigo-500/20">
-                                            <div className="relative z-10">
-                                                <h3 className="text-xl font-black tracking-tight mb-2">Monthly Summary</h3>
-                                                <p className="text-indigo-100/70 text-[11px] font-medium mb-4 max-w-[200px]">Download your detailed attendance report for {new Date(reportMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.</p>
-                                                <div className="mb-5">
-                                                    <label className="block text-[9px] font-black uppercase text-indigo-200 tracking-wider mb-2">File Format</label>
-                                                    <select
-                                                        value={fileFormat}
-                                                        onChange={(e) => setFileFormat(e.target.value)}
-                                                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+                                            {/* Selector Segment Buttons */}
+                                            <div className="bg-slate-100 dark:bg-[#161b22] p-1 rounded-xl flex gap-1 border border-slate-200/50 dark:border-white/5 overflow-x-auto no-scrollbar">
+                                                {[
+                                                    { id: 'this_month', label: 'This Month' },
+                                                    { id: 'last_month', label: 'Last' },
+                                                    { id: 'select_month', label: 'Month' },
+                                                    { id: 'custom', label: 'Custom' },
+                                                ].map(type => (
+                                                    <button
+                                                        key={type.id}
+                                                        type="button"
+                                                        onClick={() => setAnalyticsFilterType(type.id)}
+                                                        className={`flex-1 min-w-[70px] py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all text-center whitespace-nowrap ${
+                                                            analyticsFilterType === type.id
+                                                                ? 'bg-white dark:bg-github-dark-subtle text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                                : 'text-slate-500 dark:text-slate-400'
+                                                        }`}
                                                     >
-                                                        <option value="xlsx" className="text-slate-800">Excel (xlsx)</option>
-                                                        <option value="csv" className="text-slate-800">CSV (csv)</option>
-                                                        <option value="pdf" className="text-slate-800">PDF (pdf)</option>
-                                                    </select>
-                                                </div>
-                                                <button
-                                                    onClick={downloadReport}
-                                                    disabled={isDownloading}
-                                                    className="w-full py-4 bg-white text-indigo-600 text-xs font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl flex items-center justify-center gap-3 disabled:opacity-50 active:scale-[0.98] transition-all"
-                                                >
-                                                    {isDownloading ? <RefreshCw className="animate-spin" size={16} /> : <Download size={16} />}
-                                                    Download Report
-                                                </button>
+                                                        {type.label}
+                                                    </button>
+                                                ))}
                                             </div>
-                                            {/* Abstract Background Element */}
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-                                            <div className="absolute bottom-0 left-0 w-24 h-24 bg-sky-400/20 rounded-full -ml-12 -mb-12 blur-2xl" />
+
+                                            {/* Contextual Filter Pickers */}
+                                            {analyticsFilterType === 'select_month' && (
+                                                <div className="w-full">
+                                                    <MonthPicker
+                                                        value={analyticsSelectedMonth}
+                                                        onChange={(val) => setAnalyticsSelectedMonth(val)}
+                                                        compact={true}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {analyticsFilterType === 'custom' && (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <MobileDatePicker
+                                                        label="Start Date"
+                                                        value={analyticsStartDate}
+                                                        onChange={(val) => setAnalyticsStartDate(val)}
+                                                    />
+                                                    <MobileDatePicker
+                                                        label="End Date"
+                                                        value={analyticsEndDate}
+                                                        onChange={(val) => setAnalyticsEndDate(val)}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
+
+                                        {analyticsLoading ? (
+                                            <div className="py-20 flex flex-col items-center justify-center bg-white dark:bg-github-dark-subtle rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                <RefreshCw className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400 mb-3" />
+                                                <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest">Compiling Analytics Data...</p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {/* Premium Stats Grid */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-600 mb-4">
+                                                            <CheckCircle size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Attendance</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{presentPercentage}%</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">{presentCount} Days Present</p>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
+                                                            <Clock size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Avg Shift</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{avgHours}h</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">Per Working Day</p>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-rose-50 dark:bg-rose-500/10 rounded-2xl flex items-center justify-center text-rose-600 mb-4">
+                                                            <AlertCircle size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Late Arrival</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{lateCount}</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">{latePercentage}% of shifts</p>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-sky-50 dark:bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-600 mb-4">
+                                                            <BarChart3 size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Short Shifts</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{underHoursCount}</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">Under 8 Hours</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Trends Chart */}
+                                                <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                    <h3 className="text-[10px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-[0.2em] mb-8 flex items-center justify-between opacity-60">
+                                                        Daily Work Hours
+                                                        <div className="flex items-center gap-1.5 text-indigo-500 font-bold tracking-tight">
+                                                            <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                                                            Trend
+                                                        </div>
+                                                    </h3>
+                                                    <div className="h-48 -ml-4">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <AreaChart data={attendanceTrendData}>
+                                                                <defs>
+                                                                    <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                                    </linearGradient>
+                                                                </defs>
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" className="dark:opacity-10" />
+                                                                <XAxis dataKey="date" hide />
+                                                                <YAxis hide />
+                                                                <RechartsTooltip 
+                                                                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', background: 'rgb(255 255 255 / 0.9)' }}
+                                                                    itemStyle={{ color: '#6366f1', fontWeight: 'bold' }}
+                                                                />
+                                                                <Area type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
+                                                            </AreaChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                </div>
+
+                                                {/* Download Action Section */}
+                                                <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-indigo-500/20">
+                                                    <div className="relative z-10">
+                                                        <h3 className="text-xl font-black tracking-tight mb-2">Monthly Summary</h3>
+                                                        <p className="text-indigo-100/70 text-[11px] font-medium mb-4 max-w-[200px]">Download your detailed attendance report for {new Date(reportMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.</p>
+                                                        <div className="mb-5">
+                                                            <label className="block text-[9px] font-black uppercase text-indigo-200 tracking-wider mb-2">File Format</label>
+                                                            <select
+                                                                value={fileFormat}
+                                                                onChange={(e) => setFileFormat(e.target.value)}
+                                                                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+                                                            >
+                                                                <option value="xlsx" className="text-slate-800">Excel (xlsx)</option>
+                                                                <option value="csv" className="text-slate-800">CSV (csv)</option>
+                                                                <option value="pdf" className="text-slate-800">PDF (pdf)</option>
+                                                            </select>
+                                                        </div>
+                                                        <button
+                                                            onClick={downloadReport}
+                                                            disabled={isDownloading}
+                                                            className="w-full py-4 bg-white text-indigo-600 text-xs font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl flex items-center justify-center gap-3 disabled:opacity-50 active:scale-[0.98] transition-all"
+                                                        >
+                                                            {isDownloading ? <RefreshCw className="animate-spin" size={16} /> : <Download size={16} />}
+                                                            Download Report
+                                                        </button>
+                                                    </div>
+                                                    {/* Abstract Background Element */}
+                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                                                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-sky-400/20 rounded-full -ml-12 -mb-12 blur-2xl" />
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                )  }
+                                )}
 
                                 {subTab === 'corrections' && (
                                     <div className="space-y-4">

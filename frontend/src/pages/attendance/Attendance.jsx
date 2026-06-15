@@ -52,7 +52,7 @@ import {
     LineElement,
     Filler
 } from 'chart.js';
-import { Bar, Doughnut, Radar } from 'react-chartjs-2';
+import { Bar, Pie, Line, Radar } from 'react-chartjs-2';
 
 import CustomCalendar from '../../components/CustomCalendar';
 import DatePicker from '../../components/DatePicker';
@@ -352,6 +352,20 @@ const Attendance = () => {
     const [loading, setLoading] = useState(false);
     const [holidays, setHolidays] = useState([]);
     const [myShift, setMyShift] = useState(null);
+
+    // Analytics Date Filter States
+    const [analyticsFilterType, setAnalyticsFilterType] = useState('this_month'); // 'this_month' | 'last_month' | 'select_month' | 'custom'
+    const [analyticsSelectedMonth, setAnalyticsSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [analyticsStartDate, setAnalyticsStartDate] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+    });
+    const [analyticsEndDate, setAnalyticsEndDate] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    });
+    const [analyticsSessions, setAnalyticsSessions] = useState([]);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
     // Fetch Holidays and Shift Policy
     useEffect(() => {
@@ -779,6 +793,48 @@ const Attendance = () => {
         }
     }, [reportMonth, activeTab]);
 
+    // Fetch Filtered Analytics Records
+    const fetchAnalyticsRecords = useCallback(async (force = false) => {
+        if (!force && (activeTab !== 'my_attendance' || subTab !== 'analytics')) return;
+        setAnalyticsLoading(true);
+        try {
+            let start = '';
+            let end = '';
+            const today = new Date();
+
+            if (analyticsFilterType === 'this_month') {
+                const y = today.getFullYear();
+                const m = today.getMonth();
+                start = new Date(y, m, 1).toISOString().split('T')[0];
+                end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+            } else if (analyticsFilterType === 'last_month') {
+                const y = today.getFullYear();
+                const m = today.getMonth() - 1;
+                start = new Date(y, m, 1).toISOString().split('T')[0];
+                end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+            } else if (analyticsFilterType === 'select_month') {
+                if (analyticsSelectedMonth) {
+                    const [y, m] = analyticsSelectedMonth.split('-').map(Number);
+                    start = new Date(y, m - 1, 1).toISOString().split('T')[0];
+                    end = new Date(y, m, 0).toISOString().split('T')[0];
+                }
+            } else if (analyticsFilterType === 'custom') {
+                start = analyticsStartDate;
+                end = analyticsEndDate;
+            }
+
+            if (start && end) {
+                const res = await attendanceService.getMyRecords(start, end);
+                if (res.ok) setAnalyticsSessions(res.data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch analytics records", error);
+            toast.error("Failed to fetch analytics data");
+        } finally {
+            setAnalyticsLoading(false);
+        }
+    }, [activeTab, subTab, analyticsFilterType, analyticsSelectedMonth, analyticsStartDate, analyticsEndDate]);
+
     // 3. Fetch Correction History (my own requests only, even for admins)
     const fetchCorrectionHistory = useCallback(async () => {
         if (activeTab === 'my_attendance' && subTab === 'correction') {
@@ -869,6 +925,10 @@ const Attendance = () => {
     useEffect(() => {
         fetchMonthlyRecords();
     }, [fetchMonthlyRecords]);
+
+    useEffect(() => {
+        fetchAnalyticsRecords();
+    }, [fetchAnalyticsRecords]);
 
     useEffect(() => {
         fetchCorrectionHistory();
@@ -1249,40 +1309,72 @@ const Attendance = () => {
     };
 
     // --- ANALYTICS DATA PREP ---
-    const chartData = {
-        labels: monthlySessions.map(s => new Date(s.check_in || s.time_in).getDate()).reverse(),
-        datasets: [
-            {
-                label: 'Hours Worked',
-                data: monthlySessions.map(s => parseFloat(s.total_hours || 0)).reverse(),
-                backgroundColor: 'rgba(79, 70, 229, 0.6)',
-                borderRadius: 4,
-            }
-        ]
+    const formatDateLabel = (dateStr) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
     };
 
-    const statusCounts = monthlySessions.reduce((acc, s) => {
-        const label = getStatusStyle(s.status).label;
-        acc[label] = (acc[label] || 0) + 1;
-        return acc;
-    }, {});
-
-    const pieData = {
-        labels: Object.keys(statusCounts),
-        datasets: [{
-            data: Object.values(statusCounts),
-            backgroundColor: Object.keys(statusCounts).map(label => {
-                if (label === 'PRESENT') return '#10b981'; // emerald-500
-                if (label === 'LATE') return '#f59e0b';    // amber-500
-                if (label === 'OVERTIME') return '#8b5cf6'; // violet-500
-                if (label === 'ABSENT') return '#ef4444';   // red-500
-                if (label === 'MISSED PUNCH') return '#f43f5e'; // rose-500
-                if (label === 'HALF DAY') return '#f97316'; // orange-500
-                return '#94a3b8'; // slate-400
-            }),
-            borderWidth: 0
-        }]
+    const getSessionHours = (s) => {
+        const val = s.total_hours || s.hours;
+        if (val !== undefined && val !== null && val !== 0 && !isNaN(parseFloat(val))) {
+            return parseFloat(val);
+        }
+        if (!s.time_in || !s.time_out) return 0;
+        const start = new Date(s.time_in);
+        const end = new Date(s.time_out);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+        let diffMs = end - start;
+        if (diffMs < 0) {
+            diffMs += 24 * 60 * 60 * 1000;
+        }
+        if (diffMs <= 0) return 0;
+        return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
     };
+
+    const chartData = useMemo(() => {
+        return {
+            labels: analyticsSessions.map(s => formatDateLabel(s.check_in || s.time_in)).reverse(),
+            datasets: [
+                {
+                    label: 'Hours Worked',
+                    data: analyticsSessions.map(s => getSessionHours(s)).reverse(),
+                    backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                    borderRadius: 4,
+                    sessions: [...analyticsSessions].reverse()
+                }
+            ]
+        };
+    }, [analyticsSessions]);
+
+    const statusCounts = useMemo(() => {
+        return analyticsSessions.reduce((acc, s) => {
+            const label = getStatusStyle(s.status).label;
+            acc[label] = (acc[label] || 0) + 1;
+            return acc;
+        }, {});
+    }, [analyticsSessions]);
+
+    const pieData = useMemo(() => {
+        const labels = Object.keys(statusCounts);
+        return {
+            labels: labels,
+            datasets: [{
+                data: Object.values(statusCounts),
+                backgroundColor: labels.map(label => {
+                    if (label === 'PRESENT') return '#10b981'; // emerald-500
+                    if (label === 'LATE') return '#f59e0b';    // amber-500
+                    if (label === 'OVERTIME') return '#8b5cf6'; // violet-500
+                    if (label === 'ABSENT') return '#ef4444';   // red-500
+                    if (label === 'MISSED PUNCH') return '#d946ef'; // fuchsia-500
+                    if (label === 'HALF DAY') return '#f97316'; // orange-500
+                    return '#94a3b8'; // slate-400
+                }),
+                borderWidth: 0
+            }]
+        };
+    }, [statusCounts]);
 
 
     // --- COMPUTE CALENDAR EVENTS ---
@@ -1940,185 +2032,324 @@ const Attendance = () => {
                         {/* SUB-TAB: ANALYTICS */}
                         {subTab === 'analytics' && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                {/* 1. KPI Cards Row */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {/* Card 1: Total Days */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                                {/* Date Filters */}
+                                <div className="bg-white dark:bg-dark-card p-4 rounded-2xl border border-slate-200 dark:border-github-dark-border flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                                            <CalendarIcon size={20} />
+                                        </div>
                                         <div>
-                                            <p className="text-sm text-slate-500 font-medium">Total Days</p>
-                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">{monthlySessions.length}</h3>
-                                        </div>
-                                        <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                            <CalendarIcon size={24} />
+                                            <h4 className="text-xs font-black text-slate-800 dark:text-github-dark-text uppercase tracking-wider">Analytics Period</h4>
+                                            <p className="text-[11px] text-slate-400 dark:text-github-dark-muted font-bold mt-0.5">Configure the date range for metrics and charts</p>
                                         </div>
                                     </div>
-
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border relative overflow-hidden">
-                                        <div className="flex justify-between items-start z-10 relative">
-                                            <div>
-                                                <p className="text-sm text-slate-500 font-medium">Present</p>
-                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
-                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT' && s.status !== 'LATE' && s.status !== 'OVERTIME').length / monthlySessions.length) * 100) : 0}%
-                                                </h3>
+                                    
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        {/* Filter Type Segment Selector */}
+                                        <div className="bg-slate-100 dark:bg-white/5 p-1 rounded-xl flex gap-1 border border-slate-200/50 dark:border-white/5 shrink-0">
+                                            {[
+                                                { id: 'this_month', label: 'This Month' },
+                                                { id: 'last_month', label: 'Last Month' },
+                                                { id: 'select_month', label: 'Select Month' },
+                                                { id: 'custom', label: 'Custom' },
+                                            ].map(type => (
+                                                <button
+                                                    key={type.id}
+                                                    type="button"
+                                                    onClick={() => setAnalyticsFilterType(type.id)}
+                                                    className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider rounded-lg transition-all ${
+                                                        analyticsFilterType === type.id
+                                                            ? 'bg-white dark:bg-github-dark-subtle text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                                                    }`}
+                                                >
+                                                    {type.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        
+                                        {/* Contextual Inputs */}
+                                        {analyticsFilterType === 'select_month' && (
+                                            <div className="w-44">
+                                                <MonthPicker
+                                                    value={analyticsSelectedMonth}
+                                                    onChange={(val) => setAnalyticsSelectedMonth(val)}
+                                                    compact={true}
+                                                />
                                             </div>
-                                            <div className="h-12 w-12 rounded-full border-4 border-emerald-100 dark:border-emerald-900/30 border-t-emerald-500 flex items-center justify-center">
-                                                <span className="text-[10px] font-bold text-emerald-600">
-                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.status !== 'ABSENT' && s.status !== 'LATE' && s.status !== 'OVERTIME').length / monthlySessions.length) * 100) : 0}%
-                                                </span>
+                                        )}
+                                        
+                                        {analyticsFilterType === 'custom' && (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-36">
+                                                    <DatePicker
+                                                        value={analyticsStartDate}
+                                                        onChange={(val) => setAnalyticsStartDate(val)}
+                                                        compact={true}
+                                                        placeholder="Start Date"
+                                                    />
+                                                </div>
+                                                <span className="text-[10px] text-slate-400 dark:text-github-dark-muted font-black uppercase">To</span>
+                                                <div className="w-36">
+                                                    <DatePicker
+                                                        value={analyticsEndDate}
+                                                        onChange={(val) => setAnalyticsEndDate(val)}
+                                                        compact={true}
+                                                        placeholder="End Date"
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Card 3: Late % */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border relative overflow-hidden">
-                                        <div className="flex justify-between items-start z-10 relative">
-                                            <div>
-                                                <p className="text-sm text-slate-500 font-medium">Late</p>
-                                                <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
-                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.late_minutes > 0).length / monthlySessions.length) * 100) : 0}%
-                                                </h3>
-                                            </div>
-                                            <div className="h-12 w-12 rounded-full border-4 border-amber-100 dark:border-amber-900/30 border-t-amber-500 flex items-center justify-center">
-                                                <span className="text-[10px] font-bold text-amber-600">
-                                                    {monthlySessions.length > 0 ? Math.round((monthlySessions.filter(s => s.late_minutes > 0).length / monthlySessions.length) * 100) : 0}%
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Card 4: Overtime Days */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm text-slate-500 font-medium">Overtime</p>
-                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
-                                                {monthlySessions.filter(s => s.status === 'OVERTIME').length}
-                                            </h3>
-                                        </div>
-                                        <div className="w-12 h-12 rounded-full bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center text-violet-600 dark:text-violet-400">
-                                            <History size={24} />
-                                        </div>
-                                    </div>
-
-                                    {/* Card 5: Avg Hours */}
-                                    <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm text-slate-500 font-medium">Avg Hours</p>
-                                            <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
-                                                {monthlySessions.length > 0
-                                                    ? (monthlySessions.reduce((acc, s) => acc + parseFloat(s.total_hours || 0), 0) / monthlySessions.length).toFixed(1)
-                                                    : '0'}
-                                            </h3>
-                                        </div>
-                                        <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                                            <Clock size={24} />
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* 2. Attendance Trends (Full Width) */}
-                                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Total Attendance Report</h3>
-                                        <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400">
-                                            <MoreVertical size={18} />
-                                        </button>
+                                {analyticsLoading ? (
+                                    <div className="py-20 flex flex-col items-center justify-center bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
+                                        <RefreshCw className="w-10 h-10 animate-spin text-indigo-600 dark:text-indigo-400 mb-4" />
+                                        <p className="text-xs font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest">Compiling Analytics Data...</p>
                                     </div>
-                                    <div className="h-72">
-                                        <Bar
-                                            data={chartData}
-                                            options={{
-                                                responsive: true,
-                                                maintainAspectRatio: false,
-                                                plugins: {
-                                                    legend: { display: false }
-                                                },
-                                                scales: {
-                                                    y: {
-                                                        beginAtZero: true,
-                                                        grid: { color: 'rgba(200, 200, 200, 0.1)', borderDash: [5, 5] },
-                                                        ticks: { color: '#94a3b8' }
-                                                    },
-                                                    x: {
-                                                        grid: { display: false },
-                                                        ticks: { color: '#94a3b8' }
-                                                    }
-                                                },
-                                                borderRadius: 6,
-                                                barThickness: 24
-                                            }}
-                                        />
-                                    </div>
-                                </div>
+                                ) : (
+                                    <>
+                                        {/* 1. KPI Cards Row */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                                            {/* Card 1: Total Days */}
+                                            <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-slate-500 font-medium">Total Days</p>
+                                                    <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">{analyticsSessions.length}</h3>
+                                                </div>
+                                                <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                                    <CalendarIcon size={24} />
+                                                </div>
+                                            </div>
 
-                                {/* 3. Bottom Row: Status & Weekly Pattern */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Status Breakdown */}
-                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Attendance Status</h3>
-                                        <div className="h-64 flex justify-center relative">
-                                            <Doughnut
-                                                data={pieData}
-                                                options={{
-                                                    responsive: true,
-                                                    maintainAspectRatio: false,
-                                                    cutout: '75%',
-                                                    plugins: {
-                                                        legend: {
-                                                            position: 'right',
-                                                            labels: { usePointStyle: true, boxWidth: 8, padding: 20 }
-                                                        }
-                                                    }
-                                                }}
-                                            />
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                <span className="text-3xl font-bold text-slate-800 dark:text-github-dark-text">{monthlySessions.length}</span>
-                                                <span className="text-xs text-slate-500 uppercase font-bold">Total</span>
+                                            <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border relative overflow-hidden">
+                                                <div className="flex justify-between items-start z-10 relative">
+                                                    <div>
+                                                        <p className="text-sm text-slate-500 font-medium">Present</p>
+                                                        <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
+                                                            {analyticsSessions.length > 0 ? Math.round((analyticsSessions.filter(s => s.status !== 'ABSENT' && s.status !== 'LATE' && s.status !== 'OVERTIME').length / analyticsSessions.length) * 100) : 0}%
+                                                        </h3>
+                                                    </div>
+                                                    <div className="h-12 w-12 rounded-full border-4 border-emerald-100 dark:border-emerald-900/30 border-t-emerald-500 flex items-center justify-center">
+                                                        <span className="text-[10px] font-bold text-emerald-600">
+                                                            {analyticsSessions.length > 0 ? Math.round((analyticsSessions.filter(s => s.status !== 'ABSENT' && s.status !== 'LATE' && s.status !== 'OVERTIME').length / analyticsSessions.length) * 100) : 0}%
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Card 3: Late % */}
+                                            <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border relative overflow-hidden">
+                                                <div className="flex justify-between items-start z-10 relative">
+                                                    <div>
+                                                        <p className="text-sm text-slate-500 font-medium">Late</p>
+                                                        <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
+                                                            {analyticsSessions.length > 0 ? Math.round((analyticsSessions.filter(s => s.late_minutes > 0).length / analyticsSessions.length) * 100) : 0}%
+                                                        </h3>
+                                                    </div>
+                                                    <div className="h-12 w-12 rounded-full border-4 border-amber-100 dark:border-amber-900/30 border-t-amber-500 flex items-center justify-center">
+                                                        <span className="text-[10px] font-bold text-amber-600">
+                                                            {analyticsSessions.length > 0 ? Math.round((analyticsSessions.filter(s => s.late_minutes > 0).length / analyticsSessions.length) * 100) : 0}%
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Card 4: Overtime Days */}
+                                            <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-slate-500 font-medium">Overtime</p>
+                                                    <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
+                                                        {analyticsSessions.filter(s => s.status === 'OVERTIME').length}
+                                                    </h3>
+                                                </div>
+                                                <div className="w-12 h-12 rounded-full bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center text-violet-600 dark:text-violet-400">
+                                                    <History size={24} />
+                                                </div>
+                                            </div>
+
+                                            {/* Card 5: Avg Hours */}
+                                            <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-slate-500 font-medium">Avg Hours</p>
+                                                    <h3 className="text-3xl font-bold text-slate-800 dark:text-github-dark-text mt-1">
+                                                        {analyticsSessions.length > 0
+                                                            ? (analyticsSessions.reduce((acc, s) => acc + getSessionHours(s), 0) / analyticsSessions.length).toFixed(1)
+                                                            : '0'}
+                                                    </h3>
+                                                </div>
+                                                <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                                    <Clock size={24} />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Weekly Radar Chart */}
-                                    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
-                                        <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Weekly Activity</h3>
-                                        <div className="h-64 flex justify-center">
-                                            <Radar
-                                                data={{
-                                                    labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-                                                    datasets: [{
-                                                        label: 'Avg Hours',
-                                                        data: [0, 1, 2, 3, 4, 5, 6].map(d => {
-                                                            // Calculate Avg Hours per Day of Week
-                                                            const sessionsOnDay = monthlySessions.filter(s => new Date(s.time_in).getDay() === d);
-                                                            if (sessionsOnDay.length === 0) return 0;
-                                                            const total = sessionsOnDay.reduce((acc, s) => acc + parseFloat(s.total_hours || 0), 0);
-                                                            return (total / sessionsOnDay.length).toFixed(1);
-                                                        }),
-                                                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
-                                                        borderColor: '#4f46e5',
-                                                        borderWidth: 2,
-                                                        pointBackgroundColor: '#fff',
-                                                        pointBorderColor: '#4f46e5',
-                                                    }]
-                                                }}
-                                                options={{
-                                                    responsive: true,
-                                                    maintainAspectRatio: false,
-                                                    scales: {
-                                                        r: {
-                                                            angleLines: { color: 'rgba(200, 200, 200, 0.2)' },
-                                                            grid: { color: 'rgba(200, 200, 200, 0.2)' },
-                                                            pointLabels: { color: '#64748b', font: { size: 11 } },
-                                                            ticks: { display: false, backdropColor: 'transparent' }
-                                                        }
-                                                    },
-                                                    plugins: {
-                                                        legend: { display: false }
-                                                    }
-                                                }}
-                                            />
+                                        {/* 2. Attendance Trends (Full Width) */}
+                                        <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
+                                            <div className="flex justify-between items-center mb-6">
+                                                <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text">Total Attendance Report</h3>
+                                                <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400">
+                                                    <MoreVertical size={18} />
+                                                </button>
+                                            </div>
+                                            <div className="h-72">
+                                                <Bar
+                                                    data={chartData}
+                                                    options={{
+                                                        responsive: true,
+                                                        maintainAspectRatio: false,
+                                                        plugins: {
+                                                            legend: { display: false },
+                                                            tooltip: {
+                                                                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                                                titleColor: '#fff',
+                                                                bodyColor: '#e2e8f0',
+                                                                borderColor: 'rgba(255, 255, 255, 0.1)',
+                                                                borderWidth: 1,
+                                                                padding: 12,
+                                                                boxPadding: 6,
+                                                                usePointStyle: true,
+                                                                callbacks: {
+                                                                    title: function(context) {
+                                                                        const index = context[0].dataIndex;
+                                                                        const session = context[0].dataset.sessions?.[index];
+                                                                        if (session) {
+                                                                            const dateStr = session.check_in || session.time_in;
+                                                                            if (dateStr) {
+                                                                                return new Date(dateStr).toLocaleDateString('en-US', {
+                                                                                    weekday: 'long',
+                                                                                    year: 'numeric',
+                                                                                    month: 'short',
+                                                                                    day: 'numeric'
+                                                                                });
+                                                                            }
+                                                                        }
+                                                                        return context[0].label;
+                                                                    },
+                                                                    label: function(context) {
+                                                                        const index = context.dataIndex;
+                                                                        const session = context.dataset.sessions?.[index];
+                                                                        const hours = context.parsed.y;
+                                                                        const labelLines = [`Worked: ${hours} hrs`];
+                                                                        if (session) {
+                                                                            if (session.status) {
+                                                                                labelLines.push(`Status: ${session.status}`);
+                                                                            }
+                                                                            if (session.time_in) {
+                                                                                const inTime = new Date(session.time_in).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                                                                                labelLines.push(`In: ${inTime}`);
+                                                                            }
+                                                                            if (session.time_out) {
+                                                                                const outTime = new Date(session.time_out).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                                                                                labelLines.push(`Out: ${outTime}`);
+                                                                            } else if (session.time_in) {
+                                                                                labelLines.push(`Out: Active / Missed`);
+                                                                            }
+                                                                        }
+                                                                        return labelLines;
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        scales: {
+                                                            y: {
+                                                                beginAtZero: true,
+                                                                grid: { color: 'rgba(200, 200, 200, 0.1)', borderDash: [5, 5] },
+                                                                ticks: { color: '#94a3b8' }
+                                                            },
+                                                            x: {
+                                                                grid: { display: false },
+                                                                ticks: { color: '#94a3b8' }
+                                                            }
+                                                        },
+                                                        borderRadius: 6,
+                                                        barThickness: 24
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
+
+                                        {/* 3. Bottom Row: Status & Weekly Pattern */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* Status Breakdown */}
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
+                                                <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Attendance Status</h3>
+                                                <div className="h-64 flex justify-center relative">
+                                                    <Pie
+                                                        data={pieData}
+                                                        options={{
+                                                            responsive: true,
+                                                            maintainAspectRatio: false,
+                                                            plugins: {
+                                                                legend: {
+                                                                    position: 'right',
+                                                                    labels: { usePointStyle: true, boxWidth: 8, padding: 20 }
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Weekly Activity Line/Area Chart */}
+                                            <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
+                                                <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6">Weekly Activity</h3>
+                                                <div className="h-64">
+                                                    <Line
+                                                        data={{
+                                                            labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                                                            datasets: [{
+                                                                label: 'Avg Hours',
+                                                                data: [0, 1, 2, 3, 4, 5, 6].map(d => {
+                                                                    const sessionsOnDay = analyticsSessions.filter(s => new Date(s.time_in).getDay() === d);
+                                                                    if (sessionsOnDay.length === 0) return 0;
+                                                                    const total = sessionsOnDay.reduce((acc, s) => acc + getSessionHours(s), 0);
+                                                                    return parseFloat((total / sessionsOnDay.length).toFixed(1));
+                                                                }),
+                                                                backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                                                                borderColor: '#4f46e5',
+                                                                borderWidth: 2,
+                                                                tension: 0.4,
+                                                                fill: true,
+                                                                pointBackgroundColor: '#4f46e5',
+                                                                pointHoverRadius: 6,
+                                                            }]
+                                                        }}
+                                                        options={{
+                                                            responsive: true,
+                                                            maintainAspectRatio: false,
+                                                            plugins: {
+                                                                legend: { display: false },
+                                                                tooltip: {
+                                                                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                                                    titleColor: '#fff',
+                                                                    bodyColor: '#e2e8f0',
+                                                                    callbacks: {
+                                                                        label: function(context) {
+                                                                            return `Avg Hours: ${context.parsed.y} hrs`;
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            scales: {
+                                                                y: {
+                                                                    beginAtZero: true,
+                                                                    grid: { color: 'rgba(200, 200, 200, 0.1)', borderDash: [5, 5] },
+                                                                    ticks: { color: '#94a3b8' }
+                                                                },
+                                                                x: {
+                                                                    grid: { display: false },
+                                                                    ticks: { color: '#94a3b8' }
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
                         {/* SUB-TAB: CORRECTION REQUESTS */}
