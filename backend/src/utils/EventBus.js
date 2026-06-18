@@ -9,8 +9,37 @@ class AppEventBus extends EventEmitter {
             ACTIVITY_LOG: 'activity_log',
             USER_CREATED: 'user_created',
             ATTENDANCE_LOGGED: 'attendance_logged',
-            ERROR_LOG: 'error_log'
+            ERROR_LOG: 'error_log',
+            API_REQUEST_LOG: 'api_request_log'
         };
+
+        // Listen for API request logs and save to Database
+        this.on(this.events.API_REQUEST_LOG, async (payload) => {
+            try {
+                const logData = {
+                    user_id: payload.user_id || null,
+                    org_id: payload.org_id || null,
+                    request_path: payload.request_path || '/',
+                    route_pattern: payload.route_pattern || null,
+                    method: payload.method || 'GET',
+                    status_code: Number(payload.status_code) || 200,
+                    duration_ms: Number(payload.duration_ms) || 0,
+                    is_success: payload.is_success ? 1 : 0,
+                    event_source: payload.event_source || 'API',
+                    module_name: payload.module_name || 'General',
+                    client_os: payload.client_os || null,
+                    client_type: payload.client_type || null,
+                    device_type: payload.device_type || null,
+                    request_ip: payload.request_ip || null,
+                    user_agent: payload.user_agent ? (payload.user_agent.length > 255 ? payload.user_agent.substring(0, 255) : payload.user_agent) : null,
+                    payload_details: payload.payload_details ? (typeof payload.payload_details === 'object' ? JSON.stringify(payload.payload_details) : payload.payload_details) : null,
+                    occurred_at: attendanceDB.fn.now()
+                };
+                await attendanceDB('api_request_logs').insert(logData);
+            } catch (err) {
+                console.error('[EventBus DB API Request Log Error]:', err);
+            }
+        });
 
         // Listen for activity logs and save to Database
         this.on(this.events.ACTIVITY_LOG, async (payload) => {
@@ -96,6 +125,10 @@ class AppEventBus extends EventEmitter {
 
     emitActivityLog(payload) {
         this.emit(this.events.ACTIVITY_LOG, payload);
+    }
+
+    emitApiRequest(payload) {
+        this.emit(this.events.API_REQUEST_LOG, payload);
     }
 
     emitError(payload) {

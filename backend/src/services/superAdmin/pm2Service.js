@@ -17,17 +17,13 @@ export const getLogPaths = () => {
         }
     } catch (e) {}
     
-    // Fallback: create mock logs locally in dev if they don't exist
     try {
-        if (!fs.existsSync(DEV_OUT_LOG)) {
-            fs.writeFileSync(DEV_OUT_LOG, `[${new Date().toISOString()}] [INFO] Local dev PM2 mock out logs initialized.\n`);
-        }
-        if (!fs.existsSync(DEV_ERR_LOG)) {
-            fs.writeFileSync(DEV_ERR_LOG, `[${new Date().toISOString()}] [WARNING] Local dev PM2 mock error logs initialized.\n`);
+        if (fs.existsSync(DEV_OUT_LOG)) {
+            return { out: DEV_OUT_LOG, err: DEV_ERR_LOG };
         }
     } catch (e) {}
     
-    return { out: DEV_OUT_LOG, err: DEV_ERR_LOG };
+    return { out: null, err: null };
 };
 
 // Regex classification rules
@@ -124,6 +120,9 @@ const readLastLines = async (filePath, maxLines = 150) => {
 // Fetch combined history from stdout and stderr
 export const getHistoryLogs = async (maxLines = 150) => {
     const paths = getLogPaths();
+    if (!paths.out || !paths.err) {
+        return [];
+    }
     
     const [outLines, errLines] = await Promise.all([
         readLastLines(paths.out, maxLines),
