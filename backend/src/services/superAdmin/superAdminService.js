@@ -18,13 +18,13 @@ export const getDashboardStats = async () => {
             .whereIn('status', ['pending', 'open', 'OPEN', 'PENDING', ''])
             .orWhereNull('status')
             .first(),
-        attendanceDB('security_alerts')
+        attendanceDB('sys_security_alerts')
             .count('* as count')
             .whereIn('status', ['open', 'unseen', 'OPEN', 'UNSEEN'])
             .first(),
-        attendanceDB('api_request_logs').count('* as count').first(),
-        attendanceDB('application_error_logs').count('error_id as count').first(),
-        attendanceDB('api_request_logs').select('module_name as module').count('* as count').groupBy('module_name'),
+        attendanceDB('sys_api_logs').count('* as count').first(),
+        attendanceDB('sys_error_logs').count('error_id as count').first(),
+        attendanceDB('sys_api_logs').select('module_name as module').count('* as count').groupBy('module_name'),
         attendanceDB('organizations').select('status').count('* as count').groupBy('status')
     ]);
 

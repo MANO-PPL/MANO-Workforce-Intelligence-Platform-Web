@@ -1493,8 +1493,8 @@ export const downloadReport = catchAsync(async (req, res) => {
 
     const reportId = crypto.randomUUID();
 
-    // 1. Write status entry to generated_reports table
-    await attendanceDB('generated_reports').insert({
+    // 1. Write status entry to sys_generated_reports table
+    await attendanceDB('sys_generated_reports').insert({
         report_id: reportId,
         user_id: req.user.user_id || req.user.id,
         org_id,
@@ -1535,7 +1535,7 @@ export const getReportStatus = catchAsync(async (req, res) => {
     const { reportId } = req.params;
     const org_id = req.user.org_id;
 
-    const report = await attendanceDB('generated_reports')
+    const report = await attendanceDB('sys_generated_reports')
         .where({ report_id: reportId, org_id })
         .first();
 

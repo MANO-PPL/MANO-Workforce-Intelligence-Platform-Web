@@ -6,15 +6,15 @@ import { getHistoryLogs, getFilteredLogs } from '../../services/superAdmin/pm2Se
 // --- Security Alerts ---
 export const getSecurityAlerts = async (req, res, next) => {
     try {
-        const alerts = await attendanceDB('security_alerts')
-            .leftJoin('users', 'security_alerts.user_id', 'users.user_id')
-            .leftJoin('organizations', 'security_alerts.org_id', 'organizations.org_id')
+        const alerts = await attendanceDB('sys_security_alerts')
+            .leftJoin('users', 'sys_security_alerts.user_id', 'users.user_id')
+            .leftJoin('organizations', 'sys_security_alerts.org_id', 'organizations.org_id')
             .select(
-                'security_alerts.*',
+                'sys_security_alerts.*',
                 'users.user_name', 'users.email',
                 'organizations.org_name'
             )
-            .orderBy('security_alerts.created_at', 'desc');
+            .orderBy('sys_security_alerts.created_at', 'desc');
 
         res.status(200).json({ status: 'success', data: alerts });
     } catch (error) {
@@ -31,7 +31,7 @@ export const updateSecurityAlertStatus = async (req, res, next) => {
             throw new AppError("Status must be 'open' or 'resolved'", 400);
         }
 
-        const affected = await attendanceDB('security_alerts')
+        const affected = await attendanceDB('sys_security_alerts')
             .where({ id })
             .update({ status });
 
@@ -240,7 +240,7 @@ export const getAPIAnalytics = async (req, res, next) => {
             osRes
         ] = await Promise.all([
             // 1. High-level Overview Metrics
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     attendanceDB.raw('COUNT(*) as total_calls'),
@@ -252,7 +252,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 ).first(),
 
             // 2. Volume & Stress per Route Pattern (Cleaned parameterized endpoints)
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     'route_pattern as path',
@@ -268,7 +268,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 .limit(100),
 
             // 3. Usage by Feature/Module
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     'module_name as module',
@@ -279,7 +279,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 .orderBy('count', 'desc'),
 
             // 4. Status Code Distribution
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     'status_code',
@@ -289,7 +289,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 .orderBy('status_code', 'asc'),
 
             // 5. Timeline Chart
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     attendanceDB.raw(`DATE_FORMAT(occurred_at, '${groupFormat}') as time_bucket`),
@@ -300,7 +300,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 .orderBy('time_bucket', 'asc'),
 
             // 6. Platform / Source Distribution (WEB, MOBILE_APP, API)
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     'event_source as platform',
@@ -309,7 +309,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 .groupBy('event_source'),
 
             // 7. Client Type Distribution (e.g. Android App, iOS App, Chrome Browser)
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     'client_type',
@@ -319,7 +319,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 .orderBy('count', 'desc'),
 
             // 8. Device Type Distribution (Mobile, Tablet, Desktop)
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     'device_type',
@@ -329,7 +329,7 @@ export const getAPIAnalytics = async (req, res, next) => {
                 .orderBy('count', 'desc'),
 
             // 9. OS Distribution (Android, iOS, Windows, macOS, Linux)
-            attendanceDB('api_request_logs')
+            attendanceDB('sys_api_logs')
                 .where('occurred_at', '>=', intervalQuery)
                 .select(
                     'client_os as os',

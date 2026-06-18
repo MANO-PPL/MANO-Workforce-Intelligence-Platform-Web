@@ -204,12 +204,12 @@ export const getOrgAnalytics = catchAsync(async (req, res, next) => {
         platformDistribution,
         recentLogs
     ] = await Promise.all([
-        attendanceDB('api_request_logs').where({ org_id: id }).count('* as count').first(),
-        attendanceDB('application_error_logs').where({ org_id: id }).count('error_id as count').first(),
+        attendanceDB('sys_api_logs').where({ org_id: id }).count('* as count').first(),
+        attendanceDB('sys_error_logs').where({ org_id: id }).count('error_id as count').first(),
         attendanceDB('users').where({ org_id: id, is_active: 1, is_deleted: 0 }).count('user_id as count').first(),
-        attendanceDB('api_request_logs').where({ org_id: id }).select('module_name as module').count('* as count').groupBy('module_name'),
-        attendanceDB('api_request_logs').where({ org_id: id }).select('event_source as platform').count('* as count').groupBy('event_source'),
-        attendanceDB('api_request_logs').where({ org_id: id }).select('duration_ms', 'status_code', 'is_success').orderBy('occurred_at', 'desc').limit(200)
+        attendanceDB('sys_api_logs').where({ org_id: id }).select('module_name as module').count('* as count').groupBy('module_name'),
+        attendanceDB('sys_api_logs').where({ org_id: id }).select('event_source as platform').count('* as count').groupBy('event_source'),
+        attendanceDB('sys_api_logs').where({ org_id: id }).select('duration_ms', 'status_code', 'is_success').orderBy('occurred_at', 'desc').limit(200)
     ]);
 
     // Parse recent logs to compute average latency and success rate
@@ -303,13 +303,13 @@ export const getOrgLogs = catchAsync(async (req, res, next) => {
     let countQuery;
 
     if (type === 'errors') {
-        query = attendanceDB('application_error_logs as el')
+        query = attendanceDB('sys_error_logs as el')
             .leftJoin('users as u', 'el.user_id', 'u.user_id')
             .select('el.*', 'u.user_name', 'u.email')
             .where('el.org_id', id)
             .orderBy('el.occurred_at', 'desc');
 
-        countQuery = attendanceDB('application_error_logs').where('org_id', id);
+        countQuery = attendanceDB('sys_error_logs').where('org_id', id);
 
         if (platform) {
             // Error logs store platform in extra_context
@@ -331,13 +331,13 @@ export const getOrgLogs = catchAsync(async (req, res, next) => {
             });
         }
     } else if (type === 'api') {
-        query = attendanceDB('api_request_logs as ar')
+        query = attendanceDB('sys_api_logs as ar')
             .leftJoin('users as u', 'ar.user_id', 'u.user_id')
             .select('ar.*', 'u.user_name', 'u.email')
             .where('ar.org_id', id)
             .orderBy('ar.occurred_at', 'desc');
 
-        countQuery = attendanceDB('api_request_logs').where('org_id', id);
+        countQuery = attendanceDB('sys_api_logs').where('org_id', id);
 
         if (platform) {
             query = query.andWhere('ar.event_source', platform);
@@ -362,13 +362,13 @@ export const getOrgLogs = catchAsync(async (req, res, next) => {
             });
         }
     } else {
-        query = attendanceDB('user_activity_logs as al')
+        query = attendanceDB('sys_activity_logs as al')
             .leftJoin('users as u', 'al.user_id', 'u.user_id')
             .select('al.*', 'u.user_name', 'u.email')
             .where('al.org_id', id)
             .orderBy('al.occurred_at', 'desc');
 
-        countQuery = attendanceDB('user_activity_logs').where('org_id', id);
+        countQuery = attendanceDB('sys_activity_logs').where('org_id', id);
 
         if (platform) {
             query = query.andWhere('al.event_source', platform);

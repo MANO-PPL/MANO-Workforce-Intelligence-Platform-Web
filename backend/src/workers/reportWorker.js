@@ -10,7 +10,7 @@ const reportWorker = new Worker('{ReportQueue}', async (job) => {
     console.log(`👷 [Worker] Processing report job #${reportId} for Org ${org_id}...`);
 
     // 1. Update database status to 'processing'
-    await attendanceDB('generated_reports')
+    await attendanceDB('sys_generated_reports')
         .where({ report_id: reportId })
         .update({ status: 'processing', updated_at: attendanceDB.fn.now() });
 
@@ -45,7 +45,7 @@ const reportWorker = new Worker('{ReportQueue}', async (job) => {
         });
 
         // 6. Update Database tracking row as completed
-        await attendanceDB('generated_reports')
+        await attendanceDB('sys_generated_reports')
             .where({ report_id: reportId })
             .update({
                 status: 'completed',
@@ -70,7 +70,7 @@ const reportWorker = new Worker('{ReportQueue}', async (job) => {
         console.error(`❌ [Worker] Error generating report job #${reportId}:`, err);
 
         // Update database tracking row as failed
-        await attendanceDB('generated_reports')
+        await attendanceDB('sys_generated_reports')
             .where({ report_id: reportId })
             .update({
                 status: 'failed',

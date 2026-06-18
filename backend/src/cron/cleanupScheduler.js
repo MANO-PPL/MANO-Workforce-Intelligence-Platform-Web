@@ -145,8 +145,8 @@ async function cleanupDeletedOrganizations() {
                     .del();
 
                 await trx('notifications').where('org_id', org.org_id).del();
-                await trx('user_activity_logs').where('org_id', org.org_id).del();
-                await trx('application_error_logs').where('org_id', org.org_id).del();
+                await trx('sys_activity_logs').where('org_id', org.org_id).del();
+                await trx('sys_error_logs').where('org_id', org.org_id).del();
                 await trx('attendance_correction_requests').where('org_id', org.org_id).del();
 
                 await trx('user_work_locations')
@@ -157,7 +157,7 @@ async function cleanupDeletedOrganizations() {
                 await trx('daily_attendance').where('org_id', org.org_id).del();
                 await trx('dar_requests').where('org_id', org.org_id).del();
                 await trx('events_meetings').where('org_id', org.org_id).del();
-                await trx('security_alerts').where('org_id', org.org_id).del();
+                await trx('sys_security_alerts').where('org_id', org.org_id).del();
 
                 await trx('feedback_attachments')
                     .whereIn('feedback_id', trx('feedback').select('feedback_id').where('org_id', org.org_id))

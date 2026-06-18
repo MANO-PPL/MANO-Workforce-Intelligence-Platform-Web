@@ -35,7 +35,7 @@ class AppEventBus extends EventEmitter {
                     payload_details: payload.payload_details ? (typeof payload.payload_details === 'object' ? JSON.stringify(payload.payload_details) : payload.payload_details) : null,
                     occurred_at: attendanceDB.fn.now()
                 };
-                await attendanceDB('api_request_logs').insert(logData);
+                await attendanceDB('sys_api_logs').insert(logData);
             } catch (err) {
                 console.error('[EventBus DB API Request Log Error]:', err);
             }
@@ -58,7 +58,7 @@ class AppEventBus extends EventEmitter {
                     metadata: payload.metadata ? (typeof payload.metadata === 'object' ? JSON.stringify(payload.metadata) : payload.metadata) : null,
                     occurred_at: attendanceDB.fn.now()
                 };
-                await attendanceDB('user_activity_logs').insert(logData);
+                await attendanceDB('sys_activity_logs').insert(logData);
             } catch (err) {
                 console.error('[EventBus DB Activity Log Error]:', err);
             }
@@ -83,7 +83,7 @@ class AppEventBus extends EventEmitter {
                     extra_context: payload.extra_context ? (typeof payload.extra_context === 'object' ? JSON.stringify(payload.extra_context) : payload.extra_context) : null,
                     occurred_at: attendanceDB.fn.now()
                 };
-                await attendanceDB('application_error_logs').insert(logData);
+                await attendanceDB('sys_error_logs').insert(logData);
             } catch (err) {
                 console.error('[EventBus DB Error Log Error]:', err);
             }

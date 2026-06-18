@@ -433,8 +433,8 @@ export const permanentlyDeleteUser = async (userId) => {
 
         await trx('refresh_tokens').where('user_id', userId).del();
         await trx('notifications').where('user_id', userId).del();
-        await trx('user_activity_logs').where('user_id', userId).del();
-        await trx('application_error_logs').where('user_id', userId).del();
+        await trx('sys_activity_logs').where('user_id', userId).del();
+        await trx('sys_error_logs').where('user_id', userId).del();
         
         // Nullify reviewer/altered references where this user is referenced
         await trx('attendance_correction_requests').where('reviewed_by', userId).update({ reviewed_by: null });
@@ -448,7 +448,7 @@ export const permanentlyDeleteUser = async (userId) => {
         await trx('daily_attendance').where('user_id', userId).del();
         await trx('dar_requests').where('user_id', userId).del();
         await trx('events_meetings').where('user_id', userId).del();
-        await trx('security_alerts').where('user_id', userId).del();
+        await trx('sys_security_alerts').where('user_id', userId).del();
 
         // Clean up relational chat room memberships and DM rooms
         const memberships = await trx('conversation_members')
