@@ -141,16 +141,7 @@ export async function processTimeIn(context) {
       });
   }
 
-  // Events
-  EventBus.emitNotification({
-    org_id,
-    user_id,
-    title: "Attendance Checked In",
-    message: `You have successfully checked in at ${localTime} from ${address}`,
-    type: "SUCCESS",
-    related_entity_type: "ATTENDANCE",
-    related_entity_id: attendance_id
-  });
+  // Events (Removed database notification since local toast 'Checked In Successfully!' is already displayed)
 
   EventBus.emitActivityLog({
     user_id,
@@ -309,16 +300,7 @@ export async function processTimeOut(context) {
     console.error("Daily Sync Error (Timeout):", dailyErr);
   }
 
-  // Events
-  EventBus.emitNotification({
-    org_id,
-    user_id,
-    title: "Attendance Checked Out",
-    message: `You have successfully checked out at ${localTime}. Total hours today: ${currentSessionContext.total_hours_today.toFixed(2)}h`,
-    type: "INFO",
-    related_entity_type: "ATTENDANCE",
-    related_entity_id: openSession.attendance_id
-  });
+  // Events (Removed database notification since local toast 'Checked Out Successfully!' is already displayed)
 
   EventBus.emitActivityLog({
     user_id,

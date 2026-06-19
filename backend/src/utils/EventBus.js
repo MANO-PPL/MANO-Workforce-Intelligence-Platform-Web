@@ -92,12 +92,16 @@ class AppEventBus extends EventEmitter {
         // Listen for notifications and save to Database, then emit 'notification_saved' for Socket.IO
         this.on(this.events.NOTIFICATION, async (payload) => {
             try {
+                let dbType = payload.type || 'INFO';
+                if (dbType === 'CHAT' || dbType === 'CHAT_MESSAGE') {
+                    dbType = 'INFO';
+                }
                 const notificationData = {
                     org_id: payload.org_id || null,
                     user_id: payload.user_id,
                     title: payload.title || '',
                     message: payload.message || '',
-                    type: payload.type || 'INFO',
+                    type: dbType,
                     related_entity_type: payload.related_entity_type || null,
                     related_entity_id: payload.related_entity_id || null,
                     is_read: 0,

@@ -9,6 +9,7 @@ import { initDARReportScheduler } from './src/cron/DARReportScheduler.js';
 
 import { sendPushNotification } from './src/services/notifications/fcmService.js';
 import EventBus from './src/utils/EventBus.js';
+import { attendanceDB } from './src/config/database.js';
 import './src/workers/reportWorker.js';
 import fs from 'fs';
 import { getLogPaths, parseLogLine } from './src/services/superAdmin/pm2Service.js';
@@ -144,8 +145,39 @@ io.on('connection', (socket) => {
 });
 
 // Listen to the EventBus saved notifications and push real-time alerts
-EventBus.on('notification_saved', (notification) => {
-  io.to(`user_${notification.user_id}`).emit('new-notification', notification);
+EventBus.on('notification_saved', async (notification) => {
+  let enrichedNotification = { ...notification };
+  const isChat = notification.type === 'CHAT' || notification.type === 'CHAT_MESSAGE' || notification.related_entity_type === 'CHAT_MESSAGE';
+
+  if (isChat) {
+    enrichedNotification.type = 'CHAT';
+  }
+
+  if (isChat && notification.related_entity_id) {
+    try {
+      const room = await attendanceDB('chat_conversations')
+        .where('id', notification.related_entity_id)
+        .first();
+      if (room && room.last_message_id) {
+        const lastMsg = await attendanceDB('chat_messages')
+          .where('id', room.last_message_id)
+          .first();
+        if (lastMsg) {
+          const sender = await attendanceDB('users')
+            .where('user_id', lastMsg.sender_id)
+            .select('profile_image_url')
+            .first();
+          if (sender && sender.profile_image_url) {
+            enrichedNotification.sender_avatar = sender.profile_image_url;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error enriching notification with sender avatar:', e);
+    }
+  }
+
+  io.to(`user_${notification.user_id}`).emit('new-notification', enrichedNotification);
   console.log(`📡 Real-time notification push sent to user_${notification.user_id} for alert #${notification.notification_id}`);
   
   // Trigger FCM push notification to user's registered devices
@@ -155,7 +187,10 @@ EventBus.on('notification_saved', (notification) => {
     notification.message,
     {
       notification_id: String(notification.notification_id || ''),
-      type: String(notification.type || 'INFO'),
+      type: isChat ? 'CHAT' : String(notification.type || 'INFO'),
+      related_entity_type: String(notification.related_entity_type || ''),
+      related_entity_id: String(notification.related_entity_id || ''),
+      sender_avatar: String(enrichedNotification.sender_avatar || '')
     }
   );
 });
