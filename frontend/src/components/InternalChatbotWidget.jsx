@@ -407,6 +407,27 @@ export default function InternalChatbotWidget() {
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
 
+    // Read chatbot visibility preference from localStorage (toggled in Profile page)
+    const [isChatbotVisible, setIsChatbotVisible] = useState(() => {
+        const saved = localStorage.getItem('mano_chatbot_visible');
+        return saved === null ? true : saved === 'true';
+    });
+
+    // Listen for storage changes from Profile page toggle (works across tabs too)
+    useEffect(() => {
+        const handleStorage = () => {
+            const saved = localStorage.getItem('mano_chatbot_visible');
+            setIsChatbotVisible(saved === null ? true : saved === 'true');
+        };
+        window.addEventListener('storage', handleStorage);
+        // Also poll localStorage in case toggle happens in the same tab
+        const interval = setInterval(handleStorage, 500);
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            clearInterval(interval);
+        };
+    }, []);
+
     const currentRole = user?.user_type || 'employee';
 
     // Track active tab and subtab info dynamically
@@ -475,6 +496,9 @@ export default function InternalChatbotWidget() {
             sendMessage();
         }
     };
+
+    // Hide entirely when user has turned it off in Profile preferences
+    if (!isChatbotVisible) return null;
 
     return (
         <div className="font-poppins">

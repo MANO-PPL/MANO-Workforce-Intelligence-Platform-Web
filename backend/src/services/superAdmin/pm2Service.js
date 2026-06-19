@@ -62,6 +62,18 @@ export const parseLogLine = (line, type = 'stdout') => {
         };
     }
 
+    // Check if it fits the standardized format without timestamp: [Severity] [Category] Message
+    const stdMatchNoTs = line.match(/^\[(DEBUG|INFO|WARN|ERROR|CRITICAL)\]\s+\[([^\]]+)\]\s+(.*)$/is);
+    if (stdMatchNoTs) {
+        return {
+            timestamp: new Date().toISOString(),
+            severity: stdMatchNoTs[1].toUpperCase(),
+            category: stdMatchNoTs[2],
+            message: stdMatchNoTs[3],
+            source: type === 'stderr' ? 'stderr' : 'stdout'
+        };
+    }
+
     // Fallback: old dynamic parsing for unformatted logs (e.g. process startup banners)
     let timestamp = new Date().toISOString();
     let message = line;
