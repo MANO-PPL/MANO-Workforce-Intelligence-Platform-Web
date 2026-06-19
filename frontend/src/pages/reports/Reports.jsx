@@ -1654,7 +1654,7 @@ const Reports = () => {
                                                         ].map((item, i) => (
                                                             <div key={i} className="relative rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden bg-slate-100 dark:bg-github-dark-subtle shadow-sm flex flex-col">
                                                                 {item.img ? (
-                                                                    <img src={item.img} alt={`${item.label} Selfie`} className="w-full h-28 object-cover" />
+                                                                    <img src={item.img} alt={`${item.label} Selfie`} className="w-full h-28 object-contain" />
                                                                 ) : (
                                                                     <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-white dark:bg-dark-card">
                                                                         <div className="text-xl opacity-20">📷</div>
@@ -1775,7 +1775,7 @@ const Reports = () => {
                                         ].map((item, i) => (
                                             <div key={i} className="relative h-14 rounded-lg border border-slate-700 dark:border-[#30363d] overflow-hidden bg-slate-900 shadow-sm flex flex-col justify-between">
                                                 {item.img ? (
-                                                    <img src={item.img} alt={`Selfie ${item.label}`} className="w-full h-full object-cover" />
+                                                    <img src={item.img} alt={`Selfie ${item.label}`} className="w-full h-full object-contain" />
                                                 ) : (
                                                     <div className="flex flex-col items-center justify-center h-full pb-2 gap-0.5 opacity-40">
                                                         <span className="text-sm">📷</span>

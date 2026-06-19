@@ -1847,7 +1847,7 @@ const Attendance = () => {
                                                         >
                                                             {session.time_in_image ? (
                                                                 <>
-                                                                    <img src={session.time_in_image} alt="In" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                                                    <img src={session.time_in_image} alt="In" className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" />
                                                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
                                                                         <Eye size={32} className="text-white transform scale-75 group-hover:scale-100 transition-transform duration-300" />
                                                                     </div>
@@ -1898,7 +1898,7 @@ const Attendance = () => {
                                                         >
                                                             {session.time_out_image ? (
                                                                 <>
-                                                                    <img src={session.time_out_image} alt="Out" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                                                    <img src={session.time_out_image} alt="Out" className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" />
                                                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
                                                                         <Eye size={32} className="text-white transform scale-75 group-hover:scale-100 transition-transform duration-300" />
                                                                     </div>

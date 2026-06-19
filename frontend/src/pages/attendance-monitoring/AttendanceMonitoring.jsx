@@ -279,7 +279,7 @@ const MapSidebarContent = ({ selectedCluster, onClose }) => {
                                                 </div>
                                                 {selectedUser.session.inImage ? (
                                                     <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-36 bg-slate-100 dark:bg-github-dark-subtle mt-2">
-                                                        <img src={selectedUser.session.inImage} className="w-full h-full object-cover" />
+                                                        <img src={selectedUser.session.inImage} className="w-full h-full object-contain" />
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col items-center justify-center py-4 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
@@ -300,7 +300,7 @@ const MapSidebarContent = ({ selectedCluster, onClose }) => {
                                                 </div>
                                                 {selectedUser.session.outImage ? (
                                                     <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-36 bg-slate-100 dark:bg-github-dark-subtle mt-2">
-                                                        <img src={selectedUser.session.outImage} className="w-full h-full object-cover" />
+                                                        <img src={selectedUser.session.outImage} className="w-full h-full object-contain" />
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col items-center justify-center py-4 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
@@ -331,7 +331,7 @@ const MapSidebarContent = ({ selectedCluster, onClose }) => {
                                             </div>
                                             { (selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage) ? (
                                                 <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-48 bg-slate-100 dark:bg-github-dark-subtle mt-2">
-                                                    <img src={selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage} className="w-full h-full object-cover" />
+                                                    <img src={selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage} className="w-full h-full object-contain" />
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col items-center justify-center py-6 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-2xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
@@ -2607,7 +2607,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                                 </div>
                                                 {session.inImage && (
                                                     <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border group/img cursor-pointer shadow-sm" onClick={() => setPreviewImage(session.inImage)}>
-                                                        <img src={session.inImage} alt="In Selfie" className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
+                                                        <img src={session.inImage} alt="In Selfie" className="w-full h-full object-contain transition-transform duration-500 group-hover/img:scale-110" />
                                                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                                             <Search size={16} className="text-white" />
                                                         </div>
@@ -2633,7 +2633,7 @@ const UserAttendanceDetailsModal = ({ user, onClose }) => {
                                                 )}
                                                 {session.outImage ? (
                                                     <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border group/img cursor-pointer shadow-sm" onClick={() => setPreviewImage(session.outImage)}>
-                                                        <img src={session.outImage} alt="Out Selfie" className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110" />
+                                                        <img src={session.outImage} alt="Out Selfie" className="w-full h-full object-contain transition-transform duration-500 group-hover/img:scale-110" />
                                                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                                             <Search size={16} className="text-white" />
                                                         </div>

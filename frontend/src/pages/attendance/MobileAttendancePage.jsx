@@ -1447,7 +1447,7 @@ const MobileAttendancePage = () => {
                                                                 onClick={() => setPreviewImage(s.time_in_image)}
                                                                 className="w-full aspect-square rounded-2xl overflow-hidden border border-slate-100 dark:border-github-dark-border relative group active:scale-95 transition-all shadow-inner"
                                                             >
-                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-cover" />
+                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-contain" />
                                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                                                                     <Eye size={20} className="text-white" />
                                                                 </div>
@@ -1476,7 +1476,7 @@ const MobileAttendancePage = () => {
                                                                 onClick={() => setPreviewImage(s.time_out_image)}
                                                                 className="w-full aspect-square rounded-2xl overflow-hidden border border-slate-100 dark:border-github-dark-border relative group active:scale-95 transition-all shadow-inner"
                                                             >
-                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-cover" />
+                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-contain" />
                                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                                                                     <Eye size={20} className="text-white" />
                                                                 </div>
@@ -1613,7 +1613,7 @@ const MobileAttendancePage = () => {
                                                         </div>
                                                         {s.time_in_image && (
                                                             <button onClick={() => setPreviewImage(s.time_in_image)} className="w-8 h-8 rounded-lg border border-white dark:border-github-dark-border overflow-hidden active:scale-90 transition-all shadow-sm">
-                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-cover" />
+                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-contain" />
                                                             </button>
                                                         )}
                                                     </div>
@@ -1624,7 +1624,7 @@ const MobileAttendancePage = () => {
                                                         </div>
                                                         {s.time_out_image && (
                                                             <button onClick={() => setPreviewImage(s.time_out_image)} className="w-8 h-8 rounded-lg border border-white dark:border-github-dark-border overflow-hidden active:scale-90 transition-all shadow-sm">
-                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-cover" />
+                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-contain" />
                                                             </button>
                                                         )}
                                                     </div>

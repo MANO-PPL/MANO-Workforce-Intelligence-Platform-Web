@@ -1549,7 +1549,7 @@ const MobileReports = () => {
                                                             ].map((item, i) => (
                                                                 <div key={i} className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-[#30363d] bg-slate-100 dark:bg-[#21262d] shadow-sm flex flex-col">
                                                                     {item.img
-                                                                        ? <img src={item.img} alt={item.label} className="w-full h-28 object-cover" />
+                                                                        ? <img src={item.img} alt={item.label} className="w-full h-28 object-contain" />
                                                                         : <div className="flex h-28 items-center justify-center text-slate-400 text-[10px]">No photo</div>
                                                                     }
                                                                     <span className={`text-[9px] font-black uppercase tracking-wider text-center py-1.5 border-t border-slate-100 dark:border-[#30363d] ${item.label === 'In' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>

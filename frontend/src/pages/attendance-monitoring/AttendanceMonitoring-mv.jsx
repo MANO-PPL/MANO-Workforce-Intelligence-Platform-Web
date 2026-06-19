@@ -1299,7 +1299,7 @@ const EmployeeDetailModal = ({ employee, onClose, date, avatarTimestamp }) => {
                                                 onClick={() => setPreviewImage(s.inImage)}
                                                 className="relative aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border shadow-sm group active:scale-95 transition-all"
                                             >
-                                                <img src={s.inImage} className="w-full h-full object-cover" />
+                                                <img src={s.inImage} className="w-full h-full object-contain" />
                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <Camera size={16} className="text-white" />
                                                 </div>
@@ -1325,7 +1325,7 @@ const EmployeeDetailModal = ({ employee, onClose, date, avatarTimestamp }) => {
                                                 onClick={() => setPreviewImage(s.outImage)}
                                                 className="relative aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border shadow-sm group active:scale-95 transition-all"
                                             >
-                                                <img src={s.outImage} className="w-full h-full object-cover" />
+                                                <img src={s.outImage} className="w-full h-full object-contain" />
                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <Camera size={16} className="text-white" />
                                                 </div>
@@ -1647,7 +1647,7 @@ const MobileClusterDrawer = ({ selectedCluster, onClose, avatarTimestamp }) => {
                                                 </div>
                                                 {selectedUser.session.inImage ? (
                                                     <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-36 bg-slate-100 dark:bg-github-dark-subtle mt-2">
-                                                        <img src={selectedUser.session.inImage} className="w-full h-full object-cover" />
+                                                        <img src={selectedUser.session.inImage} className="w-full h-full object-contain" />
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col items-center justify-center py-4 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
@@ -1668,7 +1668,7 @@ const MobileClusterDrawer = ({ selectedCluster, onClose, avatarTimestamp }) => {
                                                 </div>
                                                 {selectedUser.session.outImage ? (
                                                     <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-36 bg-slate-100 dark:bg-github-dark-subtle mt-2">
-                                                        <img src={selectedUser.session.outImage} className="w-full h-full object-cover" />
+                                                        <img src={selectedUser.session.outImage} className="w-full h-full object-contain" />
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col items-center justify-center py-4 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
@@ -1699,7 +1699,7 @@ const MobileClusterDrawer = ({ selectedCluster, onClose, avatarTimestamp }) => {
                                             </div>
                                             { (selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage) ? (
                                                 <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-48 bg-slate-100 dark:bg-github-dark-subtle mt-2">
-                                                    <img src={selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage} className="w-full h-full object-cover" />
+                                                    <img src={selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage} className="w-full h-full object-contain" />
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col items-center justify-center py-6 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-2xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
