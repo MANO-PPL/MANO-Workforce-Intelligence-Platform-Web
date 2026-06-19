@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../context/AuthContext";
@@ -10,6 +10,7 @@ const MobileLoginPage = () => {
     const isCaptchaEnabled = String(import.meta.env.VITE_ENABLE_CAPTCHA).toLowerCase().trim() !== 'false';
     const { login } = useAuth();
     const navigate = useNavigate();
+    const recaptchaRef = useRef(null);
     const [formData, setFormData] = useState({ identifier: "", password: "" });
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -56,6 +57,10 @@ const MobileLoginPage = () => {
         } catch (err) {
             const errorMessage = err.response?.data?.message || "Authentication Failed";
             toast.error(errorMessage);
+            if (recaptchaRef.current) {
+                recaptchaRef.current.reset();
+            }
+            setCaptchaToken(null);
         } finally {
             setLoading(false);
         }
@@ -226,6 +231,7 @@ const MobileLoginPage = () => {
                         {isCaptchaEnabled && import.meta.env.VITE_RECAPTCHA_SITE_KEY && (
                             <div className="flex justify-center scale-[0.8] -my-2 transform transition-all opacity-90">
                                 <ReCAPTCHA
+                                    ref={recaptchaRef}
                                     sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
                                     onChange={setCaptchaToken}
                                     theme={isDark ? "dark" : "light"}
