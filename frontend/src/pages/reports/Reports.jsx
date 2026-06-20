@@ -28,7 +28,8 @@ import {
     MapPin,
     TrendingUp,
     History,
-    X
+    X,
+    XCircle
 } from 'lucide-react';
 
 import { adminService } from '../../services/adminService';
@@ -451,6 +452,7 @@ const Reports = () => {
     const [isHistorySidebarOpen, setIsHistorySidebarOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [isDetailSidebarOpen, setIsDetailSidebarOpen] = useState(false);
+    const [previewImage, setPreviewImage] = useState(null);
     const [hoveredRecord, setHoveredRecord] = useState(null);
     const [hoveredPosition, setHoveredPosition] = useState({ top: 0, left: 0 });
 
@@ -916,7 +918,7 @@ const Reports = () => {
 
     return (
         <DashboardLayout title="Reports & Exports" noPadding={true}>
-            <div className="h-[calc(100vh-64px)] p-4 flex flex-col overflow-hidden space-y-4">
+            <div className="min-h-[calc(100vh-64px)] p-4 flex flex-col space-y-4">
                 {/* Switcher & Parallel Filters Row (Tabs are kept below the header) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
                     {/* View Switcher Tabs */}
@@ -1418,7 +1420,7 @@ const Reports = () => {
                             <p className="text-slate-500 text-sm font-medium">Crunching and parsing preview records...</p>
                         </div>
                     ) : (matrixData.employees && matrixData.employees.length > 0) ? (
-                        <div className="flex-1 min-h-0 w-full overflow-auto no-scrollbar rounded-xl border border-slate-200 dark:border-github-dark-border bg-white dark:bg-dark-card shadow-sm animate-none" style={{ isolation: 'isolate' }}>
+                        <div className="w-full overflow-x-auto no-scrollbar rounded-xl border border-slate-200 dark:border-github-dark-border bg-white dark:bg-dark-card shadow-sm animate-none" style={{ isolation: 'isolate' }}>
                             <table className="w-full text-left border-collapse" style={{ minWidth: 'max-content' }}>
                                 <thead className="sticky top-0 z-30">
                                     <tr className="bg-slate-50 dark:bg-[#161b22] border-b border-slate-200 dark:border-github-dark-border">
@@ -1500,7 +1502,7 @@ const Reports = () => {
                     )
                 ) : (
                     /* Full Report View: Render Spreadsheet table inside the Card layout */
-                    <div className="flex-1 min-h-0 flex flex-col bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden">
+                    <div className="w-full flex flex-col bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden">
                         {/* Card Header */}
                         <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/10 flex justify-between items-center shrink-0">
                             <div>
@@ -1531,7 +1533,7 @@ const Reports = () => {
                         </div>
 
                         {/* Preview Body */}
-                        <div className="flex-1 min-h-0 no-scrollbar bg-slate-100 dark:bg-github-dark-bg border-t border-slate-200 dark:border-github-dark-border overflow-auto px-4 pb-4 pt-0">
+                        <div className="w-full no-scrollbar bg-slate-100 dark:bg-github-dark-bg border-t border-slate-200 dark:border-github-dark-border overflow-x-auto px-4 pb-4 pt-4">
                             {loadingPreview ? (
                                 <div className="flex flex-col items-center justify-center py-24 gap-4">
                                     <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
@@ -1881,16 +1883,23 @@ const Reports = () => {
                                                             { label: 'In', img: selectedRecord.time_in_image, color: 'text-emerald-600 dark:text-emerald-400' },
                                                             { label: 'Out', img: selectedRecord.time_out_image, color: 'text-rose-600 dark:text-rose-400' }
                                                         ].map((item, i) => (
-                                                            <div key={i} className="relative rounded-xl border border-slate-200 dark:border-github-dark-border overflow-hidden bg-slate-100 dark:bg-github-dark-subtle shadow-sm flex flex-col">
+                                                            <div key={i} className="flex flex-col">
                                                                 {item.img ? (
-                                                                    <img src={item.img} alt={`${item.label} Selfie`} className="w-full h-28 object-contain" />
+                                                                    <div className="flex justify-center w-full mt-2">
+                                                                        <div className="relative rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border group/img cursor-pointer shadow-sm bg-transparent" onClick={() => setPreviewImage(item.img)}>
+                                                                            <img src={item.img} alt={`${item.label} Selfie`} className="max-h-48 max-w-full w-auto block object-contain transition-transform duration-500 group-hover/img:scale-110" />
+                                                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                                                                <Search size={16} className="text-white" />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
                                                                 ) : (
-                                                                    <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-white dark:bg-dark-card">
-                                                                        <div className="text-xl opacity-20">📷</div>
-                                                                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">No photo</span>
+                                                                    <div className="w-full h-28 rounded-xl bg-slate-50 dark:bg-github-dark-subtle/20 border border-dashed border-slate-200 dark:border-github-dark-border flex flex-col items-center justify-center gap-1">
+                                                                        <XCircle size={14} className="text-slate-350" />
+                                                                        <span className="text-[9px] text-slate-400 font-medium">No Selfie {item.label}</span>
                                                                     </div>
                                                                 )}
-                                                                <span className={`text-[9px] font-black uppercase tracking-wider text-center py-1.5 bg-white dark:bg-dark-card border-t border-slate-100 dark:border-github-dark-border ${item.color}`}>
+                                                                <span className={`text-[9px] font-black uppercase tracking-wider text-center mt-2.5 ${item.color}`}>
                                                                     Punch {item.label}
                                                                 </span>
                                                             </div>
@@ -2023,6 +2032,36 @@ const Reports = () => {
                     </div>
                 )}
             </div>
+
+            {/* Image Preview Lightbox */}
+            {previewImage && createPortal(
+                <AnimatePresence>
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4"
+                        onClick={() => setPreviewImage(null)}
+                    >
+                        <button
+                            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+                            onClick={() => setPreviewImage(null)}
+                        >
+                            <XCircle size={32} />
+                        </button>
+                        <motion.img
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            src={previewImage}
+                            alt="Selfie Preview"
+                            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </motion.div>
+                </AnimatePresence>,
+                document.body
+            )}
         </DashboardLayout>
     );
 };
