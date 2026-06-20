@@ -345,7 +345,6 @@ html.platform-zoomed .space-y-8 > * + * {
     color: #60a5fa !important;
 }
 
-<<<<<<< HEAD
 /* ===== Print Layout Styles for HR Document Studio ===== */
 @media print {
   /* Hide standard screen container elements completely */
@@ -375,6 +374,7 @@ html.platform-zoomed .space-y-8 > * + * {
     size: A4 portrait;
     margin: 0;
   }
+}
 
 /* Custom premium overrides to position top-right toast at the extreme right */
 .Toastify__toast-container--top-right {

@@ -79,21 +79,14 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
         work_location: ''
     });
 
-<<<<<<< HEAD
-    const [departments, setDepartments] = useState([]);
-    const [designations, setDesignations] = useState([]);
-    const [shifts, setShifts] = useState([]);
-    const [availableLocations, setAvailableLocations] = useState([]);
-    const [orgUsers, setOrgUsers] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-=======
     const [departments, setDepartments] = useState(() => adminCacheData.departments?.departments || []);
     const [designations, setDesignations] = useState(() => adminCacheData.designations?.designations || []);
     const [shifts, setShifts] = useState(() => adminCacheData.shifts?.shifts || []);
+    const [availableLocations, setAvailableLocations] = useState([]);
+    const [orgUsers, setOrgUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(() => {
         return !(adminCacheData.departments && adminCacheData.designations && adminCacheData.shifts);
     });
->>>>>>> origin/main
     const [isSaving, setIsSaving] = useState(false);
     const [activePopover, setActivePopover] = useState(null);
     const [errors, setErrors] = useState({});
@@ -179,13 +172,9 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
 
                 if (deptRes.success) setDepartments(deptRes.departments);
                 if (desgRes.success) setDesignations(desgRes.designations);
-<<<<<<< HEAD
-                if (shiftRes.success) setShifts(shiftRes.shifts);
+                if (shiftRes.success || shiftRes.ok) setShifts(shiftRes.shifts || []);
                 if (locRes.ok) setAvailableLocations(locRes.locations || []);
                 if (usersRes.success) setOrgUsers(usersRes.users || []);
-=======
-                if (shiftRes.success || shiftRes.ok) setShifts(shiftRes.shifts || []);
->>>>>>> origin/main
 
                 if (isEditMode) {
                     const userRes = await adminService.getUserById(userId);
@@ -696,7 +685,6 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                                     )}
                                 </div>
 
-<<<<<<< HEAD
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Joining Date</label>
                                     <input
@@ -741,7 +729,6 @@ const EmployeeFormContent = ({ userId, onSuccess, onCancel, isSidebarMode = fals
                                     </div>
                                 </div>
 
-                                <div className="space-y-1.5">
                                 <div className="space-y-1.5 relative" ref={shiftContainerRef}>
                                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Shift Time</label>
                                     <button
