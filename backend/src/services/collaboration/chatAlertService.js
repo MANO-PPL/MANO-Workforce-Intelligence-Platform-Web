@@ -1,52 +1,109 @@
 import { attendanceDB } from '../../config/database.js';
 import { encryptText, decryptText } from '../../utils/encryption.js';
 import EventBus from '../../utils/EventBus.js';
+import { getFileUrl } from '../s3/s3Service.js';
+
+// Helper to parse system card and sign its attachments
+const signSystemCardAttachments = async (messageText) => {
+    if (!messageText || !messageText.startsWith("[SYSTEM_CARD:")) return messageText;
+    const closeBracketIdx = messageText.indexOf("]");
+    if (closeBracketIdx === -1) return messageText;
+
+    const header = messageText.substring(0, closeBracketIdx + 1);
+    const body = messageText.substring(closeBracketIdx + 1).trim();
+    try {
+        const payload = JSON.parse(body);
+        if (payload && Array.isArray(payload.attachments)) {
+            const signedAttachments = [];
+            for (const att of payload.attachments) {
+                let key = null;
+                if (att.url) {
+                    try {
+                        const parsed = new URL(att.url);
+                        if (parsed.hostname.includes('s3.amazonaws.com') || parsed.hostname.includes('.s3.')) {
+                            key = decodeURIComponent(parsed.pathname.substring(1));
+                        }
+                    } catch (e) {
+                        // Ignore
+                    }
+                }
+                if (key) {
+                    try {
+                        const signedRes = await getFileUrl({ key });
+                        if (signedRes.success) {
+                            signedAttachments.push({ ...att, url: signedRes.url });
+                            continue;
+                        }
+                    } catch (err) {
+                        console.error("Error signing S3 key for system card:", key, err);
+                    }
+                }
+                signedAttachments.push(att);
+            }
+            payload.attachments = signedAttachments;
+            return `${header} ${JSON.stringify(payload)}`;
+        }
+    } catch (e) {
+        // Ignore JSON parsing errors for legacy text fallback
+    }
+    return messageText;
+};
 
 /**
  * Helper to get or create a direct chat room between two users
  */
 async function getOrCreateDM(orgId, userA, userB) {
     const finalOrgId = orgId || 1;
-    const allRooms = await attendanceDB('chat_rooms')
-        .where({ room_type: 'direct', org_id: finalOrgId });
 
-    let room = allRooms.find(r => {
-        try {
-            const ids = typeof r.member_ids === 'string' ? JSON.parse(r.member_ids) : r.member_ids;
-            return Array.isArray(ids) &&
-                   ids.map(Number).includes(Number(userA)) &&
-                   ids.map(Number).includes(Number(userB));
-        } catch (e) {
-            return false;
-        }
-    });
+    // Find if a DM conversation exists
+    const userAConversations = await attendanceDB('chat_conversation_members')
+        .where({ org_id: finalOrgId, user_id: userA })
+        .select('conversation_id');
 
-    if (room) {
-        let existingMessages = [];
-        try {
-            const decrypted = decryptText(room.messages);
-            existingMessages = typeof decrypted === 'string' ? JSON.parse(decrypted || '[]') : (decrypted || []);
-        } catch (e) {
-            existingMessages = [];
+    const userAConvIds = userAConversations.map(c => c.conversation_id);
+
+    if (userAConvIds.length > 0) {
+        const existingDM = await attendanceDB('chat_conversations')
+            .join('chat_conversation_members', 'chat_conversations.id', 'chat_conversation_members.conversation_id')
+            .where({
+                'chat_conversations.org_id': finalOrgId,
+                'chat_conversations.type': 'dm',
+                'chat_conversation_members.user_id': userB
+            })
+            .whereIn('chat_conversations.id', userAConvIds)
+            .select('chat_conversations.id')
+            .first();
+
+        if (existingDM) {
+            return existingDM.id;
         }
-        return { roomId: room.room_id, existingMessages };
     }
 
     // Create a new direct chat room between the two users
-    const memberIds = [Number(userA), Number(userB)].sort((a, b) => a - b);
-    const [insertedId] = await attendanceDB('chat_rooms').insert({
-        org_id: finalOrgId,
-        room_name: null,
-        room_type: 'direct',
-        created_by: userA,
-        member_ids: JSON.stringify(memberIds),
-        messages: encryptText(JSON.stringify([])),
-        last_read_times: JSON.stringify({}),
-        created_at: attendanceDB.fn.now(),
-        updated_at: attendanceDB.fn.now()
+    let newRoomId = null;
+
+    await attendanceDB.transaction(async (trx) => {
+        const [insertedId] = await trx('chat_conversations').insert({
+            org_id: finalOrgId,
+            type: 'dm',
+            name: null,
+            created_by: userA,
+            created_at: trx.fn.now(),
+            updated_at: trx.fn.now()
+        });
+
+        newRoomId = insertedId;
+
+        // Add both users as members
+        const memberRows = [
+            { org_id: finalOrgId, conversation_id: insertedId, user_id: Number(userA), role: 'owner', joined_at: trx.fn.now() },
+            { org_id: finalOrgId, conversation_id: insertedId, user_id: Number(userB), role: 'member', joined_at: trx.fn.now() }
+        ];
+
+        await trx('chat_conversation_members').insert(memberRows);
     });
 
-    return { roomId: insertedId, existingMessages: [] };
+    return newRoomId;
 }
 
 /**
@@ -55,24 +112,36 @@ async function getOrCreateDM(orgId, userA, userB) {
 export async function sendSystemAlert({ org_id, sender_id, recipient_id, card_type, entity_id, status, payload, io }) {
     try {
         const finalOrgId = org_id || 1;
-        const { roomId, existingMessages } = await getOrCreateDM(finalOrgId, sender_id, recipient_id);
+        const roomId = await getOrCreateDM(finalOrgId, sender_id, recipient_id);
 
         // Format system payload message as JSON
         const messageText = `[SYSTEM_CARD:${card_type}:${entity_id}:${status}] ${JSON.stringify(payload)}`;
 
         const messageId = Date.now() + Math.floor(Math.random() * 1000);
-        const newMsg = {
-            message_id: messageId,
-            sender_id: Number(sender_id),
-            message_text: messageText,
-            created_at: new Date().toISOString()
-        };
 
-        const updatedMessages = [...existingMessages, newMsg];
-        await attendanceDB('chat_rooms')
-            .where({ room_id: roomId })
+        // Insert message
+        await attendanceDB('chat_messages').insert({
+            id: messageId,
+            org_id: finalOrgId,
+            conversation_id: roomId,
+            sender_id: Number(sender_id),
+            type: 'workflow_card',
+            content: encryptText(messageText),
+            metadata_json: JSON.stringify({
+                card_type,
+                entity_id,
+                status,
+                ...payload
+            }),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        });
+
+        // Update conversation last_message_id
+        await attendanceDB('chat_conversations')
+            .where({ org_id: finalOrgId, id: roomId })
             .update({
-                messages: encryptText(JSON.stringify(updatedMessages)),
+                last_message_id: messageId,
                 updated_at: attendanceDB.fn.now()
             });
 
@@ -83,17 +152,21 @@ export async function sendSystemAlert({ org_id, sender_id, recipient_id, card_ty
                 .select('user_name', 'profile_image_url')
                 .first();
 
+            const signedMessageText = await signSystemCardAttachments(messageText);
+
             const formattedResponseMsg = {
                 message_id: messageId,
                 room_id: Number(roomId),
                 sender_id: Number(sender_id),
-                message_text: messageText,
-                created_at: newMsg.created_at,
+                message_text: signedMessageText,
+                created_at: new Date().toISOString(),
                 user_name: sender ? sender.user_name : 'System Alert',
                 profile_image_url: sender ? sender.profile_image_url : null
             };
 
-            io.to(`room_${roomId}`).emit('message_received', formattedResponseMsg);
+            // Emit to namespaced room channel
+            io.to(`org_${finalOrgId}:conversation_${roomId}`).emit('message_received', formattedResponseMsg);
+
             io.to(`user_${sender_id}`).emit('room_updated', { room_id: roomId });
             io.to(`user_${recipient_id}`).emit('room_updated', { room_id: roomId });
         }

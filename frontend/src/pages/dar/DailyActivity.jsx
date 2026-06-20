@@ -250,30 +250,26 @@ const DailyActivity = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 {/* Admin Tabs */}
                 {['admin', 'hr'].includes(user?.user_type) ? (
-                    <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
+                    <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
                         <button
                             onClick={() => setActiveMainTab('daily_activity')}
-                            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeMainTab === 'daily_activity'
-                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeMainTab === 'daily_activity'
+                                ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
                                 : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                                 }`}
                         >
-                            <div className="flex items-center gap-2">
-                                <Calendar size={18} />
-                                Daily Activity
-                            </div>
+                            <Calendar size={15} className={`${activeMainTab === 'daily_activity' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                            <span className="leading-none">Daily Activity</span>
                         </button>
                         <button
                             onClick={() => setActiveMainTab('admin')}
-                            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeMainTab === 'admin'
-                                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeMainTab === 'admin'
+                                ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
                                 : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                                 }`}
                         >
-                            <div className="flex items-center gap-2">
-                                <Shield size={18} />
-                                Admin Panel
-                            </div>
+                            <Shield size={15} className={`${activeMainTab === 'admin' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                            <span className="leading-none">Admin Panel</span>
                         </button>
                     </div>
                 ) : <div />}

@@ -6,17 +6,17 @@ import * as S3Service from '../services/s3/s3Service.js';
 import EventBus from '../utils/EventBus.js';
 
 const reportWorker = new Worker('{ReportQueue}', async (job) => {
-    const { reportId, org_id, user_id, targetUserId, month, date, type, format } = job.data;
+    const { reportId, org_id, user_id, targetUserId, month, date, type, format, startDate, endDate, columns } = job.data;
     console.log(`👷 [Worker] Processing report job #${reportId} for Org ${org_id}...`);
 
     // 1. Update database status to 'processing'
-    await attendanceDB('generated_reports')
+    await attendanceDB('sys_generated_reports')
         .where({ report_id: reportId })
         .update({ status: 'processing', updated_at: attendanceDB.fn.now() });
 
     try {
         // 2. Generate the report buffer asynchronously
-        const fileBuffer = await compileReportBuffer({ org_id, targetUserId, month, date, type, format });
+        const fileBuffer = await compileReportBuffer({ org_id, targetUserId, month, date, type, format, startDate, endDate, columns });
 
         // 3. Define content type & S3 directory details
         const contentType = format === 'pdf' 
@@ -45,7 +45,7 @@ const reportWorker = new Worker('{ReportQueue}', async (job) => {
         });
 
         // 6. Update Database tracking row as completed
-        await attendanceDB('generated_reports')
+        await attendanceDB('sys_generated_reports')
             .where({ report_id: reportId })
             .update({
                 status: 'completed',
@@ -70,7 +70,7 @@ const reportWorker = new Worker('{ReportQueue}', async (job) => {
         console.error(`❌ [Worker] Error generating report job #${reportId}:`, err);
 
         // Update database tracking row as failed
-        await attendanceDB('generated_reports')
+        await attendanceDB('sys_generated_reports')
             .where({ report_id: reportId })
             .update({
                 status: 'failed',

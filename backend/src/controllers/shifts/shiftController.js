@@ -6,7 +6,7 @@ import { notifyShiftAssigned } from '../../services/collaboration/chatAlertServi
 export const getShifts = catchAsync(async (req, res) => {
     const { org_id } = req.user;
     const shifts = await ShiftService.getShiftsForOrg(org_id);
-    res.json({ ok: true, shifts });
+    res.json({ ok: true, success: true, shifts });
 });
 
 export const createShift = catchAsync(async (req, res) => {

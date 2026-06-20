@@ -6,12 +6,14 @@ import app from './src/app.js';
 import { initAttendanceProcessor } from './src/cron/AttendanceProcessor.js';
 import { initCleanupScheduler } from './src/cron/cleanupScheduler.js';
 import { initDARReportScheduler } from './src/cron/DARReportScheduler.js';
-import { initDatabase } from './src/config/databaseInit.js';
+
 import { sendPushNotification } from './src/services/notifications/fcmService.js';
 import EventBus from './src/utils/EventBus.js';
+import { attendanceDB } from './src/config/database.js';
 import './src/workers/reportWorker.js';
 import fs from 'fs';
 import { getLogPaths, parseLogLine } from './src/services/superAdmin/pm2Service.js';
+import { cacheService } from './src/services/cache/cacheService.js';
 
 const PORT = Number(process.env.PORT) || 5003;
 
@@ -89,26 +91,38 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   const userId = socket.user?.user_id ?? socket.user?.id;
+  const orgId = socket.user?.org_id || 1;
   
   if (userId) {
     // Join personal notification channel
     socket.join(`user_${userId}`);
+    
+    // Presence tracking: Set presence key in Redis with 60s TTL
+    if (cacheService) {
+      cacheService.set(`org:${orgId}:user:presence:${userId}`, 'online', 60);
+    }
   }
 
+  socket.on('heartbeat', () => {
+    if (userId && cacheService) {
+      cacheService.set(`org:${orgId}:user:presence:${userId}`, 'online', 60);
+    }
+  });
+
   socket.on('join_room', (roomId) => {
-    socket.join(`room_${roomId}`);
+    socket.join(`org_${orgId}:conversation_${roomId}`);
   });
 
   socket.on('leave_room', (roomId) => {
-    socket.leave(`room_${roomId}`);
+    socket.leave(`org_${orgId}:conversation_${roomId}`);
   });
 
   socket.on('typing', ({ roomId, username }) => {
-    socket.to(`room_${roomId}`).emit('user_typing', { roomId, userId, username });
+    socket.to(`org_${orgId}:conversation_${roomId}`).emit('user_typing', { roomId, userId, username });
   });
 
   socket.on('stop_typing', ({ roomId }) => {
-    socket.to(`room_${roomId}`).emit('user_stop_typing', { roomId, userId });
+    socket.to(`org_${orgId}:conversation_${roomId}`).emit('user_stop_typing', { roomId, userId });
   });
 
   socket.on('subscribe_pm2_logs', () => {
@@ -124,13 +138,46 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', (reason) => {
-    // Socket disconnected
+    if (userId && cacheService) {
+      cacheService.del(`org:${orgId}:user:presence:${userId}`);
+    }
   });
 });
 
 // Listen to the EventBus saved notifications and push real-time alerts
-EventBus.on('notification_saved', (notification) => {
-  io.to(`user_${notification.user_id}`).emit('new-notification', notification);
+EventBus.on('notification_saved', async (notification) => {
+  let enrichedNotification = { ...notification };
+  const isChat = notification.type === 'CHAT' || notification.type === 'CHAT_MESSAGE' || notification.related_entity_type === 'CHAT_MESSAGE';
+
+  if (isChat) {
+    enrichedNotification.type = 'CHAT';
+  }
+
+  if (isChat && notification.related_entity_id) {
+    try {
+      const room = await attendanceDB('chat_conversations')
+        .where('id', notification.related_entity_id)
+        .first();
+      if (room && room.last_message_id) {
+        const lastMsg = await attendanceDB('chat_messages')
+          .where('id', room.last_message_id)
+          .first();
+        if (lastMsg) {
+          const sender = await attendanceDB('users')
+            .where('user_id', lastMsg.sender_id)
+            .select('profile_image_url')
+            .first();
+          if (sender && sender.profile_image_url) {
+            enrichedNotification.sender_avatar = sender.profile_image_url;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error enriching notification with sender avatar:', e);
+    }
+  }
+
+  io.to(`user_${notification.user_id}`).emit('new-notification', enrichedNotification);
   console.log(`📡 Real-time notification push sent to user_${notification.user_id} for alert #${notification.notification_id}`);
   
   // Trigger FCM push notification to user's registered devices
@@ -140,7 +187,10 @@ EventBus.on('notification_saved', (notification) => {
     notification.message,
     {
       notification_id: String(notification.notification_id || ''),
-      type: String(notification.type || 'INFO'),
+      type: isChat ? 'CHAT' : String(notification.type || 'INFO'),
+      related_entity_type: String(notification.related_entity_type || ''),
+      related_entity_id: String(notification.related_entity_id || ''),
+      sender_avatar: String(enrichedNotification.sender_avatar || '')
     }
   );
 });
@@ -204,8 +254,7 @@ function startLogTailing(ioInstance) {
 server.listen(activePort, '0.0.0.0', () => {
   console.log(`Backend server listening at http://0.0.0.0:${activePort}`);
 
-  // Auto-initialize database tables if needed
-  initDatabase();
+
 
   if (!hasStartedSchedulers) {
     hasStartedSchedulers = true;

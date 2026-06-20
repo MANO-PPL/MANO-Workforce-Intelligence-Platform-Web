@@ -384,7 +384,7 @@ const BulkUpload = () => {
                                     <h5 className="text-[10px] text-slate-400 dark:text-slate-400 uppercase font-black tracking-widest mb-3">Departments Found ({uniqueDepts.length})</h5>
                                     <div className="flex flex-wrap gap-2">
                                         {uniqueDepts.map((d, i) => (
-                                            <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-150 dark:border-github-dark-border rounded-lg text-slate-700 dark:text-slate-300">
+                                            <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg text-slate-700 dark:text-slate-300">
                                                 {d}
                                             </span>
                                         ))}
@@ -394,7 +394,7 @@ const BulkUpload = () => {
                                     <h5 className="text-[10px] text-slate-400 dark:text-slate-400 uppercase font-black tracking-widest mb-3">Designations Found ({uniqueDesgs.length})</h5>
                                     <div className="flex flex-wrap gap-2">
                                         {uniqueDesgs.map((d, i) => (
-                                            <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-150 dark:border-github-dark-border rounded-lg text-slate-700 dark:text-slate-300">
+                                            <span key={i} className="px-2.5 py-1 text-xs font-semibold bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg text-slate-700 dark:text-slate-300">
                                                 {d}
                                             </span>
                                         ))}
@@ -432,7 +432,7 @@ const BulkUpload = () => {
                         <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-md shadow-emerald-500/10">
                             <CheckCircle size={38} strokeWidth={1.8} />
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-850 dark:text-github-dark-text mb-2">Upload Completed!</h2>
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-github-dark-text mb-2">Upload Completed!</h2>
                         <p className="text-slate-400 text-sm mb-8 max-w-sm mx-auto">
                             The uploaded CSV list has been parsed and integrated successfully. See details below.
                         </p>
@@ -440,7 +440,7 @@ const BulkUpload = () => {
                         <div className="grid grid-cols-3 gap-4 mb-8">
                             <div className="bg-slate-50/40 dark:bg-github-dark-subtle/20 border border-slate-100 dark:border-github-dark-border p-4.5 rounded-2xl">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Processed</span>
-                                <span className="text-2xl font-extrabold text-slate-850 dark:text-github-dark-text">{uploadReport?.total_processed || 0}</span>
+                                <span className="text-2xl font-extrabold text-slate-800 dark:text-github-dark-text">{uploadReport?.total_processed || 0}</span>
                             </div>
                             <div className="bg-slate-50/40 dark:bg-[#161b22]/20 border border-slate-100 dark:border-github-dark-border p-4.5 rounded-2xl">
                                 <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest block mb-1">Success</span>
@@ -493,7 +493,7 @@ const BulkUpload = () => {
 
                         {/* Generic Errors (Backend) */}
                         {uploadReport?.errors?.length > 0 && (
-                            <div className="mb-8 bg-red-50 dark:bg-red-950/10 border border-red-150 dark:border-red-900/20 p-4 rounded-2xl text-left overflow-auto max-h-40">
+                            <div className="mb-8 bg-red-50 dark:bg-red-950/10 border border-red-200 dark:border-red-900/20 p-4 rounded-2xl text-left overflow-auto max-h-40">
                                 <h4 className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wide mb-2">Detailed Errors:</h4>
                                 <ul className="list-disc list-inside text-xs text-red-600 dark:text-red-300 space-y-1">
                                     {uploadReport.errors.map((err, i) => (
@@ -506,7 +506,7 @@ const BulkUpload = () => {
                         <div className="flex justify-center gap-3">
                             <button
                                 onClick={() => navigate('/employees')}
-                                className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-github-dark-subtle/50 dark:hover:bg-github-dark-subtle text-slate-700 dark:text-github-dark-text text-sm font-bold rounded-xl border border-slate-150 dark:border-github-dark-border transition-colors active:scale-95"
+                                className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-github-dark-subtle/50 dark:hover:bg-github-dark-subtle text-slate-700 dark:text-github-dark-text text-sm font-bold rounded-xl border border-slate-200 dark:border-github-dark-border transition-colors active:scale-95"
                             >
                                 View Employee List
                             </button>

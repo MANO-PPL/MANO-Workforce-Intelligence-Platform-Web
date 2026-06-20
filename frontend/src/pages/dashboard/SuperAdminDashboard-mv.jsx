@@ -1,22 +1,81 @@
 import React, { useState, useEffect } from 'react';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
-import { Users, Building, MessageSquare, Briefcase, FileText, ShieldAlert, Clock, ChevronRight, Activity } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Users, Building, MessageSquare, Briefcase, FileText, ShieldAlert, Clock, ChevronRight, Activity, MapPin, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
+// Global memory cache for Super Admin dashboard data, surviving page navigations
+const superAdminCache = {
+  stats: null,
+  feedback: null,
+  alerts: null
+};
+
 const SuperAdminDashboardMobile = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState(() => superAdminCache.stats || {
     totalOrgs: 0,
     totalUsers: 0,
     pendingFeedback: 0,
     openAlerts: 0,
   });
-  const [recentFeedback, setRecentFeedback] = useState([]);
-  const [recentAlerts, setRecentAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [feedbackLoading, setFeedbackLoading] = useState(true);
-  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [recentFeedback, setRecentFeedback] = useState(() => superAdminCache.feedback || []);
+  const [recentAlerts, setRecentAlerts] = useState(() => superAdminCache.alerts || []);
+  const [loading, setLoading] = useState(() => !superAdminCache.stats);
+  const [feedbackLoading, setFeedbackLoading] = useState(() => !superAdminCache.feedback);
+  const [alertsLoading, setAlertsLoading] = useState(() => !superAdminCache.alerts);
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [location, setLocation] = useState({ lat: null, lng: null, address: 'Fetching location...', error: null });
+  const [isLoadingLoc, setIsLoadingLoc] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    
+    let watchId;
+    const startWatch = (highAccuracy = true) => {
+        if (!navigator.geolocation) return;
+        setIsLoadingLoc(true);
+        watchId = navigator.geolocation.watchPosition(
+            async (pos) => {
+                const { latitude, longitude } = pos.coords;
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    const data = await res.json();
+                    setLocation({
+                        lat: latitude,
+                        lng: longitude,
+                        address: data.display_name?.split(',')[0] || 'Unknown Location',
+                        error: null
+                    });
+                } catch (err) {
+                    setLocation({ lat: latitude, lng: longitude, address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, error: null });
+                } finally {
+                    setIsLoadingLoc(false);
+                }
+            },
+            (err) => {
+                console.warn(`watchPosition failed in superadmin:`, err);
+                if (highAccuracy && (err.code === 3 || err.code === 1)) {
+                    if (watchId) navigator.geolocation.clearWatch(watchId);
+                    startWatch(false);
+                } else {
+                    setLocation(prev => ({ ...prev, error: err.message, address: 'Location Access Denied' }));
+                    setIsLoadingLoc(false);
+                }
+            },
+            { enableHighAccuracy: highAccuracy, timeout: 15000, maximumAge: 30000 }
+        );
+    };
+
+    startWatch(true);
+
+    return () => {
+        clearInterval(timer);
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+    };
+  }, []);
 
   useEffect(() => {
     fetchStats();
@@ -26,10 +85,13 @@ const SuperAdminDashboardMobile = () => {
 
   const fetchStats = async () => {
     try {
-      setLoading(true);
+      if (!superAdminCache.stats) {
+        setLoading(true);
+      }
       const res = await api.get('/super-admin/dashboard-stats');
       if (res.data.success) {
         setStats(res.data.data);
+        superAdminCache.stats = res.data.data;
       }
     } catch (err) {
       console.error('Failed to fetch super admin stats:', err);
@@ -40,11 +102,14 @@ const SuperAdminDashboardMobile = () => {
 
   const fetchRecentFeedback = async () => {
     try {
-      setFeedbackLoading(true);
+      if (!superAdminCache.feedback) {
+        setFeedbackLoading(true);
+      }
       const res = await api.get('/super-admin/monitor/feedback');
       const all = Array.isArray(res.data.data) ? res.data.data : [];
       const pending = all.filter(f => !f.status || ['pending', 'open', ''].includes(f.status.toLowerCase())).slice(0, 5);
       setRecentFeedback(pending);
+      superAdminCache.feedback = pending;
     } catch (err) {
       console.error('Failed to fetch feedback:', err);
     } finally {
@@ -54,11 +119,14 @@ const SuperAdminDashboardMobile = () => {
 
   const fetchRecentAlerts = async () => {
     try {
-      setAlertsLoading(true);
+      if (!superAdminCache.alerts) {
+        setAlertsLoading(true);
+      }
       const res = await api.get('/super-admin/monitor/alerts');
       const all = Array.isArray(res.data.data) ? res.data.data : [];
       const open = all.filter(a => a.status && ['open', 'unseen'].includes(a.status.toLowerCase())).slice(0, 5);
       setRecentAlerts(open);
+      superAdminCache.alerts = open;
     } catch (err) {
       console.error('Failed to fetch alerts:', err);
     } finally {
@@ -70,19 +138,60 @@ const SuperAdminDashboardMobile = () => {
     <MobileDashboardLayout title="Dashboard">
       <div className="space-y-5 pb-20">
 
-        {/* Welcome Section */}
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-github-dark-border bg-gradient-to-r from-amber-500/10 via-indigo-500/5 to-transparent dark:from-amber-500/5 dark:via-indigo-500/5 dark:to-transparent p-5 shadow-sm">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute bottom-0 left-1/3 w-20 h-20 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-          
-          <div className="relative z-10 space-y-1">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-github-dark-text tracking-tight">
-              Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-indigo-600 dark:from-amber-400 dark:to-indigo-400 font-extrabold uppercase">Super Admin</span>
-            </h2>
-            <p className="text-[11px] text-slate-500 dark:text-github-dark-muted leading-relaxed">
-              System metrics, organizations, audit logs, and global platform settings are available below.
-            </p>
-          </div>
+        {/* Premium Greetings Card */}
+        <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 dark:from-indigo-900/40 dark:via-indigo-950/40 dark:to-black rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            {/* Animated Background Blobs */}
+            <motion.div 
+                animate={{ 
+                    scale: [1, 1.2, 1],
+                    rotate: [0, 90, 0],
+                }}
+                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500/20 blur-3xl rounded-full pointer-events-none"
+            />
+            <motion.div 
+                animate={{ 
+                    scale: [1, 1.5, 1],
+                    x: [0, 50, 0],
+                }}
+                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                className="absolute -bottom-24 -left-24 w-80 h-80 bg-sky-500/10 blur-3xl rounded-full pointer-events-none"
+            />
+
+            <div className="relative z-10 space-y-1 mb-4">
+                <p className="text-indigo-100 text-sm font-medium opacity-90">
+                    Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'},
+                </p>
+                <h2 className="text-2xl font-bold tracking-tight">Super Admin</h2>
+                <p className="text-xs text-indigo-200 mt-1 flex items-center gap-1">
+                    <Briefcase size={12} />
+                    Platform Administrator
+                </p>
+            </div>
+
+            {/* Current Time / Location Widget */}
+            <div className="mt-5 bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex items-center justify-between text-white relative z-10">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center text-white shadow-inner">
+                        <Clock size={24} />
+                    </div>
+                    <div>
+                        <span className="block text-[10px] font-bold text-indigo-200 tracking-widest">Current Time</span>
+                        <span className="text-2xl font-black text-white font-mono">
+                            {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                        </span>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <span className="block text-[10px] font-bold text-indigo-200 tracking-widest mb-1">Location</span>
+                    <div className="flex items-center gap-1.5 text-white/90 font-bold text-xs bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+                        <MapPin size={12} className="text-indigo-300" />
+                        <span className="truncate max-w-[100px] inline-block align-middle" title={location.address}>
+                            {isLoadingLoc ? 'Locating...' : location.address}
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {/* Stats Grid */}

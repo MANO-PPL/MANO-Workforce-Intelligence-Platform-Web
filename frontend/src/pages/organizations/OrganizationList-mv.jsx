@@ -123,9 +123,9 @@ const OrgDetailModal = ({ org, onClose, onRefresh, listTab }) => {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="relative bg-white dark:bg-black w-full rounded-t-[2.5rem] p-6 shadow-2xl border-t border-slate-100 dark:border-slate-800 max-h-[92vh] overflow-y-auto no-scrollbar">
         {/* Drag Handle */}
-        <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-850 rounded-full mx-auto mb-6" />
+        <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto mb-6" />
 
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-650 dark:hover:text-white rounded-full bg-slate-50 dark:bg-white/5"><X size={18} /></button>
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-full bg-slate-50 dark:bg-white/5"><X size={18} /></button>
 
         {isEditing ? (
           <form onSubmit={handleSaveOrg} className="space-y-5">
@@ -237,7 +237,7 @@ const OrgDetailModal = ({ org, onClose, onRefresh, listTab }) => {
                             <input type="checkbox" checked={adminFormData.is_active} onChange={(e) => setAdminFormData({ ...adminFormData, is_active: e.target.checked })} /> Active Status
                           </label>
                           <div className="flex gap-2 pt-1">
-                            <button type="button" onClick={() => handleSaveAdmin(admin.user_id)} className="px-3 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider">Save</button>
+                            <button type="button" onClick={() => handleSaveAdmin(admin.user_id)} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider">Save</button>
                             <button type="button" onClick={() => setEditingAdminId(null)} className="px-3 py-1.5 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-github-dark-muted rounded-lg text-[10px] font-bold uppercase tracking-wider">Cancel</button>
                           </div>
                         </div>
@@ -284,7 +284,7 @@ const OrgDetailModal = ({ org, onClose, onRefresh, listTab }) => {
                         Reactivate
                       </button>
                     )}
-                    <button type="button" onClick={handleDelete} className="flex-1 py-3 bg-red-650 hover:bg-red-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-sm">
+                    <button type="button" onClick={handleDelete} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-sm">
                       <Trash2 size={12} /> Delete Org
                     </button>
                   </>
@@ -445,14 +445,14 @@ const OrganizationListMobile = () => {
                 onClick={() => setListTab('active')}
                 className={`flex-1 py-2.5 text-[11px] font-bold rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                   listTab === 'active'
-                    ? 'bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 transform scale-[1.02] shadow-sm'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02] shadow-sm'
                     : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
                 }`}
               >
                 <span>Active</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
                   listTab === 'active'
-                    ? 'bg-indigo-50 text-indigo-655 dark:bg-indigo-900/40 dark:text-indigo-300'
+                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300'
                     : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                 }`}>{activeOrgs.length}</span>
               </button>
@@ -462,14 +462,14 @@ const OrganizationListMobile = () => {
                 onClick={() => setListTab('deleted')}
                 className={`flex-1 py-2.5 text-[11px] font-bold rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                   listTab === 'deleted'
-                    ? 'bg-white dark:bg-slate-800 text-amber-650 dark:text-amber-400 transform scale-[1.02] shadow-sm'
+                    ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 transform scale-[1.02] shadow-sm'
                     : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
                 }`}
               >
                 <span>Deleted</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
                   listTab === 'deleted'
-                    ? 'bg-amber-50 text-amber-655 dark:bg-amber-900/40 dark:text-amber-300'
+                    ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300'
                     : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                 }`}>{pendingOrgs.length}</span>
               </button>
@@ -495,12 +495,12 @@ const OrganizationListMobile = () => {
                   <div className="absolute -right-4 -top-4 w-12 h-12 bg-indigo-500/5 blur-2xl rounded-full" />
                   
                   <div className="flex items-center gap-3.5 flex-1 min-w-0">
-                    <div className="w-11 h-11 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-650 dark:text-indigo-400 rounded-xl flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-500/10">
+                    <div className="w-11 h-11 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-500/10">
                       <Building size={18} />
                     </div>
                     
                     <div className="min-w-0">
-                      <h4 className="font-bold text-slate-850 dark:text-github-dark-text text-[13px] truncate">{org.org_name}</h4>
+                      <h4 className="font-bold text-slate-800 dark:text-github-dark-text text-[13px] truncate">{org.org_name}</h4>
                       <p className="text-[10px] text-slate-450 dark:text-github-dark-muted font-mono tracking-widest mt-0.5">CODE: {org.org_code}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[9px] font-bold text-slate-400 dark:text-github-dark-muted uppercase tracking-wider flex items-center gap-1">
@@ -531,7 +531,7 @@ const OrganizationListMobile = () => {
         {/* FAB */}
         <button
           onClick={() => setShowAddModal(true)}
-          className="fixed bottom-6 right-6 w-16 h-16 bg-indigo-650 hover:bg-indigo-700 text-white rounded-[2rem] shadow-2xl shadow-indigo-500/40 flex items-center justify-center active:scale-90 active:rotate-90 transition-all z-30 group"
+          className="fixed bottom-6 right-6 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2rem] shadow-2xl shadow-indigo-500/40 flex items-center justify-center active:scale-90 active:rotate-90 transition-all z-30 group"
         >
           <Plus size={28} className="group-hover:scale-110 transition-transform" />
           <div className="absolute -inset-2 bg-indigo-500/20 blur-xl rounded-full opacity-0 group-active:opacity-100 transition-opacity" />

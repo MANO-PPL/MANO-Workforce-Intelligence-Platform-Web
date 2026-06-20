@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Edit, Download, Trash2 } from 'lucide-react';
+import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Edit, Download, Trash2, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -29,6 +29,18 @@ const Profile = () => {
         confirmText: 'Confirm'
     });
     const [isDeletingAvatar, setIsDeletingAvatar] = useState(false);
+    const [chatbotVisible, setChatbotVisible] = useState(() => {
+        const saved = localStorage.getItem('mano_chatbot_visible');
+        return saved === null ? true : saved === 'true';
+    });
+
+    const toggleChatbot = () => {
+        setChatbotVisible(prev => {
+            const next = !prev;
+            localStorage.setItem('mano_chatbot_visible', String(next));
+            return next;
+        });
+    };
 
     // Fetch full profile data on mount
     useEffect(() => {
@@ -271,6 +283,41 @@ const Profile = () => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Preferences Card */}
+                <div className="bg-white dark:bg-dark-card rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-github-dark-border space-y-4 transition-colors">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text border-b border-slate-100 dark:border-github-dark-border pb-4">
+                        Preferences
+                    </h3>
+                    <div className="flex items-center justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400 shrink-0">
+                                <Sparkles size={22} />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-slate-800 dark:text-github-dark-text text-sm">AI Chatbot (Mano Copilot)</p>
+                                <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5">
+                                    {chatbotVisible ? 'Visible on all pages' : 'Hidden from all pages'}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={toggleChatbot}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shrink-0 ${
+                                chatbotVisible
+                                    ? 'bg-indigo-600'
+                                    : 'bg-slate-200 dark:bg-github-dark-border'
+                            }`}
+                            aria-label="Toggle AI Chatbot"
+                        >
+                            <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                                    chatbotVisible ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                            />
+                        </button>
                     </div>
                 </div>
 

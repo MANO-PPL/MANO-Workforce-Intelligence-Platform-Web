@@ -50,7 +50,7 @@ export const timeIn = catchAsync(async (req, res) => {
     file,
     localTime: tz.localTime,
     address,
-    timezone: tz.tzName,
+    timezone: tz.timezone,
     ip: req.clientIp || req.ip,
     user_agent: req.get('User-Agent'),
     event_source: getEventSource(req)
@@ -101,7 +101,7 @@ export const timeOut = catchAsync(async (req, res) => {
     file,
     localTime: tz.localTime,
     address,
-    timezone: tz.tzName,
+    timezone: tz.timezone,
     ip: req.clientIp || req.ip,
     user_agent: req.get('User-Agent'),
     event_source: getEventSource(req)

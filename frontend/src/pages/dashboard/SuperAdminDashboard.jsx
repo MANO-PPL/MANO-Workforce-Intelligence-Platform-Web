@@ -5,9 +5,16 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts';
 
+// Global memory cache for Super Admin dashboard data, surviving page navigations
+const superAdminCache = {
+  stats: null,
+  feedback: null,
+  alerts: null
+};
+
 const SuperAdminDashboard = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState(() => superAdminCache.stats || {
     totalOrgs: 0,
     totalUsers: 0,
     pendingFeedback: 0,
@@ -17,11 +24,11 @@ const SuperAdminDashboard = () => {
     moduleDistribution: [],
     orgStatusDistribution: []
   });
-  const [recentFeedback, setRecentFeedback] = useState([]);
-  const [recentAlerts, setRecentAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [feedbackLoading, setFeedbackLoading] = useState(true);
-  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [recentFeedback, setRecentFeedback] = useState(() => superAdminCache.feedback || []);
+  const [recentAlerts, setRecentAlerts] = useState(() => superAdminCache.alerts || []);
+  const [loading, setLoading] = useState(() => !superAdminCache.stats);
+  const [feedbackLoading, setFeedbackLoading] = useState(() => !superAdminCache.feedback);
+  const [alertsLoading, setAlertsLoading] = useState(() => !superAdminCache.alerts);
 
   useEffect(() => {
     fetchStats();
@@ -31,10 +38,13 @@ const SuperAdminDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      setLoading(true);
+      if (!superAdminCache.stats) {
+        setLoading(true);
+      }
       const res = await api.get('/super-admin/dashboard-stats');
       if (res.data.success) {
         setStats(res.data.data);
+        superAdminCache.stats = res.data.data;
       }
     } catch (err) {
       console.error('Failed to fetch super admin stats:', err);
@@ -45,11 +55,14 @@ const SuperAdminDashboard = () => {
 
   const fetchRecentFeedback = async () => {
     try {
-      setFeedbackLoading(true);
+      if (!superAdminCache.feedback) {
+        setFeedbackLoading(true);
+      }
       const res = await api.get('/super-admin/monitor/feedback');
       const all = Array.isArray(res.data.data) ? res.data.data : [];
       const pending = all.filter(f => !f.status || ['pending', 'open', ''].includes(f.status.toLowerCase())).slice(0, 5);
       setRecentFeedback(pending);
+      superAdminCache.feedback = pending;
     } catch (err) {
       console.error('Failed to fetch feedback:', err);
     } finally {
@@ -59,11 +72,14 @@ const SuperAdminDashboard = () => {
 
   const fetchRecentAlerts = async () => {
     try {
-      setAlertsLoading(true);
+      if (!superAdminCache.alerts) {
+        setAlertsLoading(true);
+      }
       const res = await api.get('/super-admin/monitor/alerts');
       const all = Array.isArray(res.data.data) ? res.data.data : [];
       const open = all.filter(a => a.status && ['open', 'unseen'].includes(a.status.toLowerCase())).slice(0, 5);
       setRecentAlerts(open);
+      superAdminCache.alerts = open;
     } catch (err) {
       console.error('Failed to fetch alerts:', err);
     } finally {

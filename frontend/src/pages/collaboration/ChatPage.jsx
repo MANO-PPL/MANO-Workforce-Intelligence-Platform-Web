@@ -79,7 +79,7 @@ const renderParsedMessageContent = (text, isSelf) => {
                     rel="noopener noreferrer"
                     className={`underline break-all font-bold ${
                         isSelf 
-                        ? 'text-indigo-850 dark:text-[#58a6ff] hover:text-indigo-950 dark:hover:text-[#79c0ff]' 
+                        ? 'text-indigo-700 dark:text-[#58a6ff] hover:text-indigo-800 dark:hover:text-[#79c0ff]' 
                         : 'text-indigo-600 dark:text-[#58a6ff] hover:text-indigo-700 dark:hover:text-[#79c0ff]'
                     }`}
                 >

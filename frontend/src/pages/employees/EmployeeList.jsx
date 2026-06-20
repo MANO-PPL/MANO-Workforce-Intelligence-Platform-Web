@@ -19,7 +19,7 @@ import {
     X,
     User
 } from 'lucide-react';
-import { adminService } from '../../services/adminService';
+import { adminService, adminCacheData } from '../../services/adminService';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,7 +32,7 @@ const EmployeeList = () => {
 
     const { avatarTimestamp } = useAuth();
     const [employees, setEmployees] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !adminCacheData.users['true']);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('Active');
     const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -54,7 +54,8 @@ const EmployeeList = () => {
 
     const fetchEmployees = async () => {
         try {
-            setLoading(true);
+            const hasCache = !!adminCacheData.users['true'];
+            if (!hasCache) setLoading(true);
             const data = await adminService.getAllUsers(true); // includeWorkLocation=true
             if (data.success) {
                 // Transform API data to Component state

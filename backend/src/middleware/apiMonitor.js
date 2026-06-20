@@ -1,5 +1,5 @@
 import EventBus from '../utils/EventBus.js';
-import { getEventSource } from '../utils/clientInfo.js';
+import { parseClientInfo } from '../utils/clientInfo.js';
 
 // Recursive helper to mask sensitive fields in request bodies
 function maskSensitiveFields(obj) {
@@ -108,7 +108,6 @@ export const apiMonitor = (req, res, next) => {
         // Capture user context (extracted downstream by authenticateJWT middleware)
         const userId = req.user?.id || req.user?.user_id || null;
         const orgId = req.user?.org_id || null;
-        const userType = req.user?.user_type || 'anonymous';
 
         // Classify path into application module
         const moduleName = getModuleFromPath(requestPath);
@@ -119,31 +118,33 @@ export const apiMonitor = (req, res, next) => {
         // Skip standard high-frequency health checks to avoid noise
         if (requestPath === '/health' || requestPath === '/api/health') return;
 
-        // Prepare standard log description
-        const desc = `API ${req.method} ${requestPath} returned ${res.statusCode} ${res.statusMessage || ''} (${durationMs}ms)`;
+        // Parse client and device details
+        const clientInfo = parseClientInfo(req);
+
+        // Extract Express route pattern
+        const routePattern = req.route ? `${req.baseUrl || ''}${req.route.path}` : requestPath;
 
         // Emit log event
         try {
-            EventBus.emitActivityLog({
+            EventBus.emitApiRequest({
                 user_id: userId,
                 org_id: orgId,
-                event_type: 'API_CALL',
-                event_source: getEventSource(req), // WEB or MOBILE_APP platform classification
-                object_type: moduleName,           // Module name classification
-                object_id: null,
+                request_path: requestPath,
+                route_pattern: routePattern,
+                method: req.method,
+                status_code: res.statusCode,
+                duration_ms: durationMs,
+                is_success: isSuccess,
+                event_source: clientInfo.event_source,
+                module_name: moduleName,
+                client_os: clientInfo.client_os,
+                client_type: clientInfo.client_type,
+                device_type: clientInfo.device_type,
                 request_ip: req.clientIp || req.ip || null,
                 user_agent: req.headers['user-agent'] || null,
-                location: null,
-                description: desc,
-                metadata: {
-                    method: req.method,
-                    path: req.originalUrl,
-                    status_code: res.statusCode,
-                    duration_ms: durationMs,
-                    user_type: userType,
+                payload_details: {
                     body: (maskedBody && typeof maskedBody === 'object' && Object.keys(maskedBody).length > 0) ? maskedBody : null,
                     query: (maskedQuery && typeof maskedQuery === 'object' && Object.keys(maskedQuery).length > 0) ? maskedQuery : null,
-                    is_success: isSuccess
                 }
             });
         } catch (err) {
@@ -153,3 +154,4 @@ export const apiMonitor = (req, res, next) => {
 
     next();
 };
+

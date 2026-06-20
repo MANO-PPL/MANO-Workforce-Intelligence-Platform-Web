@@ -889,8 +889,8 @@ async function runImportSimulation(orgId, payload) {
             throw new Error(`Record ${index + 1} must include valid activity_date, start_time, and end_time values.`);
         }
 
-        if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
-            throw new Error(`Record ${index + 1} has end_time earlier than or equal to start_time.`);
+        if (timeToMinutes(endTime) === timeToMinutes(startTime)) {
+            throw new Error(`Record ${index + 1} has end_time equal to start_time.`);
         }
 
         return {
@@ -938,60 +938,70 @@ export async function validateActivityTime(user_id, date, start_time, end_time, 
         return { valid: true, mode: 'PLANNING' };
     }
 
-    const activityEndDateTime = new Date(`${date}T${end_time}`);
     const allowedEndDateTime = new Date(now.getTime() + buffer_minutes * 60000);
 
-    if (date === todayStr) {
-        if (activityEndDateTime > allowedEndDateTime) {
-            return { valid: false, message: `Cannot log future tasks (Buffer: ${buffer_minutes}m). Allowed until: ${allowedEndDateTime.toLocaleTimeString()}` };
-        }
+    if (start_time === end_time) {
+        return { valid: false, message: 'start_time and end_time cannot be the same.' };
     }
 
-    const attendance = await attendanceDB("attendance_records")
-        .where("user_id", user_id)
-        .whereRaw("DATE(time_in) = ?", [date])
-        .orderBy("time_in", "asc");
+    const baseStart = new Date(`${date}T${start_time}Z`);
+    const baseEnd = new Date(`${date}T${end_time}Z`);
+    if (baseEnd <= baseStart) {
+        // Treat as overnight activity ending next day.
+        baseEnd.setUTCDate(baseEnd.getUTCDate() + 1);
+    }
+
+    // For overnight shifts, users often log tasks after midnight against the "shift day"
+    // (the date they clocked in). To support that, also consider a +1 day interpretation.
+    const nextDay = new Date(`${date}T00:00:00Z`);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const nextDayStr = nextDay.toISOString().split('T')[0];
+    const rolledStart = new Date(`${nextDayStr}T${start_time}Z`);
+    const rolledEnd = new Date(`${nextDayStr}T${end_time}Z`);
+    if (rolledEnd <= rolledStart) {
+        rolledEnd.setUTCDate(rolledEnd.getUTCDate() + 1);
+    }
+
+    // Pull sessions around the requested date so overnight sessions are included.
+    const from = new Date(`${date}T00:00:00Z`);
+    from.setUTCDate(from.getUTCDate() - 1);
+    const to = new Date(`${date}T00:00:00Z`);
+    to.setUTCDate(to.getUTCDate() + 1);
+    const fromStr = from.toISOString().split('T')[0];
+    const toStr = to.toISOString().split('T')[0];
+
+    const attendance = await attendanceDB('attendance_records')
+        .where('user_id', user_id)
+        .whereRaw('DATE(time_in) BETWEEN ? AND ?', [fromStr, toStr])
+        .orderBy('time_in', 'asc');
 
     if (!attendance || attendance.length === 0) {
-        return { valid: false, message: "No attendance record found for this date." };
+        return { valid: false, message: 'No attendance session found around this date.' };
     }
 
-    const getMinutes = (timeStr) => {
-        if (!timeStr) return null;
-        if (timeStr.includes('T') || timeStr.includes('-')) {
-            const d = new Date(timeStr);
-            return d.getHours() * 60 + d.getMinutes();
-        }
-        const [h, m] = timeStr.split(':').map(Number);
-        return h * 60 + m;
-    };
-
-    const startMins = getMinutes(start_time);
-    const endMins = getMinutes(end_time);
-
-    let isWithinSession = false;
+    const candidates = [
+        { start: baseStart, end: baseEnd, label: 'same_day' },
+        { start: rolledStart, end: rolledEnd, label: 'next_day' },
+    ];
 
     for (const session of attendance) {
         const sessionStart = new Date(session.time_in);
-        const sessStartMins = sessionStart.getHours() * 60 + sessionStart.getMinutes();
+        const sessionEnd = session.time_out ? new Date(session.time_out) : allowedEndDateTime;
 
-        let sessEndMins = 24 * 60;
-        if (session.time_out) {
-            const sessionEnd = new Date(session.time_out);
-            sessEndMins = sessionEnd.getHours() * 60 + sessionEnd.getMinutes();
-        }
-
-        if (startMins >= sessStartMins && endMins <= sessEndMins) {
-            isWithinSession = true;
-            break;
+        for (const candidate of candidates) {
+            if (candidate.start >= sessionStart && candidate.end <= sessionEnd) {
+                if (candidate.end > allowedEndDateTime) {
+                    return {
+                        valid: false,
+                        message: `Cannot log future tasks (Buffer: ${buffer_minutes}m). Allowed until: ${allowedEndDateTime.toLocaleTimeString()}`
+                    };
+                }
+                return { valid: true, mode: 'EXECUTION', resolved: candidate.label };
+            }
         }
     }
 
-    if (!isWithinSession) {
-        return { valid: false, message: `Task time (${start_time}-${end_time}) must be within a valid 'Time In' session.` };
-    }
-
-    return { valid: true, mode: 'EXECUTION' };
+    return { valid: false, message: `Task time (${start_time}-${end_time}) must be within a valid 'Time In' session.` };
 }
 
 // Helper: Shared Validation & Status Determination

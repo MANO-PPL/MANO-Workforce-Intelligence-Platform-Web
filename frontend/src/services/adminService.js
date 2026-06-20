@@ -3,15 +3,67 @@ import api from './api';
 const ADMIN_API_URL = "/admin";
 const POLICY_API_URL = "/policies";
 
+// Client-side memory cache for lookup configurations
+const cache = {
+    departments: null,
+    designations: null,
+    shifts: null,
+    workLocations: null,
+    users: new Map(),
+    dashboardStats: new Map()
+};
+
+// Synchronous client-side cache for direct component consumption
+export const adminCacheData = {
+    departments: null,
+    designations: null,
+    shifts: null,
+    workLocations: null,
+    users: {},
+    dashboardStats: {}
+};
+
+const clearUserCache = () => {
+    cache.users.clear();
+    adminCacheData.users = {};
+};
+
+const clearCache = () => {
+    cache.departments = null;
+    cache.designations = null;
+    cache.shifts = null;
+    cache.workLocations = null;
+    cache.dashboardStats.clear();
+    clearUserCache();
+
+    adminCacheData.departments = null;
+    adminCacheData.designations = null;
+    adminCacheData.shifts = null;
+    adminCacheData.workLocations = null;
+    adminCacheData.dashboardStats = {};
+};
+
 export const adminService = {
     // Get all users
     async getAllUsers(includeWorkLocation = false) {
-        try {
-            const res = await api.get(`${ADMIN_API_URL}/users?workLocation=${includeWorkLocation}`);
-            return res.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || "Failed to fetch users");
+        const cacheKey = String(includeWorkLocation);
+        if (cache.users.has(cacheKey)) {
+            return cache.users.get(cacheKey);
         }
+
+        const promise = (async () => {
+            try {
+                const res = await api.get(`${ADMIN_API_URL}/users?workLocation=${includeWorkLocation}`);
+                adminCacheData.users[cacheKey] = res.data;
+                return res.data;
+            } catch (error) {
+                cache.users.delete(cacheKey);
+                throw new Error(error.response?.data?.message || "Failed to fetch users");
+            }
+        })();
+
+        cache.users.set(cacheKey, promise);
+        return promise;
     },
 
     // Get single user
@@ -42,6 +94,7 @@ export const adminService = {
             } else {
                 res = await api.post(`${ADMIN_API_URL}/user`, userData);
             }
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create user");
@@ -66,6 +119,7 @@ export const adminService = {
             } else {
                 res = await api.put(`${ADMIN_API_URL}/user/${userId}`, userData);
             }
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to update user");
@@ -80,6 +134,7 @@ export const adminService = {
                     'Content-Type': 'multipart/form-data'
                 }
             });
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to update avatar");
@@ -90,6 +145,7 @@ export const adminService = {
     async deleteUser(userId) {
         try {
             const res = await api.delete(`${ADMIN_API_URL}/user/${userId}`);
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to delete user");
@@ -100,6 +156,7 @@ export const adminService = {
     async toggleUserStatus(userId, isActive) {
         try {
             const res = await api.put(`${ADMIN_API_URL}/user/${userId}/status`, { is_active: isActive });
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to update status");
@@ -110,6 +167,7 @@ export const adminService = {
     async restoreUser(userId) {
         try {
             const res = await api.post(`${ADMIN_API_URL}/user/${userId}/restore`);
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to restore user");
@@ -120,6 +178,7 @@ export const adminService = {
     async forceDeleteUser(userId) {
         try {
             const res = await api.delete(`${ADMIN_API_URL}/user/${userId}/force`);
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to permanently delete user");
@@ -128,16 +187,24 @@ export const adminService = {
 
     // Helpers
     async getDepartments() {
-        try {
-            const res = await api.get(`${ADMIN_API_URL}/departments`);
-            return res.data;
-        } catch (error) {
-            throw error;
-        }
+        if (cache.departments) return cache.departments;
+        const promise = (async () => {
+            try {
+                const res = await api.get(`${ADMIN_API_URL}/departments`);
+                adminCacheData.departments = res.data;
+                return res.data;
+            } catch (error) {
+                cache.departments = null;
+                throw error;
+            }
+        })();
+        cache.departments = promise;
+        return promise;
     },
     async bulkCreateUsersJson(usersData) {
         try {
             const res = await api.post(`${ADMIN_API_URL}/users/bulk-json`, { users: usersData });
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to bulk create users");
@@ -156,6 +223,7 @@ export const adminService = {
     async createDepartment(dept_name) {
         try {
             const res = await api.post(`${ADMIN_API_URL}/departments`, { dept_name });
+            cache.departments = null;
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create department");
@@ -165,6 +233,7 @@ export const adminService = {
     async createDesignation(desg_name) {
         try {
             const res = await api.post(`${ADMIN_API_URL}/designations`, { desg_name });
+            cache.designations = null;
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create designation");
@@ -172,25 +241,40 @@ export const adminService = {
     },
 
     async getDesignations() {
-        try {
-            const res = await api.get(`${ADMIN_API_URL}/designations`);
-            return res.data;
-        } catch (error) {
-            throw error;
-        }
+        if (cache.designations) return cache.designations;
+        const promise = (async () => {
+            try {
+                const res = await api.get(`${ADMIN_API_URL}/designations`);
+                adminCacheData.designations = res.data;
+                return res.data;
+            } catch (error) {
+                cache.designations = null;
+                throw error;
+            }
+        })();
+        cache.designations = promise;
+        return promise;
     },
     async getShifts() {
-        try {
-            const res = await api.get(`${ADMIN_API_URL}/shifts`);
-            return res.data;
-        } catch (error) {
-            throw error;
-        }
+        if (cache.shifts) return cache.shifts;
+        const promise = (async () => {
+            try {
+                const res = await api.get(`${ADMIN_API_URL}/shifts`);
+                adminCacheData.shifts = res.data;
+                return res.data;
+            } catch (error) {
+                cache.shifts = null;
+                throw error;
+            }
+        })();
+        cache.shifts = promise;
+        return promise;
     },
     async createShift(shiftData) {
         try {
             // Note: Original code used POLICY_API_URL for create/update/delete shift
             const res = await api.post(`${POLICY_API_URL}/shifts`, shiftData);
+            cache.shifts = null;
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to create shift");
@@ -199,6 +283,7 @@ export const adminService = {
     async updateShift(shiftId, shiftData) {
         try {
             const res = await api.put(`${POLICY_API_URL}/shifts/${shiftId}`, shiftData);
+            cache.shifts = null;
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to update shift");
@@ -207,6 +292,7 @@ export const adminService = {
     async deleteShift(shiftId) {
         try {
             const res = await api.delete(`${POLICY_API_URL}/shifts/${shiftId}`);
+            cache.shifts = null;
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to delete shift");
@@ -223,30 +309,38 @@ export const adminService = {
     async assignUserShift(userId, shiftId) {
         try {
             const res = await api.put(`${POLICY_API_URL}/users/${userId}/shift`, { shift_id: shiftId });
+            clearUserCache();
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to assign shift");
         }
     },
     async getWorkLocations() {
-        try {
-            const res = await api.get(`/locations`); // Route in original was /api/locations, so since baseURL is /api, we use /locations
-            return res.data;
-        } catch (error) {
-            throw error;
-        }
+        if (cache.workLocations) return cache.workLocations;
+        const promise = (async () => {
+            try {
+                const res = await api.get(`/locations`); // Route in original was /api/locations, so since baseURL is /api, we use /locations
+                adminCacheData.workLocations = res.data;
+                return res.data;
+            } catch (error) {
+                cache.workLocations = null;
+                throw error;
+            }
+        })();
+        cache.workLocations = promise;
+        return promise;
     },
-    async getReportPreview(month, type, date = "") {
+    async getReportPreview(month, type, date = "", userId = "", startDate = "", endDate = "", columns = "") {
         try {
-            const res = await api.get(`${ADMIN_API_URL}/reports/preview?month=${month}&type=${type}&date=${date}`);
+            const res = await api.get(`${ADMIN_API_URL}/reports/preview?month=${month}&type=${type}&date=${date}${userId ? `&user_id=${userId}` : ""}${startDate ? `&startDate=${startDate}` : ""}${endDate ? `&endDate=${endDate}` : ""}${columns ? `&columns=${encodeURIComponent(columns)}` : ""}&_t=${Date.now()}`);
             return res.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || "Failed to fetch report preview");
         }
     },
-    async downloadReport(month, type, format = "xlsx", userId = "", date = "") {
+    async downloadReport(month, type, format = "xlsx", userId = "", date = "", startDate = "", endDate = "") {
         try {
-            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
+            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}${startDate ? `&startDate=${startDate}` : ""}${endDate ? `&endDate=${endDate}` : ""}&_t=${Date.now()}`;
             const response = await api.get(url, { responseType: 'blob' });
             return response.data;
         } catch (error) {
@@ -254,9 +348,9 @@ export const adminService = {
         }
     },
 
-    async queueReport(month, type, format = "xlsx", userId = "", date = "") {
+    async queueReport(month, type, format = "xlsx", userId = "", date = "", startDate = "", endDate = "", columns = "") {
         try {
-            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}`;
+            const url = `${ADMIN_API_URL}/reports/download?month=${month}&type=${type}&format=${format}${userId ? `&user_id=${userId}` : ""}${date ? `&date=${date}` : ""}${startDate ? `&startDate=${startDate}` : ""}${endDate ? `&endDate=${endDate}` : ""}${columns ? `&columns=${encodeURIComponent(columns)}` : ""}&_t=${Date.now()}`;
             const response = await api.get(url);
             return response.data;
         } catch (error) {
@@ -273,16 +367,28 @@ export const adminService = {
         }
     },
 
-    async getDashboardStats(range = 'weekly', month = null, year = null) {
-        try {
-            let url = `${ADMIN_API_URL}/dashboard-stats?range=${range}`;
-            if (month && year) {
-                url += `&month=${month}&year=${year}`;
-            }
-            const res = await api.get(url);
-            return res.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || "Failed to fetch dashboard stats");
+    async getDashboardStats(range = 'weekly', month = null, year = null, forceRefresh = false) {
+        const cacheKey = `${range}_${month || 'null'}_${year || 'null'}`;
+        if (!forceRefresh && cache.dashboardStats.has(cacheKey)) {
+            return cache.dashboardStats.get(cacheKey);
         }
+
+        const promise = (async () => {
+            try {
+                let url = `${ADMIN_API_URL}/dashboard-stats?range=${range}`;
+                if (month && year) {
+                    url += `&month=${month}&year=${year}`;
+                }
+                const res = await api.get(url);
+                adminCacheData.dashboardStats[cacheKey] = res.data;
+                return res.data;
+            } catch (error) {
+                cache.dashboardStats.delete(cacheKey);
+                throw new Error(error.response?.data?.message || "Failed to fetch dashboard stats");
+            }
+        })();
+
+        cache.dashboardStats.set(cacheKey, promise);
+        return promise;
     }
 };

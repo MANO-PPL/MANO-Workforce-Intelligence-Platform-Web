@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -32,9 +32,14 @@ import {
     XCircle,
     Image as ImageIcon,
     Eye,
-    FileClock
+    FileClock,
+    FileSpreadsheet,
+    FileType,
+    DownloadCloud,
+    Table,
+    ChevronDown
 } from 'lucide-react';
-import { attendanceService } from '../../services/attendanceService';
+import { attendanceService, attendanceCacheData } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
 import MobileDatePicker from '../../components/MobileDatePicker';
 import MonthPicker from '../../components/MonthPicker';
@@ -57,6 +62,111 @@ import {
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 
+const getAlignmentClass = (colHeader) => {
+    if (!colHeader) return 'center';
+    const header = colHeader.toLowerCase();
+    if (['name', 'department', 'dept', 'employee', 'reason', 'location', 'in location', 'out location', 'email', 'phone', 'role', 'designation', 'position'].some(k => header.includes(k))) {
+        return 'left';
+    }
+    return 'center';
+};
+
+const getCellStyle = (cellValue, colHeader, isTotalsRow, isEven) => {
+    const val = cellValue?.toString().trim() || '';
+    const header = colHeader.toLowerCase();
+
+    if (isTotalsRow) {
+        return {
+            fontWeight: 'bold',
+            color: '#1F4E78',
+            backgroundColor: '#F2F4F7',
+            borderTop: '2px solid #1F4E78',
+            borderBottom: '4px double #1F4E78',
+            borderLeft: '1px solid #CBD5E1',
+            borderRight: '1px solid #CBD5E1',
+            paddingTop: '8px',
+            paddingBottom: '8px',
+        };
+    }
+
+    const defaultBorder = '1px solid #CBD5E1';
+
+    if (val === 'Present' || val === '1.0') {
+        return {
+            backgroundColor: '#E6F4EA',
+            color: '#137333',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    if (val === 'Absent' || val === '0.0') {
+        return {
+            backgroundColor: '#FCE8E6',
+            color: '#C5221F',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    if (val.toLowerCase().includes('late') || (header.includes('late') && Number(val) > 0)) {
+        return {
+            backgroundColor: '#FEF7E0',
+            color: '#B06000',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    if (val === 'Sun' || val === 'Sat') {
+        return {
+            backgroundColor: '#F1F3F4',
+            color: '#5F6368',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    if (val.toLowerCase() === 'on leave' || val.toLowerCase() === 'leave' || val.toLowerCase() === 'half day') {
+        return {
+            backgroundColor: '#E8F0FE',
+            color: '#1A73E8',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+
+    return {
+        backgroundColor: isEven ? '#F8FAFC' : '#FFFFFF',
+        color: '#333333',
+        border: defaultBorder
+    };
+};
+
+const getWeeksOfMonth = (monthStr) => {
+    if (!monthStr) return [];
+    const [year, monthNum] = monthStr.split('-').map(Number);
+    const weeks = [];
+    const firstDate = new Date(year, monthNum - 1, 1);
+    const lastDate = new Date(year, monthNum, 0);
+
+    let currentStart = new Date(firstDate);
+    while (currentStart <= lastDate) {
+        let currentEnd = new Date(currentStart);
+        const dayOfWeek = currentStart.getDay();
+        const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+        currentEnd.setDate(currentStart.getDate() + daysToSunday);
+
+        if (currentEnd > lastDate) {
+            currentEnd = new Date(lastDate);
+        }
+
+        const weekLabel = `Week ${weeks.length + 1} (${currentStart.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })} - ${currentEnd.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })})`;
+        const startVal = currentStart.toISOString().slice(0, 10);
+        weeks.push({ label: weekLabel, value: startVal });
+
+        currentStart = new Date(currentEnd);
+        currentStart.setDate(currentStart.getDate() + 1);
+    }
+    return weeks;
+};
+
 const MobileAttendancePage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -64,7 +174,8 @@ const MobileAttendancePage = () => {
     const SUB_TABS = [
         { id: 'history', label: 'History', icon: History },
         { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-        { id: 'corrections', label: 'Corrections', icon: FileClock }
+        { id: 'corrections', label: 'Corrections', icon: FileClock },
+        { id: 'reports', label: 'Reports', icon: FileText }
     ];
 
     // --- STATE ---
@@ -107,7 +218,7 @@ const MobileAttendancePage = () => {
     const mainTabs = ['attendance', 'my_attendance'];
     const currentMainIndex = mainTabs.indexOf(mainTab);
 
-    const subTabs = ['history', 'analytics', 'corrections'];
+    const subTabs = ['history', 'analytics', 'corrections', 'reports'];
     const currentSubIndex = subTabs.indexOf(subTab);
 
     // Correction Form State
@@ -144,16 +255,76 @@ const MobileAttendancePage = () => {
 
     // Data
     const [dailySessions, setDailySessions] = useState([]);
-    const [monthlySessions, setMonthlySessions] = useState([]);
+    const [monthlySessions, setMonthlySessions] = useState(() => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const startDate = `${year}-${month}-01`;
+        const endDate = new Date(year, today.getMonth() + 1, 0).toISOString().split('T')[0];
+        const cacheKey = `${startDate}_${endDate}`;
+        const cached = attendanceCacheData.records[cacheKey];
+        return cached ? (cached.data || cached) : [];
+    });
     const [correctionHistory, setCorrectionHistory] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [fileFormat, setFileFormat] = useState('xlsx');
 
+    // Reports Self-Service States
+    const [reportsSelectedMonth, setReportsSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [reportsSelectedDate, setReportsSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+    const [reportsReportType, setReportsReportType] = useState('attendance_detailed');
+    const [reportsFileFormat, setReportsFileFormat] = useState('xlsx');
+    const [reportsIsGenerating, setReportsIsGenerating] = useState(false);
+    const [reportsActiveTab, setReportsActiveTab] = useState('preview'); // 'preview' | 'history'
+    const [reportsUseCustomRange, setReportsUseCustomRange] = useState(false);
+    const [reportsCustomStartDate, setReportsCustomStartDate] = useState(new Date().toISOString().slice(0, 10));
+    const [reportsCustomEndDate, setReportsCustomEndDate] = useState(new Date().toISOString().slice(0, 10));
+    const [reportsSelectedWeek, setReportsSelectedWeek] = useState('');
+    const [reportsExportColumns, setReportsExportColumns] = useState({
+        timeIn: true,
+        timeOut: true,
+        workedHours: true,
+        requiredHours: true,
+        late: true,
+        location: true,
+        attendanceDays: true
+    });
+
+    const [reportsIsTypeDropdownOpen, setReportsIsTypeDropdownOpen] = useState(false);
+    const [reportsIsWeekDropdownOpen, setReportsIsWeekDropdownOpen] = useState(false);
+    const [reportsIsColsDropdownOpen, setReportsIsColsDropdownOpen] = useState(false);
+
+    const reportsTypeDropdownRef = useRef(null);
+    const reportsWeekDropdownRef = useRef(null);
+    const reportsColsDropdownRef = useRef(null);
+
+    const [reportsExportHistory, setReportsExportHistory] = useState(() => {
+        const savedHistory = localStorage.getItem('attendance_my_reports_export_history');
+        return savedHistory ? JSON.parse(savedHistory) : [];
+    });
+
+    const [reportsPreviewData, setReportsPreviewData] = useState({ columns: [], rows: [] });
+    const [reportsLoadingPreview, setReportsLoadingPreview] = useState(false);
+
     // Dates
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
     const [reportYear, setReportYear] = useState(new Date().getFullYear());
+
+    // Analytics Date Filter States
+    const [analyticsFilterType, setAnalyticsFilterType] = useState('this_month'); // 'this_month' | 'last_month' | 'select_month' | 'custom'
+    const [analyticsSelectedMonth, setAnalyticsSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [analyticsStartDate, setAnalyticsStartDate] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+    });
+    const [analyticsEndDate, setAnalyticsEndDate] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    });
+    const [analyticsSessions, setAnalyticsSessions] = useState([]);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
     const [showFullCalendar, setShowFullCalendar] = useState(false);
     const [scrollerDates, setScrollerDates] = useState([]);
 
@@ -168,6 +339,115 @@ const MobileAttendancePage = () => {
         }
         setScrollerDates(d);
     }, []);
+
+    // --- FETCHING ---
+
+    const fetchDailyRecords = async () => {
+        try {
+            const res = await attendanceService.getMyRecords(selectedDate, selectedDate);
+            if (res.ok || res.data) {
+                const records = res.data || res || [];
+                setDailySessions(Array.isArray(records) ? records : []);
+            }
+        } catch (error) {
+            console.error("Failed to fetch daily records", error);
+        }
+    };
+
+    const fetchMonthlyRecords = async (force = false) => {
+        if (!reportMonth) return;
+        const [year, month] = reportMonth.split('-');
+        const startDate = `${year}-${month}-01`;
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+        const cacheKey = `${startDate}_${endDate}`;
+
+        if (!force && attendanceCacheData.records[cacheKey]) {
+            const records = attendanceCacheData.records[cacheKey].data || attendanceCacheData.records[cacheKey] || [];
+            setMonthlySessions(Array.isArray(records) ? records : []);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const res = await attendanceService.getMyRecords(startDate, endDate);
+            if (res.ok || res.data) {
+                const records = res.data || res || [];
+                setMonthlySessions(Array.isArray(records) ? records : []);
+            }
+        } catch (error) {
+            console.error("Failed to load history");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchAnalyticsRecords = useCallback(async (force = false) => {
+        if (!force && (mainTab !== 'my_attendance' || subTab !== 'analytics')) return;
+
+        let start = '';
+        let end = '';
+        const today = new Date();
+
+        if (analyticsFilterType === 'this_month') {
+            const y = today.getFullYear();
+            const m = today.getMonth();
+            start = new Date(y, m, 1).toISOString().split('T')[0];
+            end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+        } else if (analyticsFilterType === 'last_month') {
+            const y = today.getFullYear();
+            const m = today.getMonth() - 1;
+            start = new Date(y, m, 1).toISOString().split('T')[0];
+            end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+        } else if (analyticsFilterType === 'select_month') {
+            if (analyticsSelectedMonth) {
+                const [y, m] = analyticsSelectedMonth.split('-').map(Number);
+                start = new Date(y, m - 1, 1).toISOString().split('T')[0];
+                end = new Date(y, m, 0).toISOString().split('T')[0];
+            }
+        } else if (analyticsFilterType === 'custom') {
+            start = analyticsStartDate;
+            end = analyticsEndDate;
+        }
+
+        if (start && end) {
+            const cacheKey = `${start}_${end}`;
+            if (!force && attendanceCacheData.records[cacheKey]) {
+                const records = attendanceCacheData.records[cacheKey].data || attendanceCacheData.records[cacheKey] || [];
+                setAnalyticsSessions(Array.isArray(records) ? records : []);
+                return;
+            }
+
+            setAnalyticsLoading(true);
+            try {
+                const res = await attendanceService.getMyRecords(start, end);
+                if (res.ok || res.data) {
+                    const records = res.data || res || [];
+                    setAnalyticsSessions(Array.isArray(records) ? records : []);
+                }
+            } catch (error) {
+                console.error("Failed to fetch analytics records", error);
+                toast.error("Failed to fetch analytics data");
+            } finally {
+                setAnalyticsLoading(false);
+            }
+        }
+    }, [mainTab, subTab, analyticsFilterType, analyticsSelectedMonth, analyticsStartDate, analyticsEndDate]);
+
+
+    const fetchCorrectionHistory = async (force = false) => {
+        const cacheKey = JSON.stringify({});
+        if (!force && attendanceCacheData.correctionRequests[cacheKey]) {
+            setCorrectionHistory(attendanceCacheData.correctionRequests[cacheKey].data || attendanceCacheData.correctionRequests[cacheKey] || []);
+            return;
+        }
+
+        try {
+            const res = await attendanceService.getCorrectionRequests();
+            setCorrectionHistory(res.data || []);
+        } catch (error) {
+            console.error(error);
+        }
+    };
 
     // --- EFFECTS ---
 
@@ -214,6 +494,7 @@ const MobileAttendancePage = () => {
 
         fetchDailyRecords();
         fetchMonthlyRecords();
+        fetchAnalyticsRecords(true);
         fetchCorrectionHistory();
 
         return () => {
@@ -221,6 +502,10 @@ const MobileAttendancePage = () => {
             if (watchId) navigator.geolocation.clearWatch(watchId);
         };
     }, []);
+
+    useEffect(() => {
+        fetchAnalyticsRecords();
+    }, [fetchAnalyticsRecords]);
 
     useEffect(() => {
         // Auto-scroll to selected date in the scroller
@@ -285,52 +570,6 @@ const MobileAttendancePage = () => {
 
         fetchRecord();
     }, [correctionForm.date]);
-
-
-    // --- FETCHING ---
-
-
-
-    const fetchDailyRecords = async () => {
-        try {
-            const res = await attendanceService.getMyRecords(selectedDate, selectedDate);
-            if (res.ok || res.data) {
-                const records = res.data || res || [];
-                setDailySessions(Array.isArray(records) ? records : []);
-            }
-        } catch (error) {
-            console.error("Failed to fetch daily records", error);
-        }
-    };
-
-    const fetchMonthlyRecords = async () => {
-        if (!reportMonth) return;
-        setLoading(true);
-        const [year, month] = reportMonth.split('-');
-        const startDate = `${year}-${month}-01`;
-        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-
-        try {
-            const res = await attendanceService.getMyRecords(startDate, endDate);
-            if (res.ok || res.data) {
-                const records = res.data || res || [];
-                setMonthlySessions(Array.isArray(records) ? records : []);
-            }
-        } catch (error) {
-            console.error("Failed to load history");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchCorrectionHistory = async () => {
-        try {
-            const res = await attendanceService.getCorrectionRequests();
-            setCorrectionHistory(res.data || []);
-        } catch (error) {
-            console.error(error);
-        }
-    };
 
     // --- ACTIONS ---
 
@@ -548,6 +787,175 @@ const MobileAttendancePage = () => {
         setSubTab(newTab);
     };
 
+    // Reports click outside logic
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (reportsTypeDropdownRef.current && !reportsTypeDropdownRef.current.contains(event.target)) {
+                setReportsIsTypeDropdownOpen(false);
+            }
+            if (reportsWeekDropdownRef.current && !reportsWeekDropdownRef.current.contains(event.target)) {
+                setReportsIsWeekDropdownOpen(false);
+            }
+            if (reportsColsDropdownRef.current && !reportsColsDropdownRef.current.contains(event.target)) {
+                setReportsIsColsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Save reports export history
+    useEffect(() => {
+        localStorage.setItem('attendance_my_reports_export_history', JSON.stringify(reportsExportHistory));
+    }, [reportsExportHistory]);
+
+    // Calculate weeks for reports selection
+    const reportsWeeks = useMemo(() => getWeeksOfMonth(reportsSelectedMonth), [reportsSelectedMonth]);
+
+    useEffect(() => {
+        if (reportsWeeks.length > 0) {
+            setReportsSelectedWeek(reportsWeeks[0].value);
+        }
+    }, [reportsWeeks]);
+
+    const reportsExportColumnsKey = JSON.stringify(reportsExportColumns);
+
+    // Fetch reports preview data
+    useEffect(() => {
+        if (mainTab !== 'my_attendance' || subTab !== 'reports') return;
+        let cancelled = false;
+        const fetchPreview = async () => {
+            setReportsLoadingPreview(true);
+            try {
+                const isWeekly = ['matrix_weekly', 'attendance_matrix_weekly'].includes(reportsReportType);
+                const dateToUse = (isWeekly && !reportsUseCustomRange) ? reportsSelectedWeek : reportsSelectedDate;
+
+                const qStart = reportsUseCustomRange ? reportsCustomStartDate : "";
+                const qEnd = reportsUseCustomRange ? reportsCustomEndDate : "";
+
+                const res = await attendanceService.getMyReportPreview(
+                    reportsSelectedMonth,
+                    reportsReportType,
+                    dateToUse,
+                    qStart,
+                    qEnd,
+                    reportsExportColumnsKey
+                );
+                if (!cancelled && res.ok) {
+                    setReportsPreviewData(res.data);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("fetchPreview failed:", error);
+                    toast.error("Failed to load preview data");
+                }
+            } finally {
+                if (!cancelled) setReportsLoadingPreview(false);
+            }
+        };
+        fetchPreview();
+        return () => { cancelled = true; };
+    }, [mainTab, subTab, reportsSelectedMonth, reportsReportType, reportsSelectedDate, reportsUseCustomRange, reportsCustomStartDate, reportsCustomEndDate, reportsSelectedWeek, reportsExportColumnsKey]);
+
+    // Poll status for generating self-service reports
+    useEffect(() => {
+        const generatingReports = reportsExportHistory.filter(item => item.status === 'Generating');
+        if (generatingReports.length === 0) return;
+
+        const interval = setInterval(async () => {
+            let updated = false;
+            const nextHistory = await Promise.all(reportsExportHistory.map(async (item) => {
+                if (item.status === 'Generating' && item.reportId) {
+                    try {
+                        const res = await attendanceService.getMyReportStatus(item.reportId);
+                        if (res.ok && res.data) {
+                            const { status, file_url, error_message } = res.data;
+                            if (status === 'completed') {
+                                updated = true;
+                                toast.success(`Report Ready: ${item.type} has compiled successfully.`);
+                                const link = document.createElement('a');
+                                link.href = file_url;
+                                link.setAttribute('download', item.name);
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                                return {
+                                    ...item,
+                                    status: 'Ready',
+                                    file_url,
+                                    size: 'S3 Link'
+                                };
+                            } else if (status === 'failed') {
+                                updated = true;
+                                toast.error(`Report Failed: ${error_message || 'Compilation failed'}`);
+                                return {
+                                    ...item,
+                                    status: 'Failed',
+                                    size: 'Error'
+                                };
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Failed to poll status for report", item.reportId, err);
+                    }
+                }
+                return item;
+            }));
+
+            if (updated) {
+                setReportsExportHistory(nextHistory);
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [reportsExportHistory]);
+
+    const handleReportsGenerate = async () => {
+        setReportsIsGenerating(true);
+        const toastId = toast.loading("Starting report compilation...");
+        try {
+            const isWeekly = ['matrix_weekly', 'attendance_matrix_weekly'].includes(reportsReportType);
+            const dateToUse = (isWeekly && !reportsUseCustomRange) ? reportsSelectedWeek : reportsSelectedDate;
+
+            const qStart = reportsUseCustomRange ? reportsCustomStartDate : "";
+            const qEnd = reportsUseCustomRange ? reportsCustomEndDate : "";
+
+            const res = await attendanceService.queueMyReport(
+                reportsSelectedMonth,
+                reportsReportType,
+                reportsFileFormat,
+                dateToUse,
+                qStart,
+                qEnd,
+                JSON.stringify(reportsExportColumns)
+            );
+            if (res.ok) {
+                const reportId = res.reportId;
+                const filename = `My_Report_${reportsReportType}_${reportsUseCustomRange ? `${reportsCustomStartDate}_to_${reportsCustomEndDate}` : (reportsSelectedMonth || dateToUse)}.${reportsFileFormat}`;
+                const reportTypeLabel = reportsReportType.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                const newReport = {
+                    id: reportId || Date.now().toString(),
+                    reportId: reportId,
+                    name: filename,
+                    type: reportTypeLabel,
+                    date: new Date().toLocaleDateString(),
+                    status: 'Generating',
+                    size: 'Pending'
+                };
+                setReportsExportHistory(prev => [newReport, ...prev]);
+                setReportsActiveTab('history');
+                toast.update(toastId, { render: "Report queued! You can track compilation in 'Export History'.", type: "info", isLoading: false, autoClose: 3000 });
+            } else {
+                toast.update(toastId, { render: "Failed to queue report.", type: "error", isLoading: false, autoClose: 3000 });
+            }
+        } catch (error) {
+            console.error("handleReportsGenerate failed:", error);
+            toast.update(toastId, { render: error.message || "Failed to download your report", type: "error", isLoading: false, autoClose: 3000 });
+        } finally {
+            setReportsIsGenerating(false);
+        }
+    };
+
     const handleSwipe = (swipeDir) => {
         if (mainTab === 'attendance') {
             if (swipeDir === 'left' && currentMainIndex < mainTabs.length - 1) {
@@ -588,6 +996,43 @@ const MobileAttendancePage = () => {
         }
     };
 
+    const formatTime = (isoString, sessionRecord = null, isOut = false) => {
+        if (!isoString) return null;
+        
+        let tz = null;
+        if (sessionRecord?.metadata) {
+            try {
+                const meta = typeof sessionRecord.metadata === 'string' ? JSON.parse(sessionRecord.metadata) : sessionRecord.metadata;
+                tz = isOut ? meta?.time_out?.timezone : meta?.time_in?.timezone;
+            } catch (e) {}
+        }
+        
+        if (tz === 'N/A' || tz === 'Simulated Timezone' || !tz) {
+            tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+
+        try {
+            const timeStr = new Date(isoString).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: tz
+            });
+            
+            const abbrFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: tz,
+                timeZoneName: 'short'
+            });
+            const parts = abbrFormatter.formatToParts(new Date(isoString));
+            const tzPart = parts.find(p => p.type === 'timeZoneName');
+            const abbr = tzPart ? tzPart.value : '';
+            
+            return abbr ? `${timeStr} (${abbr})` : timeStr;
+        } catch (e) {
+            return new Date(isoString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+    };
+
     const calculateHours = (inTime, outTime) => {
         if (!inTime || !outTime) return '0h 0m';
         const start = new Date(inTime);
@@ -599,58 +1044,103 @@ const MobileAttendancePage = () => {
         return `${diffHrs}h ${diffMins}m`;
     };
 
+    const getSessionHours = (s) => {
+        const val = s.total_hours || s.hours;
+        if (val !== undefined && val !== null && val !== 0 && !isNaN(parseFloat(val))) {
+            return parseFloat(val);
+        }
+        if (!s.time_in || !s.time_out) return 0;
+        const start = new Date(s.time_in);
+        const end = new Date(s.time_out);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+        let diffMs = end - start;
+        if (diffMs < 0) {
+            diffMs += 24 * 60 * 60 * 1000;
+        }
+        if (diffMs <= 0) return 0;
+        return parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
+    };
+
     // Analytics Calcs
-    const totalRecords = monthlySessions.length;
-    let presentCount = 0;
-    let lateCount = 0;
-    let totalHours = 0;
+    const {
+        presentCount,
+        lateCount,
+        totalHours,
+        attendanceTrendData,
+        weeklyActivityData,
+        statusPieData,
+        avgHours,
+        presentPercentage,
+        latePercentage,
+        underHoursCount,
+        totalRecords
+    } = useMemo(() => {
+        const total = analyticsSessions.length;
+        let present = 0;
+        let late = 0;
+        let hrs = 0;
+        const trend = [];
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const wStats = { Sun: { hrs: 0, count: 0 }, Mon: { hrs: 0, count: 0 }, Tue: { hrs: 0, count: 0 }, Wed: { hrs: 0, count: 0 }, Thu: { hrs: 0, count: 0 }, Fri: { hrs: 0, count: 0 }, Sat: { hrs: 0, count: 0 } };
 
-    const attendanceTrendData = [];
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weekStats = { Sun: { hrs: 0, count: 0 }, Mon: { hrs: 0, count: 0 }, Tue: { hrs: 0, count: 0 }, Wed: { hrs: 0, count: 0 }, Thu: { hrs: 0, count: 0 }, Fri: { hrs: 0, count: 0 }, Sat: { hrs: 0, count: 0 } };
-
-    monthlySessions.forEach(session => {
-        const h = parseFloat(session.total_hours || session.hours || 0);
-        totalHours += h;
-        if (session.status !== 'ABSENT') {
-            presentCount++;
-            if (session.late_minutes > 0) lateCount++;
-        }
-
-        const dateString = session.time_in || session.date || session.shift_date;
-        const d = dateString ? new Date(dateString) : null;
-
-        if (d && !isNaN(d)) {
-            attendanceTrendData.push({ date: d.getDate(), hours: h });
-            const dayName = daysOfWeek[d.getDay()];
-            if (weekStats[dayName]) {
-                weekStats[dayName].hrs += h;
-                weekStats[dayName].count += 1;
+        analyticsSessions.forEach(session => {
+            const h = getSessionHours(session);
+            hrs += h;
+            if (session.status !== 'ABSENT') {
+                present++;
+                if (session.late_minutes > 0) late++;
             }
-        }
-    });
 
-    attendanceTrendData.sort((a, b) => a.date - b.date);
+            const dateString = session.time_in || session.date || session.shift_date;
+            const d = dateString ? new Date(dateString) : null;
 
-    const weeklyActivityData = daysOfWeek.map(day => ({
-        day,
-        hours: weekStats[day].count > 0 ? (weekStats[day].hrs / weekStats[day].count).toFixed(1) : 0
-    }));
+            if (d && !isNaN(d)) {
+                const label = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+                trend.push({ date: label, hours: h, rawDate: d });
+                const dayName = days[d.getDay()];
+                if (wStats[dayName]) {
+                    wStats[dayName].hrs += h;
+                    wStats[dayName].count += 1;
+                }
+            }
+        });
 
-    const statusPieData = [
-        { name: 'On Time', value: presentCount - lateCount, color: '#10b981' },
-        { name: 'Late', value: lateCount, color: '#f59e0b' }
-    ].filter(d => d.value > 0);
+        trend.sort((a, b) => a.rawDate - b.rawDate);
 
-    const avgHours = totalRecords > 0 ? (totalHours / totalRecords).toFixed(1) : '0.0';
-    const presentPercentage = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
-    const latePercentage = presentCount > 0 ? Math.round((lateCount / presentCount) * 100) : 0;
+        const wActData = days.map(day => ({
+            day,
+            hours: wStats[day].count > 0 ? (wStats[day].hrs / wStats[day].count).toFixed(1) : 0
+        }));
 
-    let underHoursCount = 0;
-    monthlySessions.forEach(session => {
-        const h = parseFloat(session.total_hours || session.hours || 0);
-        if (session.status !== 'ABSENT' && h > 0 && h < 8) underHoursCount++;
-    });
+        const pie = [
+            { name: 'On Time', value: present - late, color: '#10b981' },
+            { name: 'Late', value: late, color: '#f59e0b' }
+        ].filter(d => d.value > 0);
+
+        const avg = total > 0 ? (hrs / total).toFixed(1) : '0.0';
+        const presentPct = total > 0 ? Math.round((present / total) * 100) : 0;
+        const latePct = present > 0 ? Math.round((late / present) * 100) : 0;
+
+        let underHours = 0;
+        analyticsSessions.forEach(session => {
+            const h = getSessionHours(session);
+            if (session.status !== 'ABSENT' && h > 0 && h < 8) underHours++;
+        });
+
+        return {
+            presentCount: present,
+            lateCount: late,
+            totalHours: hrs,
+            attendanceTrendData: trend,
+            weeklyActivityData: wActData,
+            statusPieData: pie,
+            avgHours: avg,
+            presentPercentage: presentPct,
+            latePercentage: latePct,
+            underHoursCount: underHours,
+            totalRecords: total
+        };
+    }, [analyticsSessions]);
 
     const filteredCorrections = correctionHistory.filter(item => {
         const status = (item.status || 'PENDING').toUpperCase();
@@ -725,7 +1215,7 @@ const MobileAttendancePage = () => {
                     <div className="bg-slate-200/50 dark:bg-github-dark-border/50 p-1.5 flex rounded-2xl backdrop-blur-md border border-white/20 dark:border-white/5 shadow-xl">
                         <button
                             onClick={() => handleMainTabChange('attendance')}
-                            className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                            className={`flex-1 py-2.5 text-[11px] font-normal rounded-xl transition-all flex items-center justify-center gap-2 ${
                                 mainTab === 'attendance'
                                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md transform scale-[1.02]'
                                     : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
@@ -736,7 +1226,7 @@ const MobileAttendancePage = () => {
                         </button>
                         <button
                             onClick={() => handleMainTabChange('my_attendance')}
-                            className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                            className={`flex-1 py-2.5 text-[11px] font-normal rounded-xl transition-all flex items-center justify-center gap-2 ${
                                 mainTab === 'my_attendance'
                                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md transform scale-[1.02]'
                                     : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
@@ -949,7 +1439,7 @@ const MobileAttendancePage = () => {
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <span className="block text-[9px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest leading-none mb-1">Time In</span>
-                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text truncate block">{new Date(s.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text truncate block">{formatTime(s.time_in, s, false)}</span>
                                                             </div>
                                                         </div>
                                                         {s.time_in_image ? (
@@ -957,7 +1447,7 @@ const MobileAttendancePage = () => {
                                                                 onClick={() => setPreviewImage(s.time_in_image)}
                                                                 className="w-full aspect-square rounded-2xl overflow-hidden border border-slate-100 dark:border-github-dark-border relative group active:scale-95 transition-all shadow-inner"
                                                             >
-                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-cover" />
+                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-contain" />
                                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                                                                     <Eye size={20} className="text-white" />
                                                                 </div>
@@ -978,7 +1468,7 @@ const MobileAttendancePage = () => {
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <span className="block text-[9px] font-black text-slate-400 dark:text-github-dark-muted tracking-widest leading-none mb-1">Time Out</span>
-                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text truncate block">{s.time_out ? new Date(s.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---'}</span>
+                                                                <span className="text-sm font-black text-slate-800 dark:text-github-dark-text truncate block">{s.time_out ? formatTime(s.time_out, s, true) : '---'}</span>
                                                             </div>
                                                         </div>
                                                         {s.time_out_image ? (
@@ -986,7 +1476,7 @@ const MobileAttendancePage = () => {
                                                                 onClick={() => setPreviewImage(s.time_out_image)}
                                                                 className="w-full aspect-square rounded-2xl overflow-hidden border border-slate-100 dark:border-github-dark-border relative group active:scale-95 transition-all shadow-inner"
                                                             >
-                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-cover" />
+                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-contain" />
                                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                                                                     <Eye size={20} className="text-white" />
                                                                 </div>
@@ -1055,7 +1545,7 @@ const MobileAttendancePage = () => {
                                                 }`}
                                             >
                                                 <sub.icon size={16} className={isActive ? 'text-indigo-500' : 'text-slate-400'} />
-                                                <span className={`text-[11px] font-bold uppercase tracking-wider ${isActive ? 'opacity-100' : 'opacity-70'}`}>
+                                                <span className={`text-[11px] font-normal uppercase tracking-wider ${isActive ? 'opacity-100' : 'opacity-70'}`}>
                                                     {sub.label}
                                                 </span>
                                                 {isActive && (
@@ -1119,22 +1609,22 @@ const MobileAttendancePage = () => {
                                                     <div className="flex items-center justify-between bg-slate-50/50 dark:bg-github-dark-border/20 p-2 rounded-2xl">
                                                         <div>
                                                             <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">In</span>
-                                                            <span className="text-[11px] font-black text-slate-700 dark:text-github-dark-text">{new Date(s.time_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                            <span className="text-[11px] font-black text-slate-700 dark:text-github-dark-text">{formatTime(s.time_in, s, false)}</span>
                                                         </div>
                                                         {s.time_in_image && (
                                                             <button onClick={() => setPreviewImage(s.time_in_image)} className="w-8 h-8 rounded-lg border border-white dark:border-github-dark-border overflow-hidden active:scale-90 transition-all shadow-sm">
-                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-cover" />
+                                                                <img src={s.time_in_image} alt="In" className="w-full h-full object-contain" />
                                                             </button>
                                                         )}
                                                     </div>
                                                     <div className="flex items-center justify-between bg-slate-50/50 dark:bg-github-dark-border/20 p-2 rounded-2xl">
                                                         <div>
                                                             <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Out</span>
-                                                            <span className="text-[11px] font-black text-slate-700 dark:text-github-dark-text">{s.time_out ? new Date(s.time_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---'}</span>
+                                                            <span className="text-[11px] font-black text-slate-700 dark:text-github-dark-text">{s.time_out ? formatTime(s.time_out, s, true) : '---'}</span>
                                                         </div>
                                                         {s.time_out_image && (
                                                             <button onClick={() => setPreviewImage(s.time_out_image)} className="w-8 h-8 rounded-lg border border-white dark:border-github-dark-border overflow-hidden active:scale-90 transition-all shadow-sm">
-                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-cover" />
+                                                                <img src={s.time_out_image} alt="Out" className="w-full h-full object-contain" />
                                                             </button>
                                                         )}
                                                     </div>
@@ -1158,114 +1648,176 @@ const MobileAttendancePage = () => {
 
                                 {subTab === 'analytics' && (
                                     <div className="space-y-6">
-                                        {/* Month Selection */}
-                                        <div className="flex flex-col gap-1.5 w-full">
-                                            <MonthPicker
-                                                label="Select Month"
-                                                value={reportMonth}
-                                                onChange={(val) => setReportMonth(val)}
-                                            />
-                                        </div>
+                                        {/* Date Filters Bar */}
+                                        <div className="bg-white dark:bg-github-dark-subtle p-4 rounded-[2rem] border border-slate-100 dark:border-github-dark-border shadow-sm space-y-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                                                    <Calendar size={16} />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-[10px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-wider">Analytics Period</h4>
+                                                    <p className="text-[9px] text-slate-400 dark:text-github-dark-muted font-bold mt-0.5">Filter statistics and trend charts</p>
+                                                </div>
+                                            </div>
 
-                                        {/* Premium Stats Grid */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-600 mb-4">
-                                                    <CheckCircle size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Attendance</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{presentPercentage}%</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">{presentCount} Days Present</p>
-                                            </div>
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
-                                                    <Clock size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Avg Shift</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{avgHours}h</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">Per Working Day</p>
-                                            </div>
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-rose-50 dark:bg-rose-500/10 rounded-2xl flex items-center justify-center text-rose-600 mb-4">
-                                                    <AlertCircle size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Late Arrival</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{lateCount}</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">{latePercentage}% of shifts</p>
-                                            </div>
-                                            <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                                <div className="w-10 h-10 bg-sky-50 dark:bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-600 mb-4">
-                                                    <BarChart3 size={20} />
-                                                </div>
-                                                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Short Shifts</span>
-                                                <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{underHoursCount}</h4>
-                                                <p className="text-[9px] font-bold text-slate-400 mt-1">Under 8 Hours</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Trends Chart */}
-                                        <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
-                                            <h3 className="text-[10px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-[0.2em] mb-8 flex items-center justify-between opacity-60">
-                                                Daily Work Hours
-                                                <div className="flex items-center gap-1.5 text-indigo-500 font-bold tracking-tight">
-                                                    <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                                                    Trend
-                                                </div>
-                                            </h3>
-                                            <div className="h-48 -ml-4">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <AreaChart data={attendanceTrendData}>
-                                                        <defs>
-                                                            <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" className="dark:opacity-10" />
-                                                        <XAxis dataKey="date" hide />
-                                                        <YAxis hide />
-                                                        <RechartsTooltip 
-                                                            contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', background: 'rgb(255 255 255 / 0.9)' }}
-                                                            itemStyle={{ color: '#6366f1', fontWeight: 'bold' }}
-                                                        />
-                                                        <Area type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
-                                                    </AreaChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </div>
-
-                                        {/* Download Action Section */}
-                                        <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-indigo-500/20">
-                                            <div className="relative z-10">
-                                                <h3 className="text-xl font-black tracking-tight mb-2">Monthly Summary</h3>
-                                                <p className="text-indigo-100/70 text-[11px] font-medium mb-4 max-w-[200px]">Download your detailed attendance report for {new Date(reportMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.</p>
-                                                <div className="mb-5">
-                                                    <label className="block text-[9px] font-black uppercase text-indigo-200 tracking-wider mb-2">File Format</label>
-                                                    <select
-                                                        value={fileFormat}
-                                                        onChange={(e) => setFileFormat(e.target.value)}
-                                                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+                                            {/* Selector Segment Buttons */}
+                                            <div className="bg-slate-100 dark:bg-[#161b22] p-1 rounded-xl flex gap-1 border border-slate-200/50 dark:border-white/5 overflow-x-auto no-scrollbar">
+                                                {[
+                                                    { id: 'this_month', label: 'This Month' },
+                                                    { id: 'last_month', label: 'Last' },
+                                                    { id: 'select_month', label: 'Month' },
+                                                    { id: 'custom', label: 'Custom' },
+                                                ].map(type => (
+                                                    <button
+                                                        key={type.id}
+                                                        type="button"
+                                                        onClick={() => setAnalyticsFilterType(type.id)}
+                                                        className={`flex-1 min-w-[70px] py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all text-center whitespace-nowrap ${
+                                                            analyticsFilterType === type.id
+                                                                ? 'bg-white dark:bg-github-dark-subtle text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                                : 'text-slate-500 dark:text-slate-400'
+                                                        }`}
                                                     >
-                                                        <option value="xlsx" className="text-slate-800">Excel (xlsx)</option>
-                                                        <option value="csv" className="text-slate-800">CSV (csv)</option>
-                                                        <option value="pdf" className="text-slate-800">PDF (pdf)</option>
-                                                    </select>
-                                                </div>
-                                                <button
-                                                    onClick={downloadReport}
-                                                    disabled={isDownloading}
-                                                    className="w-full py-4 bg-white text-indigo-600 text-xs font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl flex items-center justify-center gap-3 disabled:opacity-50 active:scale-[0.98] transition-all"
-                                                >
-                                                    {isDownloading ? <RefreshCw className="animate-spin" size={16} /> : <Download size={16} />}
-                                                    Download Report
-                                                </button>
+                                                        {type.label}
+                                                    </button>
+                                                ))}
                                             </div>
-                                            {/* Abstract Background Element */}
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-                                            <div className="absolute bottom-0 left-0 w-24 h-24 bg-sky-400/20 rounded-full -ml-12 -mb-12 blur-2xl" />
+
+                                            {/* Contextual Filter Pickers */}
+                                            {analyticsFilterType === 'select_month' && (
+                                                <div className="w-full">
+                                                    <MonthPicker
+                                                        value={analyticsSelectedMonth}
+                                                        onChange={(val) => setAnalyticsSelectedMonth(val)}
+                                                        compact={true}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {analyticsFilterType === 'custom' && (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <MobileDatePicker
+                                                        label="Start Date"
+                                                        value={analyticsStartDate}
+                                                        onChange={(val) => setAnalyticsStartDate(val)}
+                                                    />
+                                                    <MobileDatePicker
+                                                        label="End Date"
+                                                        value={analyticsEndDate}
+                                                        onChange={(val) => setAnalyticsEndDate(val)}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
+
+                                        {analyticsLoading ? (
+                                            <div className="py-20 flex flex-col items-center justify-center bg-white dark:bg-github-dark-subtle rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                <RefreshCw className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400 mb-3" />
+                                                <p className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest">Compiling Analytics Data...</p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {/* Premium Stats Grid */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-600 mb-4">
+                                                            <CheckCircle size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Attendance</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{presentPercentage}%</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">{presentCount} Days Present</p>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-600 mb-4">
+                                                            <Clock size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Avg Shift</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{avgHours}h</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">Per Working Day</p>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-rose-50 dark:bg-rose-500/10 rounded-2xl flex items-center justify-center text-rose-600 mb-4">
+                                                            <AlertCircle size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Late Arrival</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{lateCount}</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">{latePercentage}% of shifts</p>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                        <div className="w-10 h-10 bg-sky-50 dark:bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-600 mb-4">
+                                                            <BarChart3 size={20} />
+                                                        </div>
+                                                        <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Short Shifts</span>
+                                                        <h4 className="text-2xl font-black text-slate-800 dark:text-github-dark-text mt-1">{underHoursCount}</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">Under 8 Hours</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Trends Chart */}
+                                                <div className="bg-white dark:bg-github-dark-subtle p-6 rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                    <h3 className="text-[10px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-[0.2em] mb-8 flex items-center justify-between opacity-60">
+                                                        Daily Work Hours
+                                                        <div className="flex items-center gap-1.5 text-indigo-500 font-bold tracking-tight">
+                                                            <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                                                            Trend
+                                                        </div>
+                                                    </h3>
+                                                    <div className="h-48 -ml-4">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <AreaChart data={attendanceTrendData}>
+                                                                <defs>
+                                                                    <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                                    </linearGradient>
+                                                                </defs>
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" className="dark:opacity-10" />
+                                                                <XAxis dataKey="date" hide />
+                                                                <YAxis hide />
+                                                                <RechartsTooltip 
+                                                                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', background: 'rgb(255 255 255 / 0.9)' }}
+                                                                    itemStyle={{ color: '#6366f1', fontWeight: 'bold' }}
+                                                                />
+                                                                <Area type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
+                                                            </AreaChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                </div>
+
+                                                {/* Download Action Section */}
+                                                <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-indigo-500/20">
+                                                    <div className="relative z-10">
+                                                        <h3 className="text-xl font-black tracking-tight mb-2">Monthly Summary</h3>
+                                                        <p className="text-indigo-100/70 text-[11px] font-medium mb-4 max-w-[200px]">Download your detailed attendance report for {new Date(reportMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.</p>
+                                                        <div className="mb-5">
+                                                            <label className="block text-[9px] font-black uppercase text-indigo-200 tracking-wider mb-2">File Format</label>
+                                                            <select
+                                                                value={fileFormat}
+                                                                onChange={(e) => setFileFormat(e.target.value)}
+                                                                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+                                                            >
+                                                                <option value="xlsx" className="text-slate-800">Excel (xlsx)</option>
+                                                                <option value="csv" className="text-slate-800">CSV (csv)</option>
+                                                                <option value="pdf" className="text-slate-800">PDF (pdf)</option>
+                                                            </select>
+                                                        </div>
+                                                        <button
+                                                            onClick={downloadReport}
+                                                            disabled={isDownloading}
+                                                            className="w-full py-4 bg-white text-indigo-600 text-xs font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl flex items-center justify-center gap-3 disabled:opacity-50 active:scale-[0.98] transition-all"
+                                                        >
+                                                            {isDownloading ? <RefreshCw className="animate-spin" size={16} /> : <Download size={16} />}
+                                                            Download Report
+                                                        </button>
+                                                    </div>
+                                                    {/* Abstract Background Element */}
+                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                                                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-sky-400/20 rounded-full -ml-12 -mb-12 blur-2xl" />
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                )  }
+                                )}
 
                                 {subTab === 'corrections' && (
                                     <div className="space-y-4">
@@ -1310,6 +1862,457 @@ const MobileAttendancePage = () => {
                                                 <p className="text-center text-slate-400 py-12 font-bold uppercase tracking-widest text-xs">No {correctionFilter} requests</p>
                                             )}
                                         </div>
+                                    </div>
+                                )}
+
+                                {subTab === 'reports' && (
+                                    <div className="space-y-6">
+                                        {/* Configuration controls */}
+                                        <div className="bg-white dark:bg-github-dark-subtle rounded-[2.5rem] border border-slate-100 dark:border-github-dark-border p-6 shadow-sm space-y-5">
+                                            {/* Report Type Select */}
+                                            <div className="space-y-2 relative" ref={reportsTypeDropdownRef}>
+                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1 uppercase">Report Type</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReportsIsTypeDropdownOpen(!reportsIsTypeDropdownOpen)}
+                                                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-2xl text-xs font-black text-slate-800 dark:text-github-dark-text focus:outline-none cursor-pointer"
+                                                >
+                                                    <span className="truncate">
+                                                        {(() => {
+                                                            const opts = [
+                                                                { value: 'attendance_detailed', label: 'Detailed Attendance Report' },
+                                                                { value: 'attendance_matrix_daily', label: 'Daily Attendance Matrix' },
+                                                                { value: 'matrix_daily', label: 'Daily Attendance Report' },
+                                                                { value: 'attendance_matrix_monthly', label: 'Monthly Attendance Matrix' },
+                                                                { value: 'matrix_monthly', label: 'Monthly Attendance Report' },
+                                                                { value: 'attendance_summary', label: 'Monthly Summary Report' },
+                                                                { value: 'attendance_matrix_weekly', label: 'Weekly Attendance Matrix' },
+                                                                { value: 'matrix_weekly', label: 'Weekly Attendance Report' }
+                                                            ];
+                                                            return opts.find(o => o.value === reportsReportType)?.label || reportsReportType;
+                                                        })()}
+                                                    </span>
+                                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-300 ${reportsIsTypeDropdownOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+                                                {reportsIsTypeDropdownOpen && (
+                                                    <div className="absolute left-0 mt-1 w-full bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-xl z-50 p-2 max-h-60 overflow-y-auto no-scrollbar space-y-0.5">
+                                                        {[
+                                                            { value: 'attendance_detailed', label: 'Detailed Attendance Report' },
+                                                            { value: 'attendance_matrix_daily', label: 'Daily Attendance Matrix' },
+                                                            { value: 'matrix_daily', label: 'Daily Attendance Report' },
+                                                            { value: 'attendance_matrix_monthly', label: 'Monthly Attendance Matrix' },
+                                                            { value: 'matrix_monthly', label: 'Monthly Attendance Report' },
+                                                            { value: 'attendance_summary', label: 'Monthly Summary Report' },
+                                                            { value: 'attendance_matrix_weekly', label: 'Weekly Attendance Matrix' },
+                                                            { value: 'matrix_weekly', label: 'Weekly Attendance Report' }
+                                                        ].map((opt) => (
+                                                            <button
+                                                                key={opt.value}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setReportsReportType(opt.value);
+                                                                    setReportsIsTypeDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-3 py-2.5 text-xs rounded-xl font-bold transition-colors ${
+                                                                    reportsReportType === opt.value 
+                                                                        ? 'bg-indigo-600 text-white shadow-md' 
+                                                                        : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-github-dark-bg'
+                                                                }`}
+                                                            >
+                                                                {opt.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Date selection section */}
+                                            <div className="space-y-4">
+                                                {reportsUseCustomRange ? (
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <MobileDatePicker
+                                                            label="Start Date"
+                                                            value={reportsCustomStartDate}
+                                                            onChange={(val) => setReportsCustomStartDate(val)}
+                                                        />
+                                                        <MobileDatePicker
+                                                            label="End Date"
+                                                            value={reportsCustomEndDate}
+                                                            onChange={(val) => setReportsCustomEndDate(val)}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        {['matrix_monthly', 'attendance_matrix_monthly', 'attendance_detailed', 'attendance_summary'].includes(reportsReportType) ? (
+                                                            <MonthPicker
+                                                                label="Select Month"
+                                                                value={reportsSelectedMonth}
+                                                                onChange={(val) => setReportsSelectedMonth(val)}
+                                                            />
+                                                        ) : ['matrix_weekly', 'attendance_matrix_weekly'].includes(reportsReportType) ? (
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <MonthPicker
+                                                                    label="Select Month"
+                                                                    value={reportsSelectedMonth}
+                                                                    onChange={(val) => setReportsSelectedMonth(val)}
+                                                                />
+                                                                <div className="space-y-2 relative" ref={reportsWeekDropdownRef}>
+                                                                    <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1 uppercase">Select Week</label>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setReportsIsWeekDropdownOpen(!reportsIsWeekDropdownOpen)}
+                                                                        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-2xl text-xs font-black text-slate-800 dark:text-github-dark-text focus:outline-none cursor-pointer"
+                                                                    >
+                                                                        <span className="truncate">{reportsWeeks.find(w => w.value === reportsSelectedWeek)?.label || 'Select Week'}</span>
+                                                                        <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-300 ${reportsIsWeekDropdownOpen ? 'rotate-180' : ''}`} />
+                                                                    </button>
+
+                                                                    {reportsIsWeekDropdownOpen && (
+                                                                        <div className="absolute left-0 mt-1 w-full bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-xl z-50 p-2 max-h-60 overflow-y-auto no-scrollbar space-y-0.5">
+                                                                            {reportsWeeks.map((w, idx) => (
+                                                                                <button
+                                                                                    key={idx}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setReportsSelectedWeek(w.value);
+                                                                                        setReportsIsWeekDropdownOpen(false);
+                                                                                    }}
+                                                                                    className={`w-full text-left px-3 py-2.5 text-xs rounded-xl font-bold transition-colors ${
+                                                                                        reportsSelectedWeek === w.value 
+                                                                                            ? 'bg-indigo-600 text-white shadow-md' 
+                                                                                            : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-github-dark-bg'
+                                                                                    }`}
+                                                                                >
+                                                                                    {w.label}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <MobileDatePicker
+                                                                label="Select Date"
+                                                                value={reportsSelectedDate}
+                                                                onChange={(val) => setReportsSelectedDate(val)}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Columns dropdown selector */}
+                                            <div className="space-y-2 relative" ref={reportsColsDropdownRef}>
+                                                <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1 uppercase">Columns to Include</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReportsIsColsDropdownOpen(!reportsIsColsDropdownOpen)}
+                                                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-github-dark-bg border border-slate-200 dark:border-github-dark-border rounded-2xl text-xs font-black text-slate-800 dark:text-github-dark-text focus:outline-none cursor-pointer"
+                                                >
+                                                    <span className="truncate">
+                                                        {Object.values(reportsExportColumns).filter(Boolean).length} Columns Selected
+                                                    </span>
+                                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-300 ${reportsIsColsDropdownOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                {reportsIsColsDropdownOpen && (
+                                                    <div className="absolute right-0 mt-1 w-full min-w-[240px] bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl shadow-xl z-50 p-4 space-y-3">
+                                                        {[
+                                                            { id: 'timeIn', label: 'Time In' },
+                                                            { id: 'timeOut', label: 'Time Out' },
+                                                            { id: 'workedHours', label: 'Worked Hours' },
+                                                            { id: 'requiredHours', label: 'Required Hours' },
+                                                            { id: 'late', label: 'Lateness Info' },
+                                                            { id: 'location', label: 'Locations' },
+                                                            { id: 'attendanceDays', label: 'Attendance Summary' }
+                                                        ].map((col) => (
+                                                            <button
+                                                                key={col.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setReportsExportColumns(prev => ({
+                                                                        ...prev,
+                                                                        [col.id]: !prev[col.id]
+                                                                    }));
+                                                                }}
+                                                                className="w-full flex items-center gap-3 cursor-pointer focus:outline-none group text-left"
+                                                            >
+                                                                <div className={`w-5 h-5 shrink-0 rounded-lg border flex items-center justify-center transition-all ${
+                                                                    reportsExportColumns[col.id]
+                                                                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                                                                        : 'bg-white dark:bg-github-dark-bg border-slate-300 dark:border-github-dark-border group-hover:border-indigo-400'
+                                                                }`}>
+                                                                    {reportsExportColumns[col.id] && (
+                                                                        <svg className="w-3 h-3 stroke-[3] stroke-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <polyline points="20 6 9 17 4 12" />
+                                                                        </svg>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-xs font-bold text-slate-700 dark:text-github-dark-text select-none">
+                                                                    {col.label}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Use custom date range toggle, Format selection and action generate button */}
+                                            <div className="space-y-4 pt-3 border-t border-slate-100 dark:border-github-dark-border/50">
+                                                <div className="flex items-center pt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setReportsUseCustomRange(!reportsUseCustomRange)}
+                                                        className="flex items-center gap-2.5 cursor-pointer focus:outline-none group"
+                                                    >
+                                                        <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                                                            reportsUseCustomRange
+                                                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                                                                : 'bg-slate-50 dark:bg-github-dark-bg border-slate-300 dark:border-[#30363d] group-hover:border-indigo-500'
+                                                        }`}>
+                                                            {reportsUseCustomRange && (
+                                                                <svg className="w-3 h-3 stroke-[3] stroke-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-github-dark-muted select-none">
+                                                            Use Custom Date Range
+                                                        </span>
+                                                    </button>
+                                                </div>
+
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-github-dark-muted">Format:</span>
+                                                    <div className="flex p-1 bg-slate-100 dark:bg-[#161b22] rounded-md border border-slate-200 dark:border-github-dark-border gap-1">
+                                                        {[
+                                                            { id: 'xlsx', label: 'Excel' },
+                                                            { id: 'csv', label: 'CSV' },
+                                                            { id: 'pdf', label: 'PDF' }
+                                                        ].map((format) => {
+                                                            const isSelected = reportsFileFormat === format.id;
+                                                            return (
+                                                                <button
+                                                                    key={format.id}
+                                                                    type="button"
+                                                                    onClick={() => setReportsFileFormat(format.id)}
+                                                                    className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-sm transition-all cursor-pointer ${
+                                                                        isSelected 
+                                                                            ? 'bg-indigo-600 text-white shadow-md' 
+                                                                            : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
+                                                                    }`}
+                                                                >
+                                                                    {format.label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={handleReportsGenerate}
+                                                    disabled={reportsIsGenerating}
+                                                    className="w-full py-4.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.2em] rounded-md shadow-xl transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-3 text-xs cursor-pointer h-13"
+                                                >
+                                                    {reportsIsGenerating ? (
+                                                        <>
+                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                            <span>Generating Report...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Download size={16} />
+                                                            <span>Download Report</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Sub-tabs switcher (Preview vs History) */}
+                                        <div className="flex gap-2 bg-slate-100 dark:bg-github-dark-bg/60 p-1.5 rounded-2xl w-full">
+                                            {[
+                                                { id: 'preview', label: 'Data Preview', icon: Eye },
+                                                { id: 'history', label: 'Export History', icon: DownloadCloud }
+                                            ].map((tab) => {
+                                                const isSelected = reportsActiveTab === tab.id;
+                                                return (
+                                                    <button
+                                                        key={tab.id}
+                                                        onClick={() => setReportsActiveTab(tab.id)}
+                                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-200 ${
+                                                            isSelected
+                                                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md'
+                                                                : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700'
+                                                        }`}
+                                                    >
+                                                        <tab.icon size={14} className={isSelected ? 'text-indigo-500' : 'text-slate-400'} />
+                                                        <span>{tab.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Reports Active Tab Content */}
+                                        {reportsActiveTab === 'preview' && (
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between px-1">
+                                                    <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-[0.2em]">Horizontal Scroll Enabled</span>
+                                                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider">Swipe Table Left/Right</span>
+                                                </div>
+
+                                                <div className="w-full overflow-x-auto rounded-3xl border border-slate-100 dark:border-github-dark-border bg-white dark:bg-[#0d1117] shadow-sm no-scrollbar">
+                                                    {reportsLoadingPreview ? (
+                                                        <div className="flex flex-col items-center justify-center py-16 gap-4">
+                                                            <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+                                                            <p className="text-slate-400 text-xs font-bold tracking-widest uppercase">Loading Preview...</p>
+                                                        </div>
+                                                    ) : reportsPreviewData.rows && reportsPreviewData.rows.length > 0 ? (
+                                                        <table className="min-w-full text-left border-collapse text-slate-800 dark:text-github-dark-text" style={{ fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+                                                            <thead className="bg-[#1f4e78] text-white">
+                                                                {reportsPreviewData.headers ? (
+                                                                    <>
+                                                                        <tr className="text-xs uppercase font-bold border-b border-[#3A6085]">
+                                                                            {reportsPreviewData.headers[0].map((cell, idx) => (
+                                                                                <th 
+                                                                                    key={idx} 
+                                                                                    rowSpan={cell.rowspan} 
+                                                                                    colSpan={cell.colspan} 
+                                                                                    className="px-4 py-3 whitespace-nowrap tracking-wider text-center text-xs font-bold uppercase border border-[#3a6085]"
+                                                                                    style={{ backgroundColor: '#1F4E78', color: '#FFFFFF' }}
+                                                                                >
+                                                                                    {cell.label}
+                                                                                </th>
+                                                                            ))}
+                                                                        </tr>
+                                                                        <tr className="text-xs uppercase font-bold">
+                                                                            {reportsPreviewData.headers[1].map((cell, idx) => (
+                                                                                <th 
+                                                                                    key={idx} 
+                                                                                    className="px-4 py-2.5 whitespace-nowrap tracking-wider text-center text-xs font-bold uppercase border border-[#3a6085]"
+                                                                                    style={{ backgroundColor: '#1F4E78', color: '#FFFFFF' }}
+                                                                                >
+                                                                                    {cell.label}
+                                                                                </th>
+                                                                            ))}
+                                                                        </tr>
+                                                                    </>
+                                                                ) : (
+                                                                    <tr className="text-xs uppercase font-bold border-b border-[#3A6085]">
+                                                                        {reportsPreviewData.columns.map((col, idx) => {
+                                                                            const alignment = getAlignmentClass(col);
+                                                                            return (
+                                                                                <th 
+                                                                                    key={idx} 
+                                                                                    className="px-4 py-3 whitespace-nowrap tracking-wider text-xs font-bold uppercase border border-[#3a6085]"
+                                                                                    style={{ 
+                                                                                        backgroundColor: '#1F4E78', 
+                                                                                        color: '#FFFFFF',
+                                                                                        textAlign: alignment
+                                                                                    }}
+                                                                                >
+                                                                                    {col?.toString().split('\n').map((line, lIdx) => (
+                                                                                        <div key={lIdx} className="leading-tight">{line}</div>
+                                                                                    ))}
+                                                                                </th>
+                                                                            );
+                                                                        })}
+                                                                    </tr>
+                                                                )}
+                                                            </thead>
+                                                            <tbody>
+                                                                {reportsPreviewData.rows.map((row, rIdx) => {
+                                                                    const isTotalsRow = row[0]?.toString().toUpperCase() === 'TOTALS';
+                                                                    const isEven = rIdx % 2 === 0;
+                                                                    return (
+                                                                        <tr key={rIdx} className="transition-colors hover:bg-slate-100/50 dark:hover:bg-slate-800/10">
+                                                                            {row.map((cell, cIdx) => {
+                                                                                const colHeader = reportsPreviewData.columns[cIdx]?.toString() || '';
+                                                                                const cellStyle = getCellStyle(cell, colHeader, isTotalsRow, isEven);
+                                                                                const alignment = getAlignmentClass(colHeader);
+                                                                                return (
+                                                                                    <td 
+                                                                                        key={cIdx} 
+                                                                                        className="px-4 py-2.5 text-xs font-bold whitespace-nowrap transition-colors"
+                                                                                        style={{ ...cellStyle, textAlign: alignment }}
+                                                                                    >
+                                                                                        {cell?.toString().split('\n').map((line, lIdx) => (
+                                                                                            <div key={lIdx} className="leading-normal">{line}</div>
+                                                                                        ))}
+                                                                                    </td>
+                                                                                );
+                                                                            })}
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    ) : (
+                                                        <div className="flex flex-col items-center justify-center py-16 gap-3">
+                                                            <Table className="text-slate-200 dark:text-slate-700" size={40} />
+                                                            <p className="text-slate-400 text-xs font-bold tracking-widest uppercase">No data available</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {reportsActiveTab === 'history' && (
+                                            <div className="space-y-4">
+                                                {reportsExportHistory.length > 0 ? (
+                                                    <div className="space-y-4">
+                                                        {reportsExportHistory.map((file) => (
+                                                            <div 
+                                                                key={file.id} 
+                                                                className="bg-white dark:bg-github-dark-subtle p-5 rounded-[2rem] border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center justify-between transition-all active:scale-[0.98]"
+                                                            >
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className={`p-3 rounded-2xl shadow-inner ${file.name.endsWith('.pdf') ? 'bg-red-50 text-red-600' : file.name.endsWith('.csv') ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'} dark:bg-github-dark-bg/60`}>
+                                                                        {file.name.endsWith('.pdf') ? <FileText size={20} /> : file.name.endsWith('.csv') ? <FileType size={20} /> : <FileSpreadsheet size={20} />}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <h4 className="font-black text-sm text-slate-800 dark:text-github-dark-text truncate max-w-[150px] leading-tight">{file.type}</h4>
+                                                                        <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                                                            <span>{file.date}</span>
+                                                                            <span>•</span>
+                                                                            <span>{file.size}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    {file.status === 'Ready' ? (
+                                                                        <a 
+                                                                            href={file.file_url} 
+                                                                            target="_blank" 
+                                                                            rel="noopener noreferrer" 
+                                                                            download={file.name}
+                                                                            className="flex items-center gap-1 bg-emerald-50 border border-emerald-100 text-emerald-600 px-3.5 py-2 rounded-full text-[10px] font-black tracking-widest active:scale-95 transition-all"
+                                                                        >
+                                                                            <Download size={12} strokeWidth={2.5} /> GET
+                                                                        </a>
+                                                                    ) : file.status === 'Generating' ? (
+                                                                        <span className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 text-indigo-600 px-3.5 py-2 rounded-full text-[10px] font-black tracking-widest">
+                                                                            <RefreshCw className="animate-spin" size={10} /> GEN
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="flex items-center gap-1 bg-rose-50 border border-rose-100 text-rose-600 px-3.5 py-2 rounded-full text-[10px] font-black tracking-widest">
+                                                                            <XCircle size={12} /> FAIL
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="py-16 bg-white dark:bg-github-dark-subtle rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-github-dark-border flex flex-col items-center justify-center text-center">
+                                                        <div className="w-16 h-16 bg-slate-50 dark:bg-github-dark-bg rounded-full flex items-center justify-center text-slate-300 mb-4 shadow-inner">
+                                                            <DownloadCloud size={28} />
+                                                        </div>
+                                                        <p className="text-slate-400 text-xs font-bold tracking-widest uppercase">No generation history</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                     </motion.div>

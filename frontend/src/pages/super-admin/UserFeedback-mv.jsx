@@ -64,7 +64,7 @@ ${item.description}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="relative bg-white dark:bg-black w-full rounded-t-[2.5rem] p-6 shadow-2xl border-t border-slate-100 dark:border-slate-800 max-h-[92vh] overflow-y-auto no-scrollbar space-y-6">
         {/* Drag Handle */}
-        <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-850 rounded-full mx-auto mb-2" />
+        <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto mb-2" />
 
         <button onClick={onClose} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-650 dark:hover:text-white rounded-full bg-slate-50 dark:bg-white/5"><X size={18} /></button>
 

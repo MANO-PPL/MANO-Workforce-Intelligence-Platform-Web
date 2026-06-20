@@ -243,7 +243,7 @@ const HolidayManagement = () => {
                                         <span className="w-1.5 h-3.5 bg-indigo-500 rounded-full"></span>
                                         {monthYear}
                                     </h4>
-                                    <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-500 dark:text-github-dark-muted border border-slate-150 dark:border-github-dark-border/40">
+                                    <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-500 dark:text-github-dark-muted border border-slate-200 dark:border-github-dark-border/40">
                                         {groups[monthYear].length} {groups[monthYear].length === 1 ? 'Holiday' : 'Holidays'}
                                     </span>
                                 </div>
@@ -251,7 +251,7 @@ const HolidayManagement = () => {
                                 {/* List of Holidays */}
                                 <div className="space-y-2.5">
                                     {groups[monthYear].sort((a, b) => new Date(a.date) - new Date(b.date)).map(holiday => (
-                                        <div key={holiday.id} className="p-3 bg-slate-50/30 dark:bg-github-dark-subtle/10 border border-slate-150 dark:border-github-dark-border rounded-xl hover:border-indigo-200 dark:hover:border-indigo-900/50 transition-all group flex items-center gap-4">
+                                        <div key={holiday.id} className="p-3 bg-slate-50/30 dark:bg-github-dark-subtle/10 border border-slate-200 dark:border-github-dark-border rounded-xl hover:border-indigo-200 dark:hover:border-indigo-900/50 transition-all group flex items-center gap-4">
                                             {/* Date Box */}
                                             <div className="shrink-0 w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex flex-col items-center justify-center border border-indigo-100 dark:border-indigo-800/30">
                                                 <span className="text-[9px] font-black uppercase leading-none opacity-60 mb-0.5">
@@ -313,25 +313,25 @@ const HolidayManagement = () => {
             <div className="h-[calc(100vh-64px)] p-4 space-y-4 overflow-hidden flex flex-col">
 
                 {/* Tabs */}
-                <div className="flex space-x-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
+                <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit">
                     <button
                         onClick={() => setActiveTab('holidays')}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'holidays'
-                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'holidays'
+                            ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
                             : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                     >
-                        <Calendar size={16} className={`${activeTab === 'holidays' ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
+                        <Calendar size={15} className={`${activeTab === 'holidays' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
                         <span className="leading-none">Holidays List</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('leave_application')}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'leave_application'
-                            ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'leave_application'
+                            ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
                             : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                     >
-                        <FileText size={16} className={`${activeTab === 'leave_application' ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
+                        <FileText size={15} className={`${activeTab === 'leave_application' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
                         <span className="leading-none">Leave Application</span>
                     </button>
                 </div>

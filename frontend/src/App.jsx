@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "react-toastify/dist/ReactToastify.css";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, Slide } from "react-toastify";
 
 import ErrorBoundary from "./ErrorBoundary";
 import ResponsiveRoute from "./components/ResponsiveRoute";
@@ -15,6 +15,7 @@ import TestRoute from "./context/TestRoute";
 import Login from "./pages/user-auth/Login";
 import ForgotPassword from "./pages/user-auth/ForgotPassword";
 import SuperAdminLogin from "./pages/user-auth/SuperAdminLogin";
+import Register from "./pages/user-auth/Register";
 import WordCaptchaTest from "./pages/test/WordCaptchaTest"; // only for testing
 
 import AdminDashboard from "./pages/dashboard/AdminDashboard"
@@ -53,12 +54,14 @@ import OrganizationList from "./pages/organizations/OrganizationList"
 import SecurityAlerts from "./pages/super-admin/SecurityAlerts"
 import UserFeedback from "./pages/super-admin/UserFeedback"
 import PM2LogsConsole from "./pages/super-admin/PM2LogsConsole"
+import APIAnalytics from "./pages/super-admin/APIAnalytics"
 
 // Mobile View Imports
 
 import MobileLogin from "./pages/user-auth/Login-mv";
 import MobileForgotPassword from "./pages/user-auth/ForgotPassword-mv";
 import SuperAdminLoginMobile from "./pages/user-auth/SuperAdminLogin-mv";
+import MobileRegister from "./pages/user-auth/Register-mv";
 import MobileAdminDashboard from "./pages/dashboard/AdminDashboard-mv";
 import MobileEmployeeDashboard from "./pages/dashboard/EmployeeDashboard-mv";
 import MobileAttendance from "./pages/attendance/MobileAttendancePage";
@@ -130,25 +133,30 @@ function SeoManager() {
     const path = location.pathname;
     const isPublicLanding = path === "/";
     const isLoginPage = path === "/login";
+    const isSignupPage = path === "/signup";
     const isForgotPassword = path === "/forgot-password";
 
     const title = isPublicLanding
       ? "MANO Attendance | Smart Attendance & Workforce Management"
       : isLoginPage
         ? "MANO Attendance Login | Secure Portal Access"
-        : isForgotPassword
-          ? "Forgot Password | MANO Attendance"
-          : "MANO Attendance";
+        : isSignupPage
+          ? "Self-Onboarding Signup | MANO Attendance"
+          : isForgotPassword
+            ? "Forgot Password | MANO Attendance"
+            : "MANO Attendance";
 
     const description = isPublicLanding
       ? "MANO Attendance: The ultimate smart attendance and workforce management platform with geofencing, AI insights, and payroll reports."
       : isLoginPage
         ? "Access the MANO Attendance secure login portal. Manage your workforce, track live attendance, and generate reports."
-        : "MANO Attendance workforce platform.";
+        : isSignupPage
+          ? "Register a new organization and administrator account on the MANO Attendance smart workforce platform."
+          : "MANO Attendance workforce platform.";
 
-    const canonicalPath = isPublicLanding ? "" : isLoginPage ? "login" : isForgotPassword ? "forgot-password" : "";
+    const canonicalPath = isPublicLanding ? "" : isLoginPage ? "login" : isSignupPage ? "signup" : isForgotPassword ? "forgot-password" : "";
     const canonicalUrl = `${SEO_BASE_URL}/${canonicalPath}`;
-    const robots = isPublicLanding || isLoginPage || isForgotPassword ? "index, follow" : "noindex, nofollow";
+    const robots = isPublicLanding || isLoginPage || isSignupPage || isForgotPassword ? "index, follow" : "noindex, nofollow";
 
     document.title = title;
     upsertCanonical(canonicalUrl);
@@ -272,17 +280,19 @@ function App() {
         <NotificationProvider>
           <SeoManager />
           <ScaleManager />
-        <ToastContainer position="bottom-center" autoClose={3000} limit={1} hideProgressBar={true} pauseOnHover={false} pauseOnFocusLoss={false} closeOnClick={true} />
+        <ToastContainer enableMultiContainer containerId="defaultContainer" position="bottom-center" autoClose={3000} limit={1} hideProgressBar={true} pauseOnHover={false} pauseOnFocusLoss={false} closeOnClick={true} />
+        <ToastContainer enableMultiContainer containerId="macOSNotifications" position="top-right" autoClose={3000} limit={3} hideProgressBar={true} closeButton={false} newestOnTop={true} transition={Slide} />
         <Routes>
 
           {/* Website Landing (shown first when not logged in) */}
           <Route path="/" element={<RootHandler />} />
           <Route path="/careers/:slug" element={<ResponsiveRoute DesktopComponent={PublicJobOpening} MobileComponent={PublicJobOpeningMobile} />} />
-          <Route path="/get-started" element={<Navigate to="/login" replace />} />
+          <Route path="/get-started" element={<Navigate to="/signup" replace />} />
 
-          {/* Public Route: Login */}
+          {/* Public Route: Login & Onboarding */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<ResponsiveRoute DesktopComponent={Login} MobileComponent={MobileLogin} />} />
+            <Route path="/signup" element={<ResponsiveRoute DesktopComponent={Register} MobileComponent={MobileRegister} />} />
             <Route path="/org-login" element={<ResponsiveRoute DesktopComponent={SuperAdminLogin} MobileComponent={SuperAdminLoginMobile} />} />
             <Route path="/forgot-password" element={<ResponsiveRoute DesktopComponent={ForgotPassword} MobileComponent={MobileForgotPassword} />} />
           </Route>
@@ -341,6 +351,7 @@ function App() {
               <Route path="/super-admin/alerts" element={<ResponsiveRoute DesktopComponent={SecurityAlerts} MobileComponent={SecurityAlertsMobile} />} />
               <Route path="/super-admin/feedback" element={<ResponsiveRoute DesktopComponent={UserFeedback} MobileComponent={UserFeedbackMobile} />} />
               <Route path="/super-admin/logs" element={<ResponsiveRoute DesktopComponent={PM2LogsConsole} MobileComponent={PM2LogsConsole} />} />
+              <Route path="/super-admin/api-analytics" element={<ResponsiveRoute DesktopComponent={APIAnalytics} MobileComponent={APIAnalytics} />} />
             </Route>
           </Route>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, X, ChevronDown, ChevronUp } from 'lucide-react';
 
-const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDate, maxDate }) => {
+const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDate, maxDate, compact = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -134,15 +134,31 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
 
     return (
         <div className="relative" ref={containerRef}>
-            {label && <label className="block text-xs font-bold uppercase text-slate-500 dark:text-github-dark-muted mb-1.5">{label}</label>}
+            {label && (
+                <label className={`block font-bold uppercase text-slate-500 dark:text-github-dark-muted ${
+                    compact 
+                        ? 'text-[10px] tracking-wider mb-1 ml-0.5' 
+                        : 'text-xs mb-1.5'
+                }`}>
+                    {label}
+                </label>
+            )}
 
             <div
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full py-2.5 px-4 bg-white dark:bg-dark-card border ${isOpen ? 'border-indigo-500 ring-1 ring-indigo-500/20' : 'border-slate-200 dark:border-github-dark-border'} rounded-xl flex items-center justify-between gap-2 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm group select-none`}
+                className={`w-full border ${
+                    isOpen 
+                        ? 'border-indigo-500 ring-1 ring-indigo-500/20' 
+                        : 'border-slate-200 dark:border-github-dark-border'
+                } rounded-xl flex items-center justify-between gap-2 cursor-pointer transition-all shadow-sm group select-none ${
+                    compact 
+                        ? 'py-2 px-3 text-xs bg-slate-50 dark:bg-[#161b22] hover:bg-slate-100 dark:hover:bg-[#21262d]' 
+                        : 'py-2.5 px-4 text-sm bg-white dark:bg-dark-card hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
             >
                 <div className="flex items-center gap-2 overflow-hidden">
                     <Calendar size={18} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
-                    <span className={`text-sm font-medium ${value ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'} truncate`}>
+                    <span className={`${compact ? 'text-xs font-semibold' : 'text-sm font-medium'} ${value ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'} truncate`}>
                         {value ? formatDateDisplay(value) : placeholder}
                     </span>
                 </div>
@@ -160,7 +176,7 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
             </div>
 
             {isOpen && (
-                <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-github-dark-subtle rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                <div className="absolute left-0 mt-2 w-[280px] bg-white dark:bg-github-dark-subtle rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
                     {/* Header */}
                     <div className="p-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-github-dark-subtle/50">
                         <button onClick={handlePrevMonth} type="button" className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-500 transition-colors">
@@ -175,16 +191,16 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
                     </div>
 
                     {/* Weekdays */}
-                    <div className="grid grid-cols-7 gap-1 p-2 pb-0 text-center">
+                    <div className="grid grid-cols-7 gap-1 p-2 pb-0 text-center justify-items-center">
                         {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                            <div key={day} className="text-[10px] uppercase font-bold text-slate-400">
+                            <div key={day} className="text-[10px] uppercase font-bold text-slate-400 w-8 h-8 flex items-center justify-center">
                                 {day}
                             </div>
                         ))}
                     </div>
 
                     {/* Days */}
-                    <div className="grid grid-cols-7 gap-1 p-2">
+                    <div className="grid grid-cols-7 gap-1 p-2 justify-items-center">
                         {renderCalendar()}
                     </div>
 
@@ -205,9 +221,11 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
                             onClick={(e) => {
                                 e.stopPropagation();
                                 const today = new Date();
-                                handleDayClick(today.getDate());
-                                setCurrentMonth(today.getMonth());
-                                setCurrentYear(today.getFullYear());
+                                const year = today.getFullYear();
+                                const month = String(today.getMonth() + 1).padStart(2, '0');
+                                const dayStr = String(today.getDate()).padStart(2, '0');
+                                onChange(`${year}-${month}-${dayStr}`);
+                                setIsOpen(false);
                             }}
                             type="button"
                             className="text-xs px-2 py-1 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold"

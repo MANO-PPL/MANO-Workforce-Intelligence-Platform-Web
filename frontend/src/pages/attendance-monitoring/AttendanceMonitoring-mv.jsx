@@ -7,10 +7,10 @@ import {
     ChevronDown, FileText, CheckCircle, XCircle, AlertCircle, X, LogIn,
     LogOut, History, PieChart as PieChartIcon, BarChart as BarChartIcon,
     RefreshCcw, MoreVertical, LayoutGrid, ArrowRight, Eye, Info,
-    ChevronRight, ChevronLeft, Map, Camera
+    ChevronRight, ChevronLeft, Map, Camera, Users
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
-import { attendanceService } from '../../services/attendanceService';
+import { attendanceService, attendanceCacheData } from '../../services/attendanceService';
 import DatePicker from '../../components/DatePicker';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -87,9 +87,156 @@ const getCurrentTimeInTimezone = (orgTimezone) => {
     }
 };
 
+const formatTotalTime = (totalMin, fallbackHours) => {
+    let minutes = 0;
+    if (totalMin > 0) {
+        minutes = totalMin;
+    } else if (fallbackHours > 0) {
+        minutes = fallbackHours * 60;
+    }
+    
+    if (minutes <= 0) return '-';
+    
+    const hrs = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    
+    if (hrs > 0 && mins > 0) {
+        return `${hrs} ${hrs === 1 ? 'hr' : 'hrs'} ${mins} ${mins === 1 ? 'min' : 'mins'}`;
+    } else if (hrs > 0) {
+        return `${hrs} ${hrs === 1 ? 'hr' : 'hrs'}`;
+    } else {
+        return `${mins} ${mins === 1 ? 'min' : 'mins'}`;
+    }
+};
+
+const processAttendanceData = (staff, resolvedTz) => {
+    const mergedData = staff.map(u => {
+        const daySessions = u.sessions || [];
+        let totalMin = 0;
+        const sessions = daySessions.map(r => {
+            const inTime = parseTimeInTimezone(r, false, resolvedTz);
+            const formatTime = (d) => {
+                if (!d) return '-';
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            };
+
+            const inStr = formatTime(inTime);
+            let outStr = '-';
+            let isActive = !r.time_out && r.status !== 'MISSED_PUNCH';
+
+            const outTime = parseTimeInTimezone(r, true, resolvedTz);
+            if (outTime) {
+                outStr = formatTime(outTime);
+                if (inTime) totalMin += Math.max(0, (outTime - inTime) / 60000);
+            } else if (isActive && inTime) {
+                const nowTZ = getCurrentTimeInTimezone(resolvedTz);
+                totalMin += Math.max(0, (nowTZ - inTime) / 60000);
+            }
+
+            const inLoc = r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Unknown');
+            const outLoc = r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : null);
+
+            return {
+                rawIn: inTime,
+                rawOut: outTime,
+                in: inStr,
+                out: outStr,
+                date: inTime ? inTime.toLocaleDateString() : '-',
+                isActive,
+                inLocation: inLoc,
+                outLocation: outLoc,
+                lateMinutes: r.late_minutes || 0,
+                isLate: (r.late_minutes || 0) > 0,
+                lateReason: r.late_reason,
+                inImage: r.time_in_image,
+                outImage: r.time_out_image,
+                inLat: r.time_in_lat,
+                inLng: r.time_in_lng,
+                outLat: r.time_out_lat,
+                outLng: r.time_out_lng
+            };
+        });
+
+        // Standardize Status String to match frontend layout colors
+        const statusMap = {
+            'WEEK_OFF': 'Week Off',
+            'HOLIDAY': 'Holiday',
+            'LEAVE': 'Leave',
+            'ABSENT': 'Absent',
+            'PRESENT': 'Present',
+            'LATE': 'Late',
+            'OVERTIME': 'Overtime',
+            'MISSED_PUNCH': 'Missed Punch',
+            'Active': 'Active',
+            'Late Active': 'Late Active'
+        };
+        const status = statusMap[u.status] || u.status || 'Absent';
+
+        const totalHrs = formatTotalTime(totalMin, u.total_hours > 0 ? Number(u.total_hours) : 0);
+        const lastLocation = u.sessions && u.sessions.length > 0
+            ? u.sessions[0].time_in_address || (u.sessions[0].time_in_lat ? `${u.sessions[0].time_in_lat}, ${u.sessions[0].time_in_lng}` : '-')
+            : '-';
+
+        // Recreate allStatuses to retain compatibility with stats counts
+        let allStatuses = [];
+        if (status === 'Late Active') { allStatuses.push('Active', 'Late'); }
+        else if (status === 'Active') { allStatuses.push('Active'); }
+        else if (status === 'Present') { allStatuses.push('Present'); }
+        else if (status === 'Late') { allStatuses.push('Present', 'Late'); }
+        else if (status === 'Overtime') { allStatuses.push('Present', 'Overtime'); }
+        else if (status === 'Missed Punch') { allStatuses.push('Missed Punch'); }
+        else if (status === 'Week Off') { allStatuses.push('Week Off'); }
+        else if (status === 'Holiday') { allStatuses.push('Holiday'); }
+        else if (status === 'Leave') { allStatuses.push('Leave'); }
+        else { allStatuses.push('Absent'); }
+
+        return {
+            id: u.user_id,
+            name: u.user_name || 'Unknown',
+            role: u.desg_name || 'Employee',
+            avatar: (u.profile_image_url && u.profile_image_url.trim() !== '') ? u.profile_image_url : (u.user_name ? u.user_name.trim().charAt(0).toUpperCase() : 'U') || 'U',
+            department: u.dept_name || 'General',
+            sessions,
+            status,
+            allStatuses,
+            totalHours: totalHrs,
+            location: lastLocation,
+            lateReason: u.late_reason || ''
+        };
+    });
+
+    // Sort: Active/Present/Late/Overtime first, then Absent, then Week Off/Holiday/Leave
+    const statusWeights = {
+        'Active': 10,
+        'Late Active': 9,
+        'Late': 8,
+        'Overtime': 7,
+        'Present': 6,
+        'Missed Punch': 5,
+        'Absent': 4,
+        'Leave': 3,
+        'Holiday': 2,
+        'Week Off': 1
+    };
+    mergedData.sort((a, b) => (statusWeights[b.status] || 0) - (statusWeights[a.status] || 0));
+
+    return mergedData;
+};
+
 const MobileAttendanceMonitoring = () => {
     const { avatarTimestamp, user: currentUser } = useAuth();
-    const [orgTimezone, setOrgTimezone] = useState('UTC');
+
+    // Get initial values from localStorage to support persistent views/filters
+    const initialSubTab = localStorage.getItem('live_attendance_active_sub_tab') || 'overview';
+    const initialDate = localStorage.getItem('live_attendance_selected_date') || new Date().toISOString().split("T")[0];
+    const initialSearch = localStorage.getItem('live_attendance_search_term') || '';
+    const initialDept = localStorage.getItem('live_attendance_department_filter') || 'All';
+    const initialStatus = localStorage.getItem('live_attendance_status_filter') || 'All';
+
+    // Synchronous memory cache check
+    const cachedResponse = attendanceCacheData.dailySummaryAdmin[initialDate];
+
+    const [orgTimezone, setOrgTimezone] = useState(() => cachedResponse?.timezone || 'UTC');
 
     const getRequestTypeStyle = (type) => {
         const typeStr = String(type).toLowerCase().replace(/_/g, ' ');
@@ -114,9 +261,9 @@ const MobileAttendanceMonitoring = () => {
 
     // UI State
     const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'requests'
-    const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'analytics' | 'timeline' | 'map'
+    const [activeSubTab, setActiveSubTab] = useState(initialSubTab); // 'overview' | 'analytics' | 'timeline' | 'map'
     const [direction, setDirection] = useState(0); // -1 for left, 1 for right
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !cachedResponse);
     const [lastSynced, setLastSynced] = useState(new Date());
     const [activeTheme, setActiveTheme] = useState('voyager');
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
@@ -130,15 +277,33 @@ const MobileAttendanceMonitoring = () => {
     };
 
     // Data State
-    const [attendanceData, setAttendanceData] = useState([]);
-    const [stats, setStats] = useState({ present: 0, late: 0, absent: 0, active: 0 });
+    const [attendanceData, setAttendanceData] = useState(() => {
+        if (cachedResponse?.data) {
+            return processAttendanceData(cachedResponse.data, cachedResponse.timezone || 'UTC');
+        }
+        return [];
+    });
+    const [stats, setStats] = useState(() => {
+        if (cachedResponse?.data) {
+            const merged = processAttendanceData(cachedResponse.data, cachedResponse.timezone || 'UTC');
+            return {
+                present: merged.filter(d => d.status !== 'Absent' && d.status !== 'Week Off' && d.status !== 'Holiday' && d.status !== 'Leave').length,
+                late: merged.filter(d => d.allStatuses ? d.allStatuses.includes('Late') : d.status.includes('Late')).length,
+                absent: merged.filter(d => d.status === 'Absent').length,
+                active: merged.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length,
+                total: merged.length
+            };
+        }
+        return { present: 0, late: 0, absent: 0, active: 0, total: 0 };
+    });
     const [correctionRequests, setCorrectionRequests] = useState([]);
     const [requestCount, setRequestCount] = useState(0);
 
     // Filters
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedDept, setSelectedDept] = useState('All');
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [searchTerm, setSearchTerm] = useState(initialSearch);
+    const [selectedDept, setSelectedDept] = useState(initialDept);
+    const [statusFilter, setStatusFilter] = useState(initialStatus);
+    const [selectedDate, setSelectedDate] = useState(initialDate);
 
     // Selection/Popup State
     const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -199,9 +364,31 @@ const MobileAttendanceMonitoring = () => {
         })
     };
 
+    // Sync filter states to localStorage
+    useEffect(() => {
+        localStorage.setItem('live_attendance_active_sub_tab', activeSubTab);
+    }, [activeSubTab]);
+
+    useEffect(() => {
+        localStorage.setItem('live_attendance_selected_date', selectedDate);
+    }, [selectedDate]);
+
+    useEffect(() => {
+        localStorage.setItem('live_attendance_search_term', searchTerm);
+    }, [searchTerm]);
+
+    useEffect(() => {
+        localStorage.setItem('live_attendance_department_filter', selectedDept);
+    }, [selectedDept]);
+
+    useEffect(() => {
+        localStorage.setItem('live_attendance_status_filter', statusFilter);
+    }, [statusFilter]);
+
     // --- DATA FETCHING (Feature Parity with Web) ---
     const fetchData = async (silent = false) => {
-        if (!silent) setLoading(true);
+        const hasCache = !!attendanceCacheData.dailySummaryAdmin[selectedDate];
+        if (!silent && !hasCache) setLoading(true);
         try {
             const [summaryRes, requestsRes] = await Promise.all([
                 attendanceService.getDailySummaryAdmin(selectedDate),
@@ -213,118 +400,16 @@ const MobileAttendanceMonitoring = () => {
             const resolvedTz = summaryRes.timezone || 'UTC';
             setOrgTimezone(resolvedTz);
 
-            // Merge Data Logic (Synchronized with Web)
-            const mergedData = staff.map(u => {
-                const daySessions = u.sessions || [];
-                const sessions = daySessions.map(r => {
-                    const inTime = parseTimeInTimezone(r, false, resolvedTz);
-                    const formatTime = (d) => {
-                        if (!d) return '-';
-                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    };
-
-                    const inStr = formatTime(inTime);
-                    let outStr = '-';
-                    let isActive = !r.time_out && r.status !== 'MISSED_PUNCH';
-
-                    const outTime = parseTimeInTimezone(r, true, resolvedTz);
-                    if (outTime) {
-                        outStr = formatTime(outTime);
-                    }
-
-                    const inLoc = r.time_in_address || (r.time_in_lat ? `${r.time_in_lat}, ${r.time_in_lng}` : 'Unknown');
-                    const outLoc = r.time_out_address || (r.time_out_lat ? `${r.time_out_lat}, ${r.time_out_lng}` : null);
-
-                    return {
-                        rawIn: inTime,
-                        rawOut: outTime,
-                        in: inStr,
-                        out: outStr,
-                        date: inTime ? inTime.toLocaleDateString() : '-',
-                        isActive,
-                        inLocation: inLoc,
-                        outLocation: outLoc,
-                        lateMinutes: r.late_minutes || 0,
-                        isLate: (r.late_minutes || 0) > 0,
-                        lateReason: r.late_reason,
-                        inImage: r.time_in_image,
-                        outImage: r.time_out_image,
-                        inLat: r.time_in_lat,
-                        inLng: r.time_in_lng,
-                        outLat: r.time_out_lat,
-                        outLng: r.time_out_lng
-                    };
-                });
-
-                // Standardize Status String to match frontend layout colors
-                const statusMap = {
-                    'WEEK_OFF': 'Week Off',
-                    'HOLIDAY': 'Holiday',
-                    'LEAVE': 'Leave',
-                    'ABSENT': 'Absent',
-                    'PRESENT': 'Present',
-                    'LATE': 'Late',
-                    'OVERTIME': 'Overtime',
-                    'MISSED_PUNCH': 'Missed Punch',
-                    'Active': 'Active',
-                    'Late Active': 'Late Active'
-                };
-                const status = statusMap[u.status] || u.status || 'Absent';
-
-                const totalHrs = u.total_hours > 0 ? `${Number(u.total_hours).toFixed(1)} hrs` : '-';
-                const lastLocation = u.sessions && u.sessions.length > 0
-                    ? u.sessions[0].time_in_address || (u.sessions[0].time_in_lat ? `${u.sessions[0].time_in_lat}, ${u.sessions[0].time_in_lng}` : '-')
-                    : '-';
-
-                // Recreate allStatuses to retain compatibility with stats counts
-                let allStatuses = [];
-                if (status === 'Late Active') { allStatuses.push('Active', 'Late'); }
-                else if (status === 'Active') { allStatuses.push('Active'); }
-                else if (status === 'Present') { allStatuses.push('Present'); }
-                else if (status === 'Late') { allStatuses.push('Present', 'Late'); }
-                else if (status === 'Overtime') { allStatuses.push('Present', 'Overtime'); }
-                else if (status === 'Missed Punch') { allStatuses.push('Missed Punch'); }
-                else if (status === 'Week Off') { allStatuses.push('Week Off'); }
-                else if (status === 'Holiday') { allStatuses.push('Holiday'); }
-                else if (status === 'Leave') { allStatuses.push('Leave'); }
-                else { allStatuses.push('Absent'); }
-
-                return {
-                    id: u.user_id,
-                    name: u.user_name || 'Unknown',
-                    role: u.desg_name || 'Employee',
-                    avatar: (u.profile_image_url && u.profile_image_url.trim() !== '') ? u.profile_image_url : (u.user_name ? u.user_name.trim().charAt(0).toUpperCase() : 'U') || 'U',
-                    department: u.dept_name || 'General',
-                    sessions,
-                    status,
-                    allStatuses,
-                    totalHours: totalHrs,
-                    location: lastLocation,
-                    lateReason: u.late_reason || ''
-                };
-            });
-
-            // Sort: Active/Present/Late/Overtime first, then Absent, then Week Off/Holiday/Leave
-            const statusWeights = {
-                'Active': 10,
-                'Late Active': 9,
-                'Late': 8,
-                'Overtime': 7,
-                'Present': 6,
-                'Missed Punch': 5,
-                'Absent': 4,
-                'Leave': 3,
-                'Holiday': 2,
-                'Week Off': 1
-            };
-            mergedData.sort((a, b) => (statusWeights[b.status] || 0) - (statusWeights[a.status] || 0));
+            // Merge Data Logic using helper
+            const mergedData = processAttendanceData(staff, resolvedTz);
 
             setAttendanceData(mergedData);
             setStats({
                 present: mergedData.filter(d => d.status !== 'Absent' && d.status !== 'Week Off' && d.status !== 'Holiday' && d.status !== 'Leave').length,
                 late: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Late') : d.status.includes('Late')).length,
                 absent: mergedData.filter(d => d.status === 'Absent').length,
-                active: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length
+                active: mergedData.filter(d => d.allStatuses ? d.allStatuses.includes('Active') : d.status.includes('Active')).length,
+                total: mergedData.length
             });
 
             setCorrectionRequests(requests);
@@ -455,7 +540,19 @@ const MobileAttendanceMonitoring = () => {
     const filteredEmployees = attendanceData.filter(e => {
         const matchesSearch = e.name.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesDept = selectedDept === 'All' || e.department === selectedDept;
-        return matchesSearch && matchesDept;
+        
+        let matchesStatus = true;
+        if (statusFilter === 'present') {
+            matchesStatus = e.status !== 'Absent' && e.status !== 'Week Off' && e.status !== 'Holiday' && e.status !== 'Leave';
+        } else if (statusFilter === 'late') {
+            matchesStatus = e.allStatuses ? e.allStatuses.includes('Late') : e.status.includes('Late');
+        } else if (statusFilter === 'absent') {
+            matchesStatus = e.status === 'Absent';
+        } else if (statusFilter === 'active') {
+            matchesStatus = e.allStatuses ? e.allStatuses.includes('Active') : e.status.includes('Active');
+        }
+        
+        return matchesSearch && matchesDept && matchesStatus;
     });
 
     const activeEmployees = filteredEmployees.filter(e => e.status !== 'Absent' && e.status !== 'Week Off' && e.status !== 'Holiday' && e.status !== 'Leave');
@@ -477,12 +574,12 @@ const MobileAttendanceMonitoring = () => {
                                 <button
                                     key={tab}
                                     onClick={() => handleTabChange(tab)}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-300 relative ${isActive
+                                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[9.5px] font-black uppercase tracking-wider transition-all duration-300 relative ${isActive
                                             ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02] shadow-sm'
                                             : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
                                         }`}
                                 >
-                                    <Icon size={14} className={`${isActive ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
+                                    <Icon size={12} className={`${isActive ? 'text-indigo-500' : 'text-slate-400'} -mt-[1px]`} />
                                     <span className="truncate leading-none">{label}</span>
                                     {tab === 'requests' && requestCount > 0 && !isActive && (
                                         <span className="ml-1 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
@@ -497,20 +594,20 @@ const MobileAttendanceMonitoring = () => {
                     {/* Sub-Navigation Bar (Matching Screenshot Style) */}
                     {activeTab === 'dashboard' && (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-6 px-2 overflow-x-auto no-scrollbar border-b border-slate-50 dark:border-white/5">
+                            <div className="flex items-center gap-4 px-1 overflow-x-auto no-scrollbar border-b border-slate-50 dark:border-white/5">
                                 {SUB_TABS.map((sub) => {
                                     const isActive = activeSubTab === sub.id;
                                     return (
                                         <button
                                             key={sub.id}
                                             onClick={() => setActiveSubTab(sub.id)}
-                                            className={`flex items-center gap-2 py-4 relative transition-all duration-300 whitespace-nowrap ${isActive
+                                            className={`flex items-center gap-1.5 py-3 relative transition-all duration-300 whitespace-nowrap ${isActive
                                                 ? 'text-indigo-600 dark:text-indigo-400'
                                                 : 'text-slate-400 dark:text-github-dark-muted'
                                                 }`}
                                         >
-                                            <sub.icon size={16} className={`${isActive ? 'text-indigo-500' : 'text-slate-400'} -mt-[0.5px]`} />
-                                            <span className={`text-[11px] font-black uppercase tracking-tighter leading-none ${isActive ? 'opacity-100' : 'opacity-70'}`}>
+                                            <sub.icon size={13} className={`${isActive ? 'text-indigo-500' : 'text-slate-400'} -mt-[0.5px]`} />
+                                            <span className={`text-[9.5px] font-black uppercase tracking-normal leading-none ${isActive ? 'opacity-100' : 'opacity-70'}`}>
                                                 {sub.label}
                                             </span>
                                             {isActive && (
@@ -591,12 +688,23 @@ const MobileAttendanceMonitoring = () => {
                                 {activeEmployees.length} PRESENT TODAY
                             </span>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-full text-[9px] font-black uppercase">
-                            <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                            </span>
-                            Live
+                        <div className="flex items-center gap-2">
+                            {statusFilter !== 'All' && (
+                                <button
+                                    onClick={() => setStatusFilter('All')}
+                                    className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-500/20 rounded text-[8px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-500/30 transition-colors"
+                                >
+                                    <span>{statusFilter === 'total' ? 'Total' : statusFilter === 'present' ? 'Present' : statusFilter === 'late' ? 'Late' : statusFilter === 'absent' ? 'Absent' : statusFilter === 'active' ? 'Active' : statusFilter}</span>
+                                    <span>×</span>
+                                </button>
+                            )}
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-full text-[9px] font-black uppercase">
+                                <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
+                                Live
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -644,10 +752,13 @@ const MobileAttendanceMonitoring = () => {
 
                                             {/* Stats Grid */}
                                             <div className="grid grid-cols-2 gap-3">
-                                                <CompactStatCard label="Present" value={stats.present} color="emerald" icon={UserCheck} />
-                                                <CompactStatCard label="Late" value={stats.late} color="amber" icon={Clock} />
-                                                <CompactStatCard label="Active" value={stats.active} color="blue" icon={Activity} />
-                                                <CompactStatCard label="Absent" value={stats.absent} color="rose" icon={UserX} />
+                                                <div className="col-span-2">
+                                                    <CompactStatCard label="Total Employees" value={stats.total} color="indigo" icon={Users} isSelected={statusFilter === 'total'} onClick={() => setStatusFilter(statusFilter === 'total' ? 'All' : 'total')} />
+                                                </div>
+                                                <CompactStatCard label="Present" value={stats.present} color="emerald" icon={UserCheck} isSelected={statusFilter === 'present'} onClick={() => setStatusFilter(statusFilter === 'present' ? 'All' : 'present')} />
+                                                <CompactStatCard label="Late" value={stats.late} color="amber" icon={Clock} isSelected={statusFilter === 'late'} onClick={() => setStatusFilter(statusFilter === 'late' ? 'All' : 'late')} />
+                                                <CompactStatCard label="Active" value={stats.active} color="blue" icon={Activity} isSelected={statusFilter === 'active'} onClick={() => setStatusFilter(statusFilter === 'active' ? 'All' : 'active')} />
+                                                <CompactStatCard label="Absent" value={stats.absent} color="rose" icon={UserX} isSelected={statusFilter === 'absent'} onClick={() => setStatusFilter(statusFilter === 'absent' ? 'All' : 'absent')} />
                                             </div>
 
                                             {/* List Section */}
@@ -839,6 +950,7 @@ const MobileAttendanceMonitoring = () => {
                                             isThemeMenuOpen={isThemeMenuOpen}
                                             setIsThemeMenuOpen={setIsThemeMenuOpen}
                                             setActiveTheme={setActiveTheme}
+                                            avatarTimestamp={avatarTimestamp}
                                         />
                                     )}
                                 </div>
@@ -995,7 +1107,7 @@ const TimelineView = ({ data, loading, onSelect, avatarTimestamp, orgTimezone })
                                         <div className="min-w-0">
                                             <p className="font-black text-[10px] text-slate-800 dark:text-github-dark-text truncate leading-tight">{item.name}</p>
                                             <p className="text-[8px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-tighter truncate">
-                                                {item.totalHours && item.totalHours.toLowerCase().includes('hrs') ? item.totalHours : `${item.totalHours} Hrs`}
+                                                {item.totalHours && (item.totalHours.toLowerCase().includes('hr') || item.totalHours.toLowerCase().includes('min') || item.totalHours === '-') ? item.totalHours : `${item.totalHours} Hrs`}
                                             </p>
                                         </div>
                                     </div>
@@ -1035,15 +1147,23 @@ const TimelineView = ({ data, loading, onSelect, avatarTimestamp, orgTimezone })
     );
 };
 
-const CompactStatCard = ({ label, value, color, icon: Icon }) => {
+const CompactStatCard = ({ label, value, color, icon: Icon, isSelected, onClick }) => {
     const colors = {
         emerald: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600',
         amber: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600',
         rose: 'bg-rose-50 dark:bg-rose-500/10 text-rose-600',
         blue: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600',
+        indigo: 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
     };
     return (
-        <div className="bg-white dark:bg-dark-card p-3 rounded-lg border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center gap-3">
+        <div
+            onClick={onClick}
+            className={`p-3 rounded-lg shadow-sm flex items-center gap-3 cursor-pointer select-none bg-white dark:bg-dark-card transition-all duration-300 border-2 ${
+                isSelected
+                    ? 'border-indigo-500 dark:border-indigo-500 scale-[1.01] shadow-md'
+                    : 'border-slate-100 dark:border-github-dark-border hover:border-slate-350 dark:hover:border-slate-700'
+            }`}
+        >
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${colors[color]}`}>
                 <Icon size={16} strokeWidth={3} />
             </div>
@@ -1060,7 +1180,7 @@ const CompactEmployeeCard = ({ employee, onClick, avatarTimestamp }) => {
     return (
         <div
             onClick={onClick}
-            className={`bg-white dark:bg-dark-card p-3 rounded-lg border border-slate-100 dark:border-github-dark-border shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all relative overflow-hidden ${isAbsentOrNonWorking ? 'opacity-70 grayscale-[0.5]' : ''}`}
+            className={`bg-white dark:bg-dark-card p-3 rounded-lg border border-slate-100 dark:border-github-dark-border/60 shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all relative overflow-hidden ${isAbsentOrNonWorking ? 'opacity-70 grayscale-[0.5]' : ''}`}
         >
             <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-white/5 overflow-hidden border border-slate-200 dark:border-github-dark-border shrink-0">
                 {employee.avatar.length > 1 ? (
@@ -1179,7 +1299,7 @@ const EmployeeDetailModal = ({ employee, onClose, date, avatarTimestamp }) => {
                                                 onClick={() => setPreviewImage(s.inImage)}
                                                 className="relative aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border shadow-sm group active:scale-95 transition-all"
                                             >
-                                                <img src={s.inImage} className="w-full h-full object-cover" />
+                                                <img src={s.inImage} className="w-full h-full object-contain" />
                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <Camera size={16} className="text-white" />
                                                 </div>
@@ -1205,7 +1325,7 @@ const EmployeeDetailModal = ({ employee, onClose, date, avatarTimestamp }) => {
                                                 onClick={() => setPreviewImage(s.outImage)}
                                                 className="relative aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border shadow-sm group active:scale-95 transition-all"
                                             >
-                                                <img src={s.outImage} className="w-full h-full object-cover" />
+                                                <img src={s.outImage} className="w-full h-full object-contain" />
                                                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <Camera size={16} className="text-white" />
                                                 </div>
@@ -1330,164 +1450,282 @@ const RequestDetailModal = ({ request, onClose, onUpdate }) => {
     );
 };
 
-const ClusterDrillDownPopup = ({ data, onClose }) => {
-    const [selectedUser, setSelectedUser] = useState(null);
-
-    return (
-        <div className="bg-white dark:bg-[#0d1117] rounded-xl overflow-hidden w-[280px] flex flex-col shadow-2xl">
-            {/* Header */}
-            <div className="p-3 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20 relative">
-                {selectedUser && (
-                    <button
-                        onClick={() => setSelectedUser(null)}
-                        className="absolute left-2 top-2.5 p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
-                    >
-                        <ChevronLeft size={16} />
-                    </button>
-                )}
-                <div className={`flex items-center justify-between mb-0.5 ${selectedUser ? 'pl-6' : ''}`}>
-                    <h3 className="text-[10px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-widest">
-                        {selectedUser ? 'Session Details' : 'Location Group'}
-                    </h3>
-                    {!selectedUser && (
-                        <span className="bg-indigo-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full">{data.length} Staff</span>
-                    )}
-                </div>
-                {!selectedUser && <p className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Multiple check-ins at this location</p>}
-            </div>
-
-            {/* Content Area */}
-            <div className="relative overflow-hidden bg-white dark:bg-[#0d1117]" style={{ height: '280px' }}>
-                <AnimatePresence initial={false} mode="wait">
-                    {!selectedUser ? (
-                        <motion.div
-                            key="list"
-                            initial={{ x: -20, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            exit={{ x: -20, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="absolute inset-0 overflow-y-auto p-2 space-y-1.5 no-scrollbar"
-                        >
-                            {data.map((m, idx) => (
-                                <div
-                                    key={idx}
-                                    onClick={() => setSelectedUser(m)}
-                                    className="flex items-center gap-2.5 p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl cursor-pointer transition-all border border-transparent hover:border-indigo-100 dark:hover:border-indigo-500/20 group"
-                                >
-                                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-xs overflow-hidden shrink-0 border border-indigo-100 dark:border-indigo-500/20">
-                                        {m.user.avatar.length > 1 ? <img src={`${m.user.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" /> : m.user.avatar}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[10px] font-black text-slate-800 dark:text-github-dark-text truncate leading-tight">{m.user.name}</p>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                            <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded ${m.type === 'in' ? 'bg-emerald-100 text-emerald-600' : m.type === 'out' ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                                                {m.type === 'combined' ? 'Full' : m.type === 'in' ? 'In' : 'Out'}
-                                            </span>
-                                            <span className="text-[8px] text-slate-400 dark:text-github-dark-muted font-mono font-bold">
-                                                {m.type === 'out' ? m.session.out : m.session.in}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <ChevronRight size={12} className="text-slate-300" />
-                                </div>
-                            ))}
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="detail"
-                            initial={{ x: 20, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            exit={{ x: 20, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="absolute inset-0 overflow-y-auto p-3 no-scrollbar"
-                        >
-                            <div className="flex items-center gap-2.5 mb-4">
-                                <div className="w-9 h-9 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-black text-xs overflow-hidden shrink-0 shadow-md">
-                                    {selectedUser.user.avatar.length > 1 ? <img src={`${selectedUser.user.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" /> : selectedUser.user.avatar}
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="font-black text-slate-800 dark:text-github-dark-text text-[11px] leading-tight">{selectedUser.user.name}</p>
-                                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{selectedUser.type === 'combined' ? 'Full Session' : selectedUser.user.role}</p>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                {selectedUser.type === 'combined' ? (
-                                    <>
-                                        <div className="space-y-1.5 bg-slate-50 dark:bg-github-dark-subtle/30 p-2 rounded-xl border border-slate-100 dark:border-github-dark-border">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Login</span>
-                                                <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded">{selectedUser.session.in}</span>
-                                            </div>
-                                            {selectedUser.session.inImage && (
-                                                <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border h-20 bg-slate-100 dark:bg-github-dark-subtle mt-1">
-                                                    <img src={selectedUser.session.inImage} className="w-full h-full object-cover" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="space-y-1.5 bg-slate-50 dark:bg-github-dark-subtle/30 p-2 rounded-xl border border-slate-100 dark:border-github-dark-border">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Logout</span>
-                                                <span className="text-[9px] font-black text-rose-600 bg-rose-50 dark:bg-rose-900/30 px-1.5 py-0.5 rounded">{selectedUser.session.out}</span>
-                                            </div>
-                                            {selectedUser.session.outImage && (
-                                                <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-github-dark-border h-20 bg-slate-100 dark:bg-github-dark-subtle mt-1">
-                                                    <img src={selectedUser.session.outImage} className="w-full h-full object-cover" />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="flex items-center justify-between bg-slate-50 dark:bg-github-dark-subtle/30 p-2 rounded-xl border border-slate-100 dark:border-github-dark-border">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{selectedUser.type === 'in' ? 'Check In' : 'Check Out'}</span>
-                                            <span className={`text-[9px] font-black ${selectedUser.type === 'in' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' : 'text-rose-600 bg-rose-50 dark:bg-rose-900/30'} px-1.5 py-0.5 rounded uppercase`}>{selectedUser.type === 'in' ? selectedUser.session.in : selectedUser.session.out}</span>
-                                        </div>
-                                        {(selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage) && (
-                                            <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-28 bg-slate-100 dark:bg-github-dark-subtle mt-2">
-                                                <img src={selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage} className="w-full h-full object-cover" />
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                                <div className="flex flex-col gap-1 p-2 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-100 dark:border-github-dark-border">
-                                    <div className="flex items-center gap-1.5 text-[8px] font-black text-slate-400 uppercase tracking-tighter">
-                                        <MapPin size={10} className="text-indigo-500" /> Location Details
-                                    </div>
-                                    <p className="text-[9px] text-slate-600 dark:text-slate-300 leading-tight break-words mt-0.5 font-medium">
-                                        {selectedUser.type === 'out' ? selectedUser.session.outLocation : selectedUser.session.inLocation}
-                                    </p>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
-        </div>
+const MobileClusterDrawer = ({ selectedCluster, onClose, avatarTimestamp }) => {
+    const [selectedUser, setSelectedUser] = useState(() => 
+        selectedCluster.data.length === 1 ? selectedCluster.data[0] : null
     );
-};
+    const [searchQuery, setSearchQuery] = useState('');
 
-const ClusterEvents = ({ setSelectedCluster }) => {
-    const map = useMap();
     useEffect(() => {
-        const handleClusterClick = (e) => {
-            const markers = e.layer.getAllChildMarkers();
-            if (markers.length > 3) {
-                const data = markers.map(m => m.options.customSessionData).filter(Boolean);
-                setSelectedCluster({
-                    position: [e.latlng.lat, e.latlng.lng],
-                    data: data
-                });
-            } else {
-                e.layer.spiderfy();
-            }
-        };
-        map.on('clusterclick', handleClusterClick);
-        return () => {
-            map.off('clusterclick', handleClusterClick);
-        };
-    }, [map]);
-    return null;
+        setSelectedUser(selectedCluster.data.length === 1 ? selectedCluster.data[0] : null);
+        setSearchQuery('');
+    }, [selectedCluster]);
+
+    const filteredClusterData = selectedCluster.data.filter(item => {
+        const name = item.user.name || '';
+        const role = item.user.role || '';
+        const dept = item.user.department || '';
+        const q = searchQuery.toLowerCase();
+        return name.toLowerCase().includes(q) || role.toLowerCase().includes(q) || dept.toLowerCase().includes(q);
+    });
+
+    return createPortal(
+        <>
+            {/* Backdrop */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+                className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[9998]"
+            />
+
+            {/* Bottom Sheet Drawer */}
+            <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-slate-50 dark:bg-dark-card border-t border-slate-200 dark:border-github-dark-border flex flex-col z-[9999] shadow-2xl rounded-t-2xl pb-6"
+            >
+                {/* Drag Handle Visual */}
+                <div className="w-12 h-1 bg-slate-350 dark:bg-white/10 rounded-full mx-auto my-3 shrink-0" />
+
+                {/* Header */}
+                <div className="px-5 pb-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                        {selectedUser && selectedCluster.data.length > 1 && (
+                            <button
+                                onClick={() => setSelectedUser(null)}
+                                className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400 mr-1"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                        )}
+                        <div>
+                            <h3 className="text-xs font-black text-slate-800 dark:text-github-dark-text uppercase tracking-widest">
+                                {selectedUser ? 'Session Details' : 'Location Group'}
+                            </h3>
+                            <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                {selectedUser ? 'Employee Activity' : `${selectedCluster.data.length} checked-in at this location`}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-github-dark-text transition-colors"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Search Bar - only shown in list view */}
+                {!selectedUser && selectedCluster.data.length > 1 && (
+                    <div className="p-3 border-b border-slate-100 dark:border-github-dark-border shrink-0 bg-white dark:bg-[#0d1117]">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-github-dark-muted" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Search staff, role, or dept..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20 text-slate-800 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-bold"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:text-github-dark-muted dark:hover:text-github-dark-text"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Content Body */}
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50 dark:bg-dark-card">
+                    <AnimatePresence initial={false} mode="wait">
+                        {!selectedUser ? (
+                            <motion.div
+                                key="list"
+                                initial={{ x: -20, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: -20, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="space-y-2.5"
+                            >
+                                {filteredClusterData.length > 0 ? (
+                                    filteredClusterData.map((m, idx) => (
+                                        <div
+                                            key={idx}
+                                            onClick={() => setSelectedUser(m)}
+                                            className="flex items-center gap-3 p-3 bg-white dark:bg-github-dark-subtle/10 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 rounded-2xl cursor-pointer transition-all border border-slate-100 dark:border-github-dark-border hover:border-indigo-200 dark:hover:border-indigo-500/20 group shadow-sm"
+                                        >
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm overflow-hidden shrink-0 border border-indigo-100/50 dark:border-indigo-500/10">
+                                                {m.user.avatar.length > 1 ? (
+                                                    <img src={`${m.user.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    m.user.avatar
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-bold text-slate-800 dark:text-github-dark-text truncate leading-tight">
+                                                    {m.user.name}
+                                                </p>
+                                                <p className="text-[10px] text-slate-500 dark:text-github-dark-muted truncate mt-0.5">
+                                                    {m.user.role} • {m.user.department}
+                                                </p>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                                                        m.session.isActive && m.type === 'in'
+                                                            ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 animate-pulse'
+                                                            : m.type === 'in' 
+                                                            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                                            : m.type === 'out' 
+                                                            ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' 
+                                                            : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                                                    }`}>
+                                                        {m.session.isActive && m.type === 'in' ? 'Active' : m.type === 'combined' ? 'Full Session' : m.type === 'in' ? 'Check In' : 'Check Out'}
+                                                    </span>
+                                                    <span className="text-[9px] text-slate-400 dark:text-github-dark-muted font-mono flex items-center gap-1">
+                                                        <Clock size={8} /> {m.type === 'out' ? m.session.out : m.session.in}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-slate-350 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                                                <ChevronRight size={14} />
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-12 text-slate-400 dark:text-github-dark-muted">
+                                        <Search size={24} className="mx-auto mb-2 opacity-50" />
+                                        <p className="text-xs font-medium">No results match your search</p>
+                                    </div>
+                                )}
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="detail"
+                                initial={{ x: 20, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: 20, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="space-y-4"
+                            >
+                                <div className="flex items-center gap-3 p-3 bg-white dark:bg-[#13151f] rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                    <div className="w-12 h-12 rounded-xl bg-indigo-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0 shadow-md">
+                                        {selectedUser.user.avatar.length > 1 ? (
+                                            <img src={`${selectedUser.user.avatar}?t=${avatarTimestamp}`} className="w-full h-full object-cover" />
+                                        ) : (
+                                            selectedUser.user.avatar
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-slate-800 dark:text-github-dark-text text-sm leading-tight">
+                                            {selectedUser.user.name}
+                                        </p>
+                                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                            {selectedUser.user.role} • {selectedUser.user.department}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {selectedUser.type === 'combined' ? (
+                                        <>
+                                            <div className="space-y-2 bg-white dark:bg-github-dark-subtle/30 p-3 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Time In</span>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-0.5 rounded-md">
+                                                        {selectedUser.session.in}
+                                                    </span>
+                                                </div>
+                                                {selectedUser.session.inImage ? (
+                                                    <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-36 bg-slate-100 dark:bg-github-dark-subtle mt-2">
+                                                        <img src={selectedUser.session.inImage} className="w-full h-full object-contain" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center py-4 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
+                                                        <Camera size={16} className="text-slate-400 mb-1" />
+                                                        <span className="text-[9px] text-slate-400">No Check-in Selfie</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="space-y-2 bg-white dark:bg-github-dark-subtle/30 p-3 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                                                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Time Out</span>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 px-2.5 py-0.5 rounded-md">
+                                                        {selectedUser.session.out}
+                                                    </span>
+                                                </div>
+                                                {selectedUser.session.outImage ? (
+                                                    <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-36 bg-slate-100 dark:bg-github-dark-subtle mt-2">
+                                                        <img src={selectedUser.session.outImage} className="w-full h-full object-contain" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center py-4 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
+                                                        <Camera size={16} className="text-slate-400 mb-1" />
+                                                        <span className="text-[9px] text-slate-400">No Check-out Selfie</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center justify-between bg-white dark:bg-github-dark-subtle/30 p-3 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${selectedUser.session.isActive && selectedUser.type === 'in' ? 'bg-indigo-500 animate-pulse' : selectedUser.type === 'in' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                                    <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                                                        {selectedUser.session.isActive && selectedUser.type === 'in' ? 'Active Session' : selectedUser.type === 'in' ? 'Check In' : 'Check Out'}
+                                                    </span>
+                                                </div>
+                                                <span className={`text-[10px] font-bold ${
+                                                    selectedUser.session.isActive && selectedUser.type === 'in'
+                                                        ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 animate-pulse'
+                                                        : selectedUser.type === 'in' 
+                                                        ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' 
+                                                        : 'text-rose-600 bg-rose-50 dark:bg-rose-900/30'
+                                                } px-2.5 py-0.5 rounded-md uppercase`}>
+                                                    {selectedUser.type === 'in' ? selectedUser.session.in : selectedUser.session.out}
+                                                </span>
+                                            </div>
+                                            { (selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage) ? (
+                                                <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-github-dark-border h-48 bg-slate-100 dark:bg-github-dark-subtle mt-2">
+                                                    <img src={selectedUser.type === 'in' ? selectedUser.session.inImage : selectedUser.session.outImage} className="w-full h-full object-contain" />
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center py-6 bg-slate-100/50 dark:bg-github-dark-subtle/10 rounded-2xl border border-dashed border-slate-200 dark:border-github-dark-border mt-2">
+                                                    <Camera size={20} className="text-slate-400 mb-1" />
+                                                    <span className="text-[10px] text-slate-400">No Selfie image captured</span>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                    <div className="flex flex-col gap-1.5 p-3 bg-white dark:bg-github-dark-subtle/30 rounded-2xl border border-slate-100 dark:border-github-dark-border shadow-sm">
+                                        <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                            <MapPin size={12} className="text-indigo-500" /> Location Details
+                                        </div>
+                                        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed break-words whitespace-normal mt-0.5">
+                                            {selectedUser.type === 'out' ? selectedUser.session.outLocation : selectedUser.session.inLocation}
+                                        </p>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            </motion.div>
+        </>,
+        document.body
+    );
 };
 
 const MapRecenter = ({ data, searchTerm, selectedDept }) => {
@@ -1526,8 +1764,30 @@ const createClusterCustomIcon = (cluster) => {
     });
 };
 
-const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isThemeMenuOpen, setIsThemeMenuOpen, setActiveTheme }) => {
+const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isThemeMenuOpen, setIsThemeMenuOpen, setActiveTheme, avatarTimestamp }) => {
     const [selectedCluster, setSelectedCluster] = useState(null);
+    const [clusterGroupElement, setClusterGroupElement] = useState(null);
+
+    useEffect(() => {
+        if (!clusterGroupElement) return;
+
+        const handleClusterClick = (e) => {
+            const markers = e.layer.getAllChildMarkers();
+            if (markers.length > 1) {
+                const data = markers.map(m => m.options.customSessionData).filter(Boolean);
+                setSelectedCluster({
+                    position: [e.latlng.lat, e.latlng.lng],
+                    data: data
+                });
+            }
+        };
+
+        clusterGroupElement.on('clusterclick', handleClusterClick);
+        return () => {
+            clusterGroupElement.off('clusterclick', handleClusterClick);
+        };
+    }, [clusterGroupElement]);
+
     const areCoordsSame = (lat1, lng1, lat2, lng2) => {
         if (!lat1 || !lng1 || !lat2 || !lng2) return false;
         return Math.abs(Number(lat1) - Number(lat2)) < 0.0001 &&
@@ -1570,10 +1830,13 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                 <MapContainer
                     center={[20, 78]}
                     zoom={5}
+                    minZoom={3}
+                    maxBounds={[[-90, -180], [90, 180]]}
+                    maxBoundsViscosity={1.0}
                     className="h-full w-full z-0"
                     attributionControl={false}
                 >
-                    <TileLayer url={MAP_THEMES[activeTheme].url} />
+                    <TileLayer url={MAP_THEMES[activeTheme].url} noWrap={true} />
 
                     {/* Map Theme Switcher Overlay */}
                     <div className="absolute top-4 right-4 z-[1001]">
@@ -1598,7 +1861,7 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                                                     onClick={() => {
                                                         setActiveTheme(id);
                                                         setIsThemeMenuOpen(false);
-                                                    }}
+                                                     }}
                                                     className={`w-full flex items-center justify-between px-4 py-2.5 text-[10px] font-bold uppercase transition-colors ${activeTheme === id
                                                         ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
                                                         : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -1615,24 +1878,15 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                     </div>
 
                     <MapRecenter data={data} searchTerm={searchTerm} selectedDept={selectedDept} />
-                    <ClusterEvents setSelectedCluster={setSelectedCluster} />
-
-                    {selectedCluster && (
-                        <Popup
-                            position={selectedCluster.position}
-                            onClose={() => setSelectedCluster(null)}
-                            closeButton={false}
-                        >
-                            <ClusterDrillDownPopup data={selectedCluster.data} onClose={() => setSelectedCluster(null)} />
-                        </Popup>
-                    )}
 
                     <MarkerClusterGroup
+                        ref={setClusterGroupElement}
                         chunkedLoading
                         maxClusterRadius={50}
                         iconCreateFunction={createClusterCustomIcon}
                         showCoverageOnHover={false}
-                        spiderfyOnMaxZoom={true}
+                        spiderfyOnMaxZoom={false}
+                        zoomToBoundsOnClick={false}
                     >
                         {data.map(user => (
                             user.sessions.map((session, sIdx) => {
@@ -1644,6 +1898,14 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                                             key={`${user.id}-${sIdx}-combined`}
                                             position={[Number(session.inLat), Number(session.inLng)]}
                                             customSessionData={{ user, session, type: 'combined' }}
+                                            eventHandlers={{
+                                                click: () => {
+                                                    setSelectedCluster({
+                                                        position: [Number(session.inLat), Number(session.inLng)],
+                                                        data: [{ user, session, type: 'combined' }]
+                                                    });
+                                                }
+                                            }}
                                             icon={L.divIcon({
                                                 className: 'user-marker-combined',
                                                 html: `<div class="marker-inner relative">
@@ -1651,7 +1913,7 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                                                         <div class="absolute inset-0 border-2 border-emerald-500 rounded-full" style="clip-path: polygon(0 0, 100% 0, 0 100%);"></div>
                                                         <div class="absolute inset-0 border-2 border-rose-500 rounded-full" style="clip-path: polygon(100% 0, 100% 100%, 0 100%);"></div>
                                                         ${user.avatar.length > 1
-                                                        ? `<img src="${user.avatar}" class="w-full h-full object-cover rounded-full" />`
+                                                        ? `<img src="${user.avatar}?t=${avatarTimestamp}" class="w-full h-full object-cover rounded-full" />`
                                                         : `<span class="text-[10px] font-black text-slate-600 dark:text-slate-300">${user.avatar}</span>`
                                                     }
                                                     </div>
@@ -1662,59 +1924,7 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                                                 iconSize: [40, 40],
                                                 iconAnchor: [20, 20]
                                             })}
-                                        >
-                                            <Popup>
-                                                <div className="bg-white dark:bg-[#0d1117] overflow-hidden">
-                                                    <div className="p-3 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20 flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden shrink-0">
-                                                            {user.avatar.length > 1 ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="font-black text-slate-800 dark:text-white text-xs leading-tight">{user.name}</p>
-                                                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Full Session</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="p-3 space-y-3">
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div className="space-y-1">
-                                                                <div className="flex justify-between items-center text-[10px] font-bold">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                                                        <span className="text-slate-400 uppercase tracking-widest text-[8px]">In</span>
-                                                                    </div>
-                                                                    <span className="text-emerald-600">{session.in}</span>
-                                                                </div>
-                                                                {session.inImage && (
-                                                                    <div className="aspect-video rounded-lg overflow-hidden border border-slate-100 dark:border-github-dark-border">
-                                                                        <img src={session.inImage} className="w-full h-full object-cover" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                <div className="flex justify-between items-center text-[10px] font-bold">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-2 h-2 rounded-full bg-rose-500" />
-                                                                        <span className="text-slate-400 uppercase tracking-widest text-[8px]">Out</span>
-                                                                    </div>
-                                                                    <span className="text-rose-600">{session.out}</span>
-                                                                </div>
-                                                                {session.outImage && (
-                                                                    <div className="aspect-video rounded-lg overflow-hidden border border-slate-100 dark:border-github-dark-border">
-                                                                        <img src={session.outImage} className="w-full h-full object-cover" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <div className="mt-3 p-2 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
-                                                            <div className="flex items-center gap-1.5 text-[8px] font-bold text-slate-400 uppercase mb-0.5">
-                                                                <MapPin size={8} className="text-indigo-500" /> Location
-                                                            </div>
-                                                            <p className="text-[9px] text-slate-600 dark:text-slate-300 leading-tight break-words">{session.inLocation}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </Popup>
-                                        </Marker>
+                                        />
                                     );
                                 }
 
@@ -1724,12 +1934,20 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                                             <Marker
                                                 position={[Number(session.inLat), Number(session.inLng)]}
                                                 customSessionData={{ user, session, type: 'in' }}
+                                                eventHandlers={{
+                                                    click: () => {
+                                                        setSelectedCluster({
+                                                            position: [Number(session.inLat), Number(session.inLng)],
+                                                            data: [{ user, session, type: 'in' }]
+                                                        });
+                                                    }
+                                                }}
                                                 icon={L.divIcon({
                                                     className: 'user-marker-in',
                                                     html: `<div class="marker-inner relative">
                                                         <div class="w-10 h-10 rounded-full border-2 border-emerald-500 bg-white dark:bg-github-dark-subtle shadow-lg overflow-hidden flex items-center justify-center">
                                                             ${user.avatar.length > 1
-                                                            ? `<img src="${user.avatar}" class="w-full h-full object-cover" />`
+                                                            ? `<img src="${user.avatar}?t=${avatarTimestamp}" class="w-full h-full object-cover" />`
                                                             : `<span class="text-[10px] font-black text-slate-600 dark:text-slate-300">${user.avatar}</span>`
                                                         }
                                                         </div>
@@ -1740,45 +1958,26 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                                                     iconSize: [40, 40],
                                                     iconAnchor: [20, 20]
                                                 })}
-                                            >
-                                                <Popup>
-                                                    <div className="bg-white dark:bg-[#0d1117] overflow-hidden">
-                                                        <div className="p-3">
-                                                            <div className="flex items-center gap-3 mb-3 pb-3 border-b border-slate-100 dark:border-github-dark-border">
-                                                                <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden">
-                                                                    {user.avatar.length > 1 ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
-                                                                </div>
-                                                                <div>
-                                                                    <p className="font-black text-slate-800 dark:text-white text-xs leading-tight">{user.name}</p>
-                                                                    <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Time In: {session.in}</p>
-                                                                </div>
-                                                            </div>
-                                                            {session.inImage && (
-                                                                <div className="aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border mb-3">
-                                                                    <img src={session.inImage} className="w-full h-full object-cover" />
-                                                                </div>
-                                                            )}
-                                                            <div className="p-2 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
-                                                                <div className="flex items-center gap-1.5 text-[8px] font-bold text-slate-400 uppercase mb-0.5">
-                                                                    <MapPin size={8} className="text-indigo-500" /> Location
-                                                                </div>
-                                                                <p className="text-[9px] text-slate-600 dark:text-slate-300 leading-tight break-words">{session.inLocation}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </Popup>
-                                            </Marker>
+                                            />
                                         )}
                                         {session.outLat && session.outLng && (
                                             <Marker
                                                 position={[Number(session.outLat), Number(session.outLng)]}
                                                 customSessionData={{ user, session, type: 'out' }}
+                                                eventHandlers={{
+                                                    click: () => {
+                                                        setSelectedCluster({
+                                                            position: [Number(session.outLat), Number(session.outLng)],
+                                                            data: [{ user, session, type: 'out' }]
+                                                        });
+                                                    }
+                                                }}
                                                 icon={L.divIcon({
                                                     className: 'user-marker-out',
                                                     html: `<div class="marker-inner relative">
                                                         <div class="w-10 h-10 rounded-full border-2 border-rose-500 bg-white dark:bg-github-dark-subtle shadow-lg overflow-hidden flex items-center justify-center">
                                                             ${user.avatar.length > 1
-                                                            ? `<img src="${user.avatar}" class="w-full h-full object-cover" />`
+                                                            ? `<img src="${user.avatar}?t=${avatarTimestamp}" class="w-full h-full object-cover" />`
                                                             : `<span class="text-[10px] font-black text-slate-600 dark:text-slate-300">${user.avatar}</span>`
                                                         }
                                                         </div>
@@ -1789,34 +1988,7 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                                                     iconSize: [40, 40],
                                                     iconAnchor: [20, 20]
                                                 })}
-                                            >
-                                                <Popup>
-                                                    <div className="bg-white dark:bg-[#0d1117] overflow-hidden">
-                                                        <div className="p-3">
-                                                            <div className="flex items-center gap-3 mb-3 pb-3 border-b border-slate-100 dark:border-github-dark-border">
-                                                                <div className="w-8 h-8 rounded-lg bg-rose-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden">
-                                                                    {user.avatar.length > 1 ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.avatar}
-                                                                </div>
-                                                                <div>
-                                                                    <p className="font-black text-slate-800 dark:text-white text-xs leading-tight">{user.name}</p>
-                                                                    <p className="text-[9px] font-bold text-rose-600 uppercase tracking-widest">Time Out: {session.out}</p>
-                                                                </div>
-                                                            </div>
-                                                            {session.outImage && (
-                                                                <div className="aspect-video rounded-xl overflow-hidden border border-slate-100 dark:border-github-dark-border mb-3">
-                                                                    <img src={session.outImage} className="w-full h-full object-cover" />
-                                                                </div>
-                                                            )}
-                                                            <div className="p-2 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-100 dark:border-github-dark-border">
-                                                                <div className="flex items-center gap-1.5 text-[8px] font-bold text-slate-400 uppercase mb-0.5">
-                                                                    <MapPin size={8} className="text-indigo-500" /> Location
-                                                                </div>
-                                                                <p className="text-[9px] text-slate-600 dark:text-slate-300 leading-tight break-words">{session.outLocation}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </Popup>
-                                            </Marker>
+                                            />
                                         )}
                                     </React.Fragment>
                                 );
@@ -1825,6 +1997,16 @@ const MapView = ({ data, searchTerm, selectedDept, activeTheme, MAP_THEMES, isTh
                     </MarkerClusterGroup>
                 </MapContainer>
             </div>
+
+            <AnimatePresence>
+                {selectedCluster && (
+                    <MobileClusterDrawer
+                        selectedCluster={selectedCluster}
+                        onClose={() => setSelectedCluster(null)}
+                        avatarTimestamp={avatarTimestamp}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };

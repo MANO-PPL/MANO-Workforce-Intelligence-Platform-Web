@@ -133,15 +133,6 @@ export const requestAllPlatformPermissions = async () => {
         console.error('Error requesting geolocation permission:', err);
     }
 
-    // 3. Request Camera Permission (Selfie Verification)
-    try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            console.log('✅ Camera access granted');
-            // Release camera resource immediately
-            stream.getTracks().forEach(track => track.stop());
-        }
-    } catch (err) {
-        console.warn('⚠️ Camera access denied or not supported:', err.message);
-    }
+    // 3. Camera Permission (Selfie Verification) is requested on-demand 
+    // when the user goes to Time In or Time Out, to avoid camera flicking on reload.
 };

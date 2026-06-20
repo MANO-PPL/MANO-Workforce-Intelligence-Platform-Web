@@ -21,7 +21,7 @@ import {
     Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { adminService } from '../../services/adminService';
+import { adminService, adminCacheData } from '../../services/adminService';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
@@ -192,7 +192,7 @@ const MobileEmployeesPage = () => {
     const navigate = useNavigate();
     const { avatarTimestamp } = useAuth();
     const [employees, setEmployees] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !adminCacheData.users['true']);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('Active');
     const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -216,7 +216,8 @@ const MobileEmployeesPage = () => {
 
     const fetchEmployees = async () => {
         try {
-            setLoading(true);
+            const hasCache = !!adminCacheData.users['true'];
+            if (!hasCache) setLoading(true);
             const data = await adminService.getAllUsers(true);
             if (data.success) {
                 const formatted = data.users.map(u => ({

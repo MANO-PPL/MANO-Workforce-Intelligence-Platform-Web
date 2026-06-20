@@ -26,4 +26,7 @@ router.put('/feedback/:id', monitorController.updateFeedbackStatus);
 // PM2 Logs Console
 router.get('/pm2-logs', monitorController.getPM2Logs);
 
+// API Analytics
+router.get('/api-analytics', monitorController.getAPIAnalytics);
+
 export default router;

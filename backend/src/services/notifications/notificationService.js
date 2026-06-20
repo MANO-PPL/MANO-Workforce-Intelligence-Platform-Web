@@ -19,6 +19,13 @@ export const getNotifications = async (
     }
 
     const notifications = await query;
+    const mappedNotifications = notifications.map(n => {
+        if (n.related_entity_type === 'CHAT_MESSAGE') {
+            return { ...n, type: 'CHAT' };
+        }
+        return n;
+    });
+
     const unreadResult = await attendanceDB('notifications')
         .where({
             user_id,
@@ -29,7 +36,7 @@ export const getNotifications = async (
 
     return {
 
-        notifications,
+        notifications: mappedNotifications,
 
         unread_count:
             unreadResult?.count || 0

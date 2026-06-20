@@ -287,6 +287,50 @@ const getSuggestionsForRoute = (pathname, tabInfo, userRole) => {
         ];
     }
 
+    // 10. Careers & Recruitment
+    if (cleanPath === '/recruitment') {
+        return [
+            "How do I create a job opening?",
+            "How does AI candidate ranking work?",
+            "How do I move candidates to a different stage?",
+            "What is the AI JD Generator?",
+            "Where can I find public career sharing links?"
+        ];
+    }
+
+    // 11. HR Document Studio
+    if (cleanPath === '/documents') {
+        return [
+            "How do I generate an Offer Letter?",
+            "What templates are available in the HR Document Studio?",
+            "How do I print or export a generated document?",
+            "How do I use Quick Populate for employee details?",
+            "How does the salary breakdown annexure calculate Basic/HRA/PF?"
+        ];
+    }
+
+    // 12. Subscription Billing
+    if (cleanPath === '/subscription') {
+        return [
+            "What are the subscription plans?",
+            "How do I purchase or pay for a subscription?",
+            "How does the employee pricing slider work?",
+            "What is the discount for yearly billing?",
+            "How is payment signature verified?"
+        ];
+    }
+
+    // 13. Employee Master & Onboarding
+    if (cleanPath === '/employee-master') {
+        return [
+            "What documents are required for onboarding?",
+            "How does the AI Document Auditor scan name mismatches?",
+            "How is onboarding progress calculated?",
+            "Where do I find employee KPI goals?",
+            "What document categories are managed in Employee Master?"
+        ];
+    }
+
     // 10. Super Admin Pages
     if (cleanPath === '/organizations') {
         return [
@@ -363,6 +407,27 @@ export default function InternalChatbotWidget() {
     const messagesEndRef = useRef(null);
     const { user } = useAuth();
 
+    // Read chatbot visibility preference from localStorage (toggled in Profile page)
+    const [isChatbotVisible, setIsChatbotVisible] = useState(() => {
+        const saved = localStorage.getItem('mano_chatbot_visible');
+        return saved === null ? true : saved === 'true';
+    });
+
+    // Listen for storage changes from Profile page toggle (works across tabs too)
+    useEffect(() => {
+        const handleStorage = () => {
+            const saved = localStorage.getItem('mano_chatbot_visible');
+            setIsChatbotVisible(saved === null ? true : saved === 'true');
+        };
+        window.addEventListener('storage', handleStorage);
+        // Also poll localStorage in case toggle happens in the same tab
+        const interval = setInterval(handleStorage, 500);
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            clearInterval(interval);
+        };
+    }, []);
+
     const currentRole = user?.user_type || 'employee';
 
     // Track active tab and subtab info dynamically
@@ -431,6 +496,9 @@ export default function InternalChatbotWidget() {
             sendMessage();
         }
     };
+
+    // Hide entirely when user has turned it off in Profile preferences
+    if (!isChatbotVisible) return null;
 
     return (
         <div className="font-poppins">

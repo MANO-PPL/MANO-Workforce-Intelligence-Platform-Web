@@ -145,8 +145,8 @@ async function cleanupDeletedOrganizations() {
                     .del();
 
                 await trx('notifications').where('org_id', org.org_id).del();
-                await trx('user_activity_logs').where('org_id', org.org_id).del();
-                await trx('application_error_logs').where('org_id', org.org_id).del();
+                await trx('sys_activity_logs').where('org_id', org.org_id).del();
+                await trx('sys_error_logs').where('org_id', org.org_id).del();
                 await trx('attendance_correction_requests').where('org_id', org.org_id).del();
 
                 await trx('user_work_locations')
@@ -157,7 +157,7 @@ async function cleanupDeletedOrganizations() {
                 await trx('daily_attendance').where('org_id', org.org_id).del();
                 await trx('dar_requests').where('org_id', org.org_id).del();
                 await trx('events_meetings').where('org_id', org.org_id).del();
-                await trx('security_alerts').where('org_id', org.org_id).del();
+                await trx('sys_security_alerts').where('org_id', org.org_id).del();
 
                 await trx('feedback_attachments')
                     .whereIn('feedback_id', trx('feedback').select('feedback_id').where('org_id', org.org_id))
@@ -170,7 +170,13 @@ async function cleanupDeletedOrganizations() {
                 await trx('leave_requests').where('org_id', org.org_id).del();
 
                 await trx('attendance_records').where('org_id', org.org_id).del();
-                await trx('chat_rooms').where('org_id', org.org_id).del();
+                // Relational chat tables cleanup
+                await trx('chat_conversations').where('org_id', org.org_id).del();
+                await trx('chat_conversation_members').where('org_id', org.org_id).del();
+                await trx('chat_messages').where('org_id', org.org_id).del();
+                await trx('chat_message_attachments').where('org_id', org.org_id).del();
+                await trx('chat_message_mentions').where('org_id', org.org_id).del();
+                await trx('chat_message_reactions').where('org_id', org.org_id).del();
 
                 // Now delete users and finally the organization
                 await trx('users').where('org_id', org.org_id).del();

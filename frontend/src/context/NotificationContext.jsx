@@ -1,9 +1,103 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
+import { MessageSquare } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { requestAllPlatformPermissions, requestAndRegisterFCMToken, onForegroundMessage } from '../services/fcm';
+
+const MacOSNotification = ({ title, message, type, avatarUrl, relatedEntityType }) => {
+    // If it's a chat notification, let's parse sender and subtitle
+    let sender = title || 'New Notification';
+    let subtitle = 'Mano Portal'; // default
+    const isChat = type === 'CHAT' || type === 'CHAT_MESSAGE' || relatedEntityType === 'CHAT_MESSAGE';
+    
+    if (isChat) {
+        subtitle = '';
+        if (title && title.includes(' in ')) {
+            const parts = title.split(' in ');
+            sender = parts[0];
+        }
+    } else {
+        // For other notifications, e.g. system alerts, request approvals etc.
+        if (title && title.includes(':')) {
+            const parts = title.split(':');
+            sender = parts[0];
+            subtitle = parts.slice(1).join(':').trim();
+        }
+    }
+
+    // Determine the icon to show on the left
+    let iconElement = null;
+    if (isChat) {
+        iconElement = (
+            <div className="relative">
+                {avatarUrl && (
+                    <img 
+                        src={avatarUrl} 
+                        alt={sender} 
+                        className="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200/20 dark:border-white/10"
+                        onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                        }}
+                    />
+                )}
+                <div 
+                    className="chat-fallback-icon w-10 h-10 rounded-full bg-emerald-500/10 dark:bg-emerald-400/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200/20 dark:border-white/10"
+                    style={{ display: avatarUrl ? 'none' : 'flex' }}
+                >
+                    <MessageSquare size={18} className="stroke-[2.5]" />
+                </div>
+            </div>
+        );
+    } else {
+        // System / generic notifications: show Mano logo
+        iconElement = (
+            <div className="w-10 h-10 rounded-full bg-indigo-500/10 dark:bg-indigo-400/15 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/20 dark:border-white/10">
+                <img 
+                    src="/mano-logo.svg" 
+                    alt="Mano" 
+                    className="w-6 h-6 object-contain"
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'block';
+                    }}
+                />
+                <span className="hidden text-[10px] font-bold">M</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-start gap-3 w-full font-sans select-none p-3 rounded-2xl bg-white/[0.04] dark:bg-black/[0.1] backdrop-blur-2xl border border-slate-200/20 dark:border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.4)] min-h-[64px] transition-all">
+            {/* Left Side: Circular Icon */}
+            <div className="flex-shrink-0">
+                {iconElement}
+            </div>
+            
+            {/* Right Side: 3 Lines */}
+            <div className="flex flex-col flex-1 min-w-0 text-left justify-center py-0.5">
+                {/* Line 1: Sender / Title */}
+                <span className="font-bold text-[13px] text-slate-900 dark:text-white leading-tight truncate">
+                    {sender}
+                </span>
+                
+                {/* Line 2: Subtitle / App / Context */}
+                {subtitle && subtitle !== 'Mano Portal' && !isChat && (
+                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 leading-normal tracking-wide uppercase truncate mt-0.5">
+                        {subtitle}
+                    </span>
+                )}
+                
+                {/* Line 3: Message Body */}
+                <span className="text-[12px] text-slate-700 dark:text-slate-350 leading-snug font-medium mt-1 break-words">
+                    {message}
+                </span>
+            </div>
+        </div>
+    );
+};
 
 const NotificationContext = createContext({
     notifications: [],
@@ -18,6 +112,8 @@ export const NotificationProvider = ({ children }) => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    const toastedRef = useRef(new Set());
+    const receivedSocketNotifIds = useRef(new Set());
 
     const fetchNotifications = useCallback(async () => {
         if (!user) return;
@@ -74,37 +170,60 @@ export const NotificationProvider = ({ children }) => {
     useEffect(() => {
         if (user && socket) {
             const handleNewNotification = (notif) => {
+                const notifId = notif.notification_id;
+                if (notifId) {
+                    const stringId = String(notifId);
+                    if (receivedSocketNotifIds.current.has(stringId)) {
+                        return;
+                    }
+                    receivedSocketNotifIds.current.add(stringId);
+                    if (receivedSocketNotifIds.current.size > 100) {
+                        const firstKey = receivedSocketNotifIds.current.values().next().value;
+                        receivedSocketNotifIds.current.delete(firstKey);
+                    }
+                }
+
                 setNotifications(prev => {
-                    if (prev.some(n => n.notification_id === notif.notification_id)) {
+                    if (prev.some(n => n.notification_id === notifId)) {
                         return prev;
                     }
                     return [notif, ...prev];
                 });
                 setUnreadCount(prev => prev + 1);
 
-                // Trigger in-app toast notification aligned with the dark theme
-                toast.info(
-                    <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold text-[13px] text-white">{notif.title}</span>
-                        <span className="text-[12px] text-gray-300 line-clamp-2">{notif.message}</span>
-                    </div>,
-                    {
-                        position: "top-right",
-                        autoClose: 5000,
-                        hideProgressBar: false,
-                        closeOnClick: true,
-                        pauseOnHover: true,
-                        draggable: true,
-                        progressClassName: "bg-indigo-500",
-                        bodyClassName: "text-sm font-sans",
-                        style: {
-                            background: '#1A1A1A',
-                            border: '1px solid #333333',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
-                        }
+                // Show toast banner immediately for chat notifications
+                const isChat = notif.type === 'CHAT' || notif.type === 'CHAT_MESSAGE' || notif.related_entity_type === 'CHAT_MESSAGE';
+                if (isChat && notifId) {
+                    const stringId = String(notifId);
+                    toastedRef.current.add(stringId);
+                    if (toastedRef.current.size > 100) {
+                        const firstKey = toastedRef.current.values().next().value;
+                        toastedRef.current.delete(firstKey);
                     }
-                );
+
+                    toast.info(
+                        <MacOSNotification 
+                            title={notif.title} 
+                            message={notif.message} 
+                            type={notif.type}
+                            avatarUrl={notif.sender_avatar}
+                            relatedEntityType={notif.related_entity_type}
+                        />,
+                        {
+                            containerId: "macOSNotifications",
+                            position: "top-right",
+                            autoClose: 3000,
+                            hideProgressBar: true,
+                            closeOnClick: true,
+                            pauseOnHover: true,
+                            draggable: true,
+                            icon: false,
+                            className: "!bg-transparent !border-none !shadow-none !p-0 !mx-4 md:!mx-0 !my-2",
+                            bodyClassName: "!p-0 !m-0",
+                            closeButton: false,
+                        }
+                    );
+                }
             };
 
             socket.on('new_notification', handleNewNotification);
@@ -134,27 +253,46 @@ export const NotificationProvider = ({ children }) => {
                 requestAndRegisterFCMToken();
             }, 3000);
 
-            // Listen to foreground FCM push messages (fallback when socket is disconnected)
+            // Listen to foreground FCM push messages to trigger the visual banner (slower fallback)
             const unsubscribeFCM = onForegroundMessage((payload) => {
-                if (!socket || !socket.connected) {
+                const notifId = payload.data?.notification_id || payload.messageId || (payload.notification?.title + payload.notification?.body);
+                const notifType = payload.data?.type;
+                const relatedEntityType = payload.data?.related_entity_type;
+                const isChat = notifType === 'CHAT' || notifType === 'CHAT_MESSAGE' || relatedEntityType === 'CHAT_MESSAGE';
+
+                if (isChat) {
+                    if (notifId) {
+                        const stringId = String(notifId);
+                        if (toastedRef.current.has(stringId)) {
+                            return;
+                        }
+                        toastedRef.current.add(stringId);
+                        if (toastedRef.current.size > 100) {
+                            const firstKey = toastedRef.current.values().next().value;
+                            toastedRef.current.delete(firstKey);
+                        }
+                    }
+
                     toast.info(
-                        <div className="flex flex-col gap-0.5">
-                            <span className="font-semibold text-[13px] text-white">
-                                {payload.notification?.title || 'New Notification'}
-                            </span>
-                            <span className="text-[12px] text-gray-300 line-clamp-2">
-                                {payload.notification?.body || ''}
-                            </span>
-                        </div>,
+                        <MacOSNotification 
+                            title={payload.notification?.title || 'New Notification'} 
+                            message={payload.notification?.body || ''} 
+                            type={payload.data?.type}
+                            avatarUrl={payload.data?.sender_avatar}
+                            relatedEntityType={payload.data?.related_entity_type}
+                        />,
                         {
+                            containerId: "macOSNotifications",
                             position: "top-right",
-                            autoClose: 5000,
-                            style: {
-                                background: '#1A1A1A',
-                                border: '1px solid #333333',
-                                borderRadius: '8px',
-                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
-                            }
+                            autoClose: 3000,
+                            hideProgressBar: true,
+                            closeOnClick: true,
+                            pauseOnHover: true,
+                            draggable: true,
+                            icon: false,
+                            className: "!bg-transparent !border-none !shadow-none !p-0 !mx-4 md:!mx-0 !my-2",
+                            bodyClassName: "!p-0 !m-0",
+                            closeButton: false,
                         }
                     );
                 }

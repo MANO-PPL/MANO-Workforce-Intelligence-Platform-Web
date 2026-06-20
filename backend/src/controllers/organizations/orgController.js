@@ -204,12 +204,12 @@ export const getOrgAnalytics = catchAsync(async (req, res, next) => {
         platformDistribution,
         recentLogs
     ] = await Promise.all([
-        attendanceDB('user_activity_logs').where({ org_id: id, event_type: 'API_CALL' }).count('activity_id as count').first(),
-        attendanceDB('application_error_logs').where({ org_id: id }).count('error_id as count').first(),
+        attendanceDB('sys_api_logs').where({ org_id: id }).count('* as count').first(),
+        attendanceDB('sys_error_logs').where({ org_id: id }).count('error_id as count').first(),
         attendanceDB('users').where({ org_id: id, is_active: 1, is_deleted: 0 }).count('user_id as count').first(),
-        attendanceDB('user_activity_logs').where({ org_id: id, event_type: 'API_CALL' }).select('object_type as module').count('activity_id as count').groupBy('object_type'),
-        attendanceDB('user_activity_logs').where({ org_id: id }).select('event_source as platform').count('activity_id as count').groupBy('event_source'),
-        attendanceDB('user_activity_logs').where({ org_id: id, event_type: 'API_CALL' }).select('metadata').orderBy('occurred_at', 'desc').limit(200)
+        attendanceDB('sys_api_logs').where({ org_id: id }).select('module_name as module').count('* as count').groupBy('module_name'),
+        attendanceDB('sys_api_logs').where({ org_id: id }).select('event_source as platform').count('* as count').groupBy('event_source'),
+        attendanceDB('sys_api_logs').where({ org_id: id }).select('duration_ms', 'status_code', 'is_success').orderBy('occurred_at', 'desc').limit(200)
     ]);
 
     // Parse recent logs to compute average latency and success rate
@@ -218,22 +218,12 @@ export const getOrgAnalytics = catchAsync(async (req, res, next) => {
     let callsWithLatency = 0;
 
     recentLogs.forEach(log => {
-        try {
-            let meta = log.metadata;
-            if (typeof meta === 'string') {
-                meta = JSON.parse(meta);
-            }
-            if (meta) {
-                if (meta.duration_ms !== undefined) {
-                    totalLatency += Number(meta.duration_ms);
-                    callsWithLatency++;
-                }
-                if (meta.is_success !== false && meta.status_code < 400) {
-                    successfulCalls++;
-                }
-            }
-        } catch (e) {
-            // Ignore JSON parsing issues
+        if (log.duration_ms !== null && log.duration_ms !== undefined) {
+            totalLatency += Number(log.duration_ms);
+            callsWithLatency++;
+        }
+        if (log.is_success && log.status_code < 400) {
+            successfulCalls++;
         }
     });
 
@@ -313,13 +303,13 @@ export const getOrgLogs = catchAsync(async (req, res, next) => {
     let countQuery;
 
     if (type === 'errors') {
-        query = attendanceDB('application_error_logs as el')
+        query = attendanceDB('sys_error_logs as el')
             .leftJoin('users as u', 'el.user_id', 'u.user_id')
             .select('el.*', 'u.user_name', 'u.email')
             .where('el.org_id', id)
             .orderBy('el.occurred_at', 'desc');
 
-        countQuery = attendanceDB('application_error_logs').where('org_id', id);
+        countQuery = attendanceDB('sys_error_logs').where('org_id', id);
 
         if (platform) {
             // Error logs store platform in extra_context
@@ -340,14 +330,45 @@ export const getOrgLogs = catchAsync(async (req, res, next) => {
                     .orWhere('request_path', 'like', searchQuery);
             });
         }
+    } else if (type === 'api') {
+        query = attendanceDB('sys_api_logs as ar')
+            .leftJoin('users as u', 'ar.user_id', 'u.user_id')
+            .select('ar.*', 'u.user_name', 'u.email')
+            .where('ar.org_id', id)
+            .orderBy('ar.occurred_at', 'desc');
+
+        countQuery = attendanceDB('sys_api_logs').where('org_id', id);
+
+        if (platform) {
+            query = query.andWhere('ar.event_source', platform);
+            countQuery = countQuery.andWhere('event_source', platform);
+        }
+
+        if (module) {
+            query = query.andWhere('ar.module_name', module);
+            countQuery = countQuery.andWhere('module_name', module);
+        }
+
+        if (search) {
+            const searchQuery = `%${search}%`;
+            query = query.andWhere(function() {
+                this.where('ar.request_path', 'like', searchQuery)
+                    .orWhere('ar.route_pattern', 'like', searchQuery)
+                    .orWhere('u.user_name', 'like', searchQuery);
+            });
+            countQuery = countQuery.andWhere(function() {
+                this.where('request_path', 'like', searchQuery)
+                    .orWhere('route_pattern', 'like', searchQuery);
+            });
+        }
     } else {
-        query = attendanceDB('user_activity_logs as al')
+        query = attendanceDB('sys_activity_logs as al')
             .leftJoin('users as u', 'al.user_id', 'u.user_id')
             .select('al.*', 'u.user_name', 'u.email')
             .where('al.org_id', id)
             .orderBy('al.occurred_at', 'desc');
 
-        countQuery = attendanceDB('user_activity_logs').where('org_id', id);
+        countQuery = attendanceDB('sys_activity_logs').where('org_id', id);
 
         if (platform) {
             query = query.andWhere('al.event_source', platform);
@@ -438,47 +459,44 @@ export const getOrgLogs = catchAsync(async (req, res, next) => {
                 platform = 'WEB'; // default fallback for web endpoints
             }
             moduleName = 'System Error';
+        } else if (type === 'api') {
+            platform = log.event_source || 'UNKNOWN';
+            moduleName = log.module_name || 'General';
         } else {
-            if (log.event_type === 'API_CALL') {
-                platform = log.event_source || 'UNKNOWN';
-                moduleName = log.object_type || 'General';
-                if (moduleName === 'API_ENDPOINT') moduleName = 'General';
+            // Manual log classification
+            platform = log.event_source || 'UNKNOWN';
+            if (platform !== 'WEB' && platform !== 'MOBILE_APP' && platform !== 'API_CLIENT') {
+                // Fallback to check user_agent
+                const ua = (log.user_agent || '').toLowerCase();
+                if (ua.includes('dart') || ua.includes('flutter')) platform = 'MOBILE_APP';
+                else platform = 'WEB';
+            }
+
+            // Map manual events to module names
+            const lowerType = (log.event_type || '').toLowerCase();
+            const lowerObj = (log.object_type || '').toLowerCase();
+            const lowerDesc = (log.description || '').toLowerCase();
+
+            if (lowerType === 'login' || lowerType === 'logout') {
+                moduleName = 'Authentication';
+            } else if (lowerType.startsWith('attendance') || lowerObj === 'attendance' || lowerDesc.includes('check in') || lowerDesc.includes('checked in') || lowerDesc.includes('check out') || lowerDesc.includes('checked out')) {
+                moduleName = 'Attendance';
+            } else if (lowerObj === 'leave' || lowerObj === 'leaves' || lowerType.includes('leave')) {
+                moduleName = 'Leaves';
+            } else if (lowerObj === 'holiday' || lowerType.includes('holiday')) {
+                moduleName = 'Holidays';
+            } else if (lowerObj === 'policy' || lowerObj === 'policies') {
+                moduleName = 'Shift Policies';
+            } else if (lowerObj === 'notification' || lowerType.includes('notification')) {
+                moduleName = 'Notifications';
+            } else if (lowerObj === 'dar' || lowerType.includes('dar')) {
+                moduleName = 'DAR (Daily Activity)';
+            } else if (lowerObj === 'employee' || lowerType.includes('employee')) {
+                moduleName = 'Employees';
+            } else if (lowerObj === 'organization' || lowerType.includes('organization')) {
+                moduleName = 'Organizations';
             } else {
-                // Manual log classification
-                platform = log.event_source || 'UNKNOWN';
-                if (platform !== 'WEB' && platform !== 'MOBILE_APP' && platform !== 'API_CLIENT') {
-                    // Fallback to check user_agent
-                    const ua = (log.user_agent || '').toLowerCase();
-                    if (ua.includes('dart') || ua.includes('flutter')) platform = 'MOBILE_APP';
-                    else platform = 'WEB';
-                }
-
-                // Map manual events to module names
-                const lowerType = (log.event_type || '').toLowerCase();
-                const lowerObj = (log.object_type || '').toLowerCase();
-                const lowerDesc = (log.description || '').toLowerCase();
-
-                if (lowerType === 'login' || lowerType === 'logout') {
-                    moduleName = 'Authentication';
-                } else if (lowerType.startsWith('attendance') || lowerObj === 'attendance' || lowerDesc.includes('check in') || lowerDesc.includes('checked in') || lowerDesc.includes('check out') || lowerDesc.includes('checked out')) {
-                    moduleName = 'Attendance';
-                } else if (lowerObj === 'leave' || lowerObj === 'leaves' || lowerType.includes('leave')) {
-                    moduleName = 'Leaves';
-                } else if (lowerObj === 'holiday' || lowerType.includes('holiday')) {
-                    moduleName = 'Holidays';
-                } else if (lowerObj === 'policy' || lowerObj === 'policies') {
-                    moduleName = 'Shift Policies';
-                } else if (lowerObj === 'notification' || lowerType.includes('notification')) {
-                    moduleName = 'Notifications';
-                } else if (lowerObj === 'dar' || lowerType.includes('dar')) {
-                    moduleName = 'DAR (Daily Activity)';
-                } else if (lowerObj === 'employee' || lowerType.includes('employee')) {
-                    moduleName = 'Employees';
-                } else if (lowerObj === 'organization' || lowerType.includes('organization')) {
-                    moduleName = 'Organizations';
-                } else {
-                    moduleName = log.object_type || 'General';
-                }
+                moduleName = log.object_type || 'General';
             }
         }
 

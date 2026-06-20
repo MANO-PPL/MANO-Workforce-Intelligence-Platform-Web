@@ -82,36 +82,36 @@ const DARAdmin = ({ embedded = false }) => {
             )}
 
             {/* Navigation Tabs (Pill Style) */}
-            <div className="flex gap-2 mb-6 bg-white dark:bg-dark-card p-1.5 rounded-xl border border-slate-200 dark:border-github-dark-border w-fit shadow-sm">
+            <div className="flex flex-wrap gap-1 mb-6 bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-xl w-fit shadow-sm border border-slate-200 dark:border-github-dark-border">
                 <button
                     onClick={() => setActiveTab('insights')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'insights'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
-                        : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'insights'
+                        ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
+                        : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                         }`}
                 >
-                    <Activity size={16} />
-                    Insights
+                    <Activity size={15} className={`${activeTab === 'insights' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                    <span className="leading-none">Insights</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('requests')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'requests'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
-                        : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'requests'
+                        ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
+                        : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                         }`}
                 >
-                    <FileText size={16} />
-                    Requests
+                    <FileText size={15} className={`${activeTab === 'requests' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                    <span className="leading-none">Requests</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('data')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'data'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
-                        : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${activeTab === 'data'
+                        ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
+                        : 'text-slate-500 dark:text-github-dark-muted hover:text-slate-700 dark:hover:text-slate-200'
                         }`}
                 >
-                    <Database size={16} />
-                    Master Data
+                    <Database size={15} className={`${activeTab === 'data' ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-400'} -mt-[1px]`} />
+                    <span className="leading-none">Master Data</span>
                 </button>
             </div>
 

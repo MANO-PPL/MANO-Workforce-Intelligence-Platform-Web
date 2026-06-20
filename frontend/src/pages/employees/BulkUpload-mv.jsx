@@ -433,7 +433,7 @@ const BulkUpload = () => {
                                 </button>
                                 <button
                                     onClick={() => { setStep(1); setFile(null); setUploadReport(null); }}
-                                    className="w-full py-4 bg-slate-50 hover:bg-slate-100 dark:bg-[#161b22] dark:hover:bg-[#161b22]/70 text-slate-600 dark:text-slate-300 rounded-2xl font-bold border border-slate-150 dark:border-github-dark-border active:scale-[0.98] transition-all"
+                                    className="w-full py-4 bg-slate-50 hover:bg-slate-100 dark:bg-[#161b22] dark:hover:bg-[#161b22]/70 text-slate-600 dark:text-slate-300 rounded-2xl font-bold border border-slate-200 dark:border-github-dark-border active:scale-[0.98] transition-all"
                                 >
                                     Upload More
                                 </button>
