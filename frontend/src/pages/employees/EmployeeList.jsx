@@ -17,7 +17,8 @@ import {
     RotateCcw,
     AlertTriangle,
     X,
-    User
+    User,
+    Settings
 } from 'lucide-react';
 import { adminService, adminCacheData } from '../../services/adminService';
 import { toast } from 'react-toastify';
@@ -25,6 +26,8 @@ import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmployeeFormContent from '../../components/employees/EmployeeFormContent';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
+import MinimalSelect from '../../components/MinimalSelect';
+
 
 const EmployeeList = () => {
     const navigate = useNavigate();
@@ -46,11 +49,76 @@ const EmployeeList = () => {
         confirmText: 'Confirm'
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [departments, setDepartments] = useState([]);
+    const [selectedDeptFilter, setSelectedDeptFilter] = useState('All');
+    const [designations, setDesignations] = useState([]);
+    const [selectedDesgFilter, setSelectedDesgFilter] = useState('All');
+    const [isDeptDesgOpen, setIsDeptDesgOpen] = useState(false);
+    const [sidebarTab, setSidebarTab] = useState('depts'); // 'depts' | 'desgs'
+    const [newItemName, setNewItemName] = useState('');
+    const [isAddingItem, setIsAddingItem] = useState(false);
 
-    // Fetch Employees on Mount
+    const handleAddDepartment = async () => {
+        if (!newItemName.trim()) return;
+        try {
+            setIsAddingItem(true);
+            await adminService.createDepartment(newItemName);
+            toast.success("Department added successfully!");
+            setNewItemName('');
+            await fetchDepartments();
+        } catch (err) {
+            toast.error(err.message || "Failed to add department");
+        } finally {
+            setIsAddingItem(false);
+        }
+    };
+
+    const handleAddDesignation = async () => {
+        if (!newItemName.trim()) return;
+        try {
+            setIsAddingItem(true);
+            await adminService.createDesignation(newItemName);
+            toast.success("Designation added successfully!");
+            setNewItemName('');
+            await fetchDesignations();
+        } catch (err) {
+            toast.error(err.message || "Failed to add designation");
+        } finally {
+            setIsAddingItem(false);
+        }
+    };
+
+    // Fetch Employees, Departments, and Designations on Mount
     useEffect(() => {
         fetchEmployees();
+        fetchDepartments();
+        fetchDesignations();
     }, []);
+
+    const fetchDepartments = async () => {
+        try {
+            const deptRes = await adminService.getDepartments();
+            if (deptRes && deptRes.departments) {
+                const sortedDepts = [...deptRes.departments].sort((a, b) => a.dept_name.localeCompare(b.dept_name));
+                setDepartments(sortedDepts);
+            }
+        } catch (err) {
+            console.error("Failed to load departments", err);
+        }
+    };
+
+    const fetchDesignations = async () => {
+        try {
+            const desgRes = await adminService.getDesignations();
+            if (desgRes && desgRes.designations) {
+                const sortedDesgs = [...desgRes.designations].sort((a, b) => a.desg_name.localeCompare(b.desg_name));
+                setDesignations(sortedDesgs);
+            }
+        } catch (err) {
+            console.error("Failed to load designations", err);
+        }
+    };
+
 
     const fetchEmployees = async () => {
         try {
@@ -192,8 +260,11 @@ const EmployeeList = () => {
             const matchesSearch = (employee.name || "").toLowerCase().includes(searchLower) ||
                 (employee.email || "").toLowerCase().includes(searchLower);
             const matchesStatus = statusFilter === 'All' || employee.status === statusFilter;
-            return matchesSearch && matchesStatus;
+            const matchesDept = selectedDeptFilter === 'All' || employee.department === selectedDeptFilter;
+            const matchesDesg = selectedDesgFilter === 'All' || employee.role === selectedDesgFilter;
+            return matchesSearch && matchesStatus && matchesDept && matchesDesg;
         })
+
         .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: 'base' }));
 
     const getStatusColor = (status) => {
@@ -226,7 +297,7 @@ const EmployeeList = () => {
 
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {/* Search */}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -238,6 +309,33 @@ const EmployeeList = () => {
                                 className="pl-10 pr-4 py-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg text-sm text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-full sm:w-64 transition-all"
                             />
                         </div>
+
+                        {/* Department Dropdown Filter */}
+                        <MinimalSelect
+                            options={[
+                                { value: 'All', label: 'All Departments' },
+                                ...departments.map(d => ({ value: d.dept_name, label: d.dept_name }))
+                            ]}
+                            value={selectedDeptFilter}
+                            onChange={(val) => setSelectedDeptFilter(val)}
+                            placeholder="All Departments"
+                            searchable={true}
+                            icon={Filter}
+                        />
+
+                        {/* Designation Dropdown Filter */}
+                        <MinimalSelect
+                            options={[
+                                { value: 'All', label: 'All Designations' },
+                                ...designations.map(d => ({ value: d.desg_name, label: d.desg_name }))
+                            ]}
+                            value={selectedDesgFilter}
+                            onChange={(val) => setSelectedDesgFilter(val)}
+                            placeholder="All Designations"
+                            searchable={true}
+                            icon={Filter}
+                        />
+
                         {/* Filter Tabs */}
                         <div className="flex bg-slate-100 dark:bg-github-dark-subtle p-1 rounded-lg">
                             {['Active', 'Inactive', 'Deleted'].map((status) => {
@@ -267,6 +365,13 @@ const EmployeeList = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setIsDeptDesgOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 dark:text-github-dark-text bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors active:scale-95 shadow-sm"
+                        >
+                            <Settings size={18} />
+                            <span>Departments & Designations</span>
+                        </button>
                         <Link to="/employees/bulk" className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 dark:text-github-dark-text bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                             <Upload size={18} />
                             <span className="hidden sm:inline">Bulk Upload</span>
@@ -280,152 +385,152 @@ const EmployeeList = () => {
 
                 {/* Table Card */}
                 <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden transition-colors duration-300">
-                    <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-slate-50/95 dark:bg-github-dark-subtle/95 backdrop-blur-md">
-                                <tr className="text-xs uppercase tracking-wider text-slate-500 dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border">
-                                    <th className="px-6 py-4 w-[22%] text-left">Employee</th>
-                                    <th className="px-6 py-4 w-[18%] text-left">Role & Dept</th>
-                                    <th className="px-6 py-4 w-[13%] text-center">Phone</th>
-                                    <th className="px-6 py-4 w-[12%] text-center">Shift</th>
-                                    <th className="px-6 py-4 w-[25%] text-left">Allowed Geofences</th>
-                                    <th className="px-6 py-4 text-center w-[10%]">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                {loading ? (
-                                    <tr>
-                                        <td colSpan="6" className="px-6 py-12 text-center text-slate-500 dark:text-github-dark-muted">
-                                            Loading...
-                                        </td>
+                        <div className="overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-50/95 dark:bg-github-dark-subtle/95 backdrop-blur-md">
+                                    <tr className="text-xs uppercase tracking-wider text-slate-500 dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border">
+                                        <th className="px-6 py-4 w-[22%] text-left">Employee</th>
+                                        <th className="px-6 py-4 w-[18%] text-left">Role & Dept</th>
+                                        <th className="px-6 py-4 w-[13%] text-center">Phone</th>
+                                        <th className="px-6 py-4 w-[12%] text-center">Shift</th>
+                                        <th className="px-6 py-4 w-[25%] text-left">Allowed Geofences</th>
+                                        <th className="px-6 py-4 text-center w-[10%]">Actions</th>
                                     </tr>
-                                ) : filteredEmployees.length > 0 ? (
-                                    filteredEmployees.map((employee) => (
-                                        <tr
-                                            key={employee.id}
-                                            onClick={() => handleOpenSidebar(employee, 'view')}
-                                            className="group cursor-pointer border-l-2 border-transparent hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] transition-all duration-200"
-                                        >
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-base group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors overflow-hidden border-2 border-white dark:border-github-dark-border shadow-sm">
-                                                        {employee.profile_image_url ? (
-                                                            <img src={`${employee.profile_image_url}?t=${avatarTimestamp}`} alt={employee.name} className="w-full h-full object-cover" />
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center text-slate-500 dark:text-github-dark-muted">
+                                                Loading...
+                                            </td>
+                                        </tr>
+                                    ) : filteredEmployees.length > 0 ? (
+                                        filteredEmployees.map((employee) => (
+                                            <tr
+                                                key={employee.id}
+                                                onClick={() => handleOpenSidebar(employee, 'view')}
+                                                className="group cursor-pointer border-l-2 border-transparent hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] transition-all duration-200"
+                                            >
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-base group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors overflow-hidden border-2 border-white dark:border-github-dark-border shadow-sm">
+                                                            {employee.profile_image_url ? (
+                                                                <img src={`${employee.profile_image_url}?t=${avatarTimestamp}`} alt={employee.name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                employee.name.charAt(0)
+                                                            )}
+                                                        </div>
+                                                        <div className="max-w-[180px] truncate">
+                                                            <p className="text-sm font-semibold text-slate-900 dark:text-github-dark-text group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors truncate" title={employee.name}>{employee.name}</p>
+                                                            <p className="text-xs text-slate-500 dark:text-github-dark-muted truncate opacity-80" title={employee.email}>{employee.email}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{employee.role}</span>
+                                                        <span className="text-xs font-medium text-slate-500 dark:text-github-dark-muted">{employee.department}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5 text-center">
+                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{employee.phone}</span>
+                                                </td>
+                                                <td className="px-6 py-5 text-center">
+                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{employee.shift}</span>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {employee.workLocations && employee.workLocations.filter(loc => loc.is_active).length > 0 ? (
+                                                            employee.workLocations.filter(loc => loc.is_active).map((loc, i) => (
+                                                                <span key={i} className="px-3 py-1.5 text-[11px] font-semibold bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-github-dark-border rounded-lg whitespace-nowrap shadow-sm">
+                                                                    {loc.loc_name}
+                                                                </span>
+                                                            ))
                                                         ) : (
-                                                            employee.name.charAt(0)
+                                                            <span className="text-xs text-slate-400 italic">None</span>
                                                         )}
                                                     </div>
-                                                    <div className="max-w-[180px] truncate">
-                                                        <p className="text-sm font-semibold text-slate-900 dark:text-github-dark-text group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors truncate" title={employee.name}>{employee.name}</p>
-                                                        <p className="text-xs text-slate-500 dark:text-github-dark-muted truncate opacity-80" title={employee.email}>{employee.email}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{employee.role}</span>
-                                                    <span className="text-xs font-medium text-slate-500 dark:text-github-dark-muted">{employee.department}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 text-center">
-                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{employee.phone}</span>
-                                            </td>
-                                            <td className="px-6 py-5 text-center">
-                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{employee.shift}</span>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-wrap gap-2">
-                                                    {employee.workLocations && employee.workLocations.filter(loc => loc.is_active).length > 0 ? (
-                                                        employee.workLocations.filter(loc => loc.is_active).map((loc, i) => (
-                                                            <span key={i} className="px-3 py-1.5 text-[11px] font-semibold bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-github-dark-border rounded-lg whitespace-nowrap shadow-sm">
-                                                                {loc.loc_name}
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-xs text-slate-400 italic">None</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center justify-center gap-2">
-                                                    {employee.status === 'Deleted' ? (
-                                                        <>
-                                                            <button
-                                                                onClick={(e) => handleRestore(e, employee.id)}
-                                                                title="Restore User"
-                                                                className="p-2 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
-                                                            >
-                                                                <RotateCcw size={18} />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => handleForceDelete(e, employee.id)}
-                                                                title="Delete Permanently"
-                                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <button
-                                                                onClick={(e) => handleToggleStatus(e, employee.id, employee.is_active)}
-                                                                title={employee.is_active ? "Deactivate" : "Activate"}
-                                                                disabled={employee.user_type === 'admin'}
-                                                                className={`p-2 rounded-lg transition-colors ${
-                                                                    employee.user_type === 'admin'
-                                                                    ? 'opacity-50 cursor-not-allowed text-slate-400'
-                                                                    : employee.is_active 
-                                                                        ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' 
-                                                                        : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
-                                                                }`}
-                                                            >
-                                                                {employee.is_active ? <UserX size={18} /> : <UserCheck size={18} />}
-                                                            </button>
-                                                            
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleOpenSidebar(employee, 'edit');
-                                                                }}
-                                                                title="Edit"
-                                                                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                                                            >
-                                                                <Edit2 size={18} />
-                                                            </button>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        {employee.status === 'Deleted' ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => handleRestore(e, employee.id)}
+                                                                    title="Restore User"
+                                                                    className="p-2 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                                                                >
+                                                                    <RotateCcw size={18} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => handleForceDelete(e, employee.id)}
+                                                                    title="Delete Permanently"
+                                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                >
+                                                                    <Trash2 size={18} />
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => handleToggleStatus(e, employee.id, employee.is_active)}
+                                                                    title={employee.is_active ? "Deactivate" : "Activate"}
+                                                                    disabled={employee.user_type === 'admin'}
+                                                                    className={`p-2 rounded-lg transition-colors ${
+                                                                        employee.user_type === 'admin'
+                                                                        ? 'opacity-50 cursor-not-allowed text-slate-400'
+                                                                        : employee.is_active 
+                                                                            ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' 
+                                                                            : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                                                                    }`}
+                                                                >
+                                                                    {employee.is_active ? <UserX size={18} /> : <UserCheck size={18} />}
+                                                                </button>
+                                                                
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleOpenSidebar(employee, 'edit');
+                                                                    }}
+                                                                    title="Edit"
+                                                                    className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                                                                >
+                                                                    <Edit2 size={18} />
+                                                                </button>
 
-                                                            {/* Delete Button (Disabled for Admins) */}
-                                                            <button
-                                                                onClick={(e) => handleDelete(e, employee.id)}
-                                                                title={employee.user_type === 'admin' ? "Cannot delete Admin" : "Move to Trash"}
-                                                                disabled={employee.user_type === 'admin'}
-                                                                className={`p-2 rounded-lg transition-colors ${
-                                                                    employee.user_type === 'admin'
-                                                                    ? 'opacity-50 cursor-not-allowed text-slate-400'
-                                                                    : 'text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
-                                                                }`}
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
-                                                        </>
-                                                    )}
+                                                                {/* Delete Button (Disabled for Admins) */}
+                                                                <button
+                                                                    onClick={(e) => handleDelete(e, employee.id)}
+                                                                    title={employee.user_type === 'admin' ? "Cannot delete Admin" : "Move to Trash"}
+                                                                    disabled={employee.user_type === 'admin'}
+                                                                    className={`p-2 rounded-lg transition-colors ${
+                                                                        employee.user_type === 'admin'
+                                                                        ? 'opacity-50 cursor-not-allowed text-slate-400'
+                                                                        : 'text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                                                                    }`}
+                                                                >
+                                                                    <Trash2 size={18} />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center text-slate-500 dark:text-github-dark-muted">
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <Search size={32} className="text-slate-300 dark:text-slate-600" />
+                                                    <p>No employees found matching your filters.</p>
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="5" className="px-6 py-12 text-center text-slate-500 dark:text-github-dark-muted">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <Search size={32} className="text-slate-300 dark:text-slate-600" />
-                                                <p>No employees found matching your filters.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
 
             </div>
 
@@ -559,6 +664,155 @@ const EmployeeList = () => {
                 )}
             </AnimatePresence>
 
+            {/* Departments & Designations Sidebar */}
+            <AnimatePresence>
+                {isDeptDesgOpen && (
+                    <>
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => { setIsDeptDesgOpen(false); setNewItemName(''); }}
+                            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px]"
+                        />
+
+                        {/* Sidebar Drawer */}
+                        <motion.div
+                            initial={{ x: '100%', opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: '100%', opacity: 0 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed right-0 top-0 h-full w-full max-w-[480px] z-50 bg-white dark:bg-dark-card border-l border-slate-200 dark:border-github-dark-border shadow-2xl flex flex-col overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/20">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                                        <Settings size={20} />
+                                    </div>
+                                    <h3 className="text-base font-bold text-slate-800 dark:text-github-dark-text">Departments & Designations</h3>
+                                </div>
+                                <button
+                                    onClick={() => { setIsDeptDesgOpen(false); setNewItemName(''); }}
+                                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Tab selector */}
+                            <div className="flex p-4 border-b border-slate-100 dark:border-github-dark-border gap-2">
+                                <button
+                                    onClick={() => { setSidebarTab('depts'); setNewItemName(''); }}
+                                    className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all ${
+                                        sidebarTab === 'depts'
+                                            ? 'bg-indigo-600 text-white shadow-md'
+                                            : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400'
+                                    }`}
+                                >
+                                    Departments
+                                </button>
+                                <button
+                                    onClick={() => { setSidebarTab('desgs'); setNewItemName(''); }}
+                                    className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all ${
+                                        sidebarTab === 'desgs'
+                                            ? 'bg-indigo-600 text-white shadow-md'
+                                            : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400'
+                                    }`}
+                                >
+                                    Designations
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="flex-1 flex flex-col p-6 overflow-hidden space-y-6">
+                                {sidebarTab === 'depts' ? (
+                                    <div className="flex-1 flex flex-col overflow-hidden space-y-4">
+                                        {/* Add Dept */}
+                                        <div className="space-y-2 flex-shrink-0">
+                                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Add New Department</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Department Name..."
+                                                    value={newItemName}
+                                                    onChange={(e) => setNewItemName(e.target.value)}
+                                                    className="flex-1 px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white"
+                                                />
+                                                <button
+                                                    onClick={handleAddDepartment}
+                                                    disabled={isAddingItem || !newItemName.trim()}
+                                                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-1 active:scale-95"
+                                                >
+                                                    <Plus size={16} />
+                                                    <span>Add</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* List Depts */}
+                                        <div className="flex-1 flex flex-col min-h-0 space-y-2">
+                                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">All Departments</label>
+                                            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850 border border-slate-100 dark:border-github-dark-border rounded-2xl bg-slate-50/20 dark:bg-github-dark-subtle/20 custom-scrollbar">
+                                                {departments.length > 0 ? (
+                                                    departments.map((dept) => (
+                                                        <div key={dept.dept_id || dept.dept_name} className="p-3.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                            {dept.dept_name}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-4 text-xs text-slate-400 italic text-center">No departments available</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 flex flex-col overflow-hidden space-y-4">
+                                        {/* Add Designation */}
+                                        <div className="space-y-2 flex-shrink-0">
+                                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Add New Designation</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Designation Name..."
+                                                    value={newItemName}
+                                                    onChange={(e) => setNewItemName(e.target.value)}
+                                                    className="flex-1 px-4 py-2 text-sm bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white"
+                                                />
+                                                <button
+                                                    onClick={handleAddDesignation}
+                                                    disabled={isAddingItem || !newItemName.trim()}
+                                                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-1 active:scale-95"
+                                                >
+                                                    <Plus size={16} />
+                                                    <span>Add</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* List Designations */}
+                                        <div className="flex-1 flex flex-col min-h-0 space-y-2">
+                                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">All Designations</label>
+                                            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850 border border-slate-100 dark:border-github-dark-border rounded-2xl bg-slate-50/20 dark:bg-github-dark-subtle/20 custom-scrollbar">
+                                                {designations.length > 0 ? (
+                                                    designations.map((desg) => (
+                                                        <div key={desg.desg_id || desg.desg_name} className="p-3.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                            {desg.desg_name}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-4 text-xs text-slate-400 italic text-center">No designations available</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
             <AnimatePresence>
                 {confirmModal.isOpen && (
                     <ConfirmationModal

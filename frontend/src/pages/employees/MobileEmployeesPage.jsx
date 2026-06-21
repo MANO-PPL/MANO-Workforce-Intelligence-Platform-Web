@@ -18,7 +18,8 @@ import {
     ChevronRight,
     User,
     Shield,
-    Eye
+    Eye,
+    Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { adminService, adminCacheData } from '../../services/adminService';
@@ -188,6 +189,135 @@ const EmployeeDetailModal = ({ employee, onClose, onAction, avatarTimestamp }) =
     );
 };
 
+const DeptDesgModal = ({ isOpen, onClose, departments, designations, onAddDept, onAddDesg, isAddingItem }) => {
+    const [sidebarTab, setSidebarTab] = useState('depts');
+    const [newItemName, setNewItemName] = useState('');
+
+    useEffect(() => {
+        const handlePopState = (e) => {
+            e.preventDefault();
+            onClose();
+            window.history.pushState(null, '', window.location.pathname);
+        };
+        if (isOpen) {
+            window.history.pushState(null, '', window.location.pathname);
+            window.addEventListener('popstate', handlePopState);
+        }
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [isOpen, onClose]);
+
+    if (!isOpen) return null;
+
+    const handleAdd = async () => {
+        if (!newItemName.trim()) return;
+        if (sidebarTab === 'depts') {
+            await onAddDept(newItemName);
+        } else {
+            await onAddDesg(newItemName);
+        }
+        setNewItemName('');
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center overflow-hidden">
+            <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                className="relative bg-white dark:bg-black w-full rounded-t-[2.5rem] p-6 shadow-2xl border-t border-slate-100 dark:border-slate-800 flex flex-col max-h-[85vh]"
+            >
+                {/* Drag Handle */}
+                <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto mb-6" />
+
+                <button
+                    onClick={onClose}
+                    className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 rounded-full transition-all"
+                >
+                    <X size={20} />
+                </button>
+
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Manage Departments & Designations</h3>
+
+                {/* Tab Switcher */}
+                <div className="flex bg-[#f6f8fa] dark:bg-github-dark-subtle p-1.5 flex rounded-2xl border border-slate-200 dark:border-github-dark-border mb-6">
+                    <button
+                        onClick={() => { setSidebarTab('depts'); setNewItemName(''); }}
+                        className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all ${
+                            sidebarTab === 'depts'
+                                ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                : 'text-slate-500 dark:text-github-dark-muted'
+                        }`}
+                    >
+                        Departments
+                    </button>
+                    <button
+                        onClick={() => { setSidebarTab('desgs'); setNewItemName(''); }}
+                        className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all ${
+                            sidebarTab === 'desgs'
+                                ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                : 'text-slate-500 dark:text-github-dark-muted'
+                        }`}
+                    >
+                        Designations
+                    </button>
+                </div>
+
+                {/* Add Input */}
+                <div className="flex gap-2 mb-6">
+                    <input
+                        type="text"
+                        placeholder={sidebarTab === 'depts' ? "New Department..." : "New Designation..."}
+                        value={newItemName}
+                        onChange={(e) => setNewItemName(e.target.value)}
+                        className="flex-1 px-4 py-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white"
+                    />
+                    <button
+                        onClick={handleAdd}
+                        disabled={isAddingItem || !newItemName.trim()}
+                        className="px-6 bg-indigo-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 active:scale-95 disabled:opacity-55"
+                    >
+                        <Plus size={16} />
+                        <span>Add</span>
+                    </button>
+                </div>
+
+                {/* List Container */}
+                <div className="flex-1 overflow-y-auto min-h-[30vh] max-h-[55vh] pr-1 space-y-2 no-scrollbar">
+                    {sidebarTab === 'depts' ? (
+                        departments.length > 0 ? (
+                            departments.map(dept => (
+                                <div key={dept.dept_id || dept.dept_name} className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 font-semibold text-slate-800 dark:text-white text-sm">
+                                    {dept.dept_name}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-10 text-slate-400 text-xs italic">No departments available</div>
+                        )
+                    ) : (
+                        designations.length > 0 ? (
+                            designations.map(desg => (
+                                <div key={desg.desg_id || desg.desg_name} className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 font-semibold text-slate-800 dark:text-white text-sm">
+                                    {desg.desg_name}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-10 text-slate-400 text-xs italic">No designations available</div>
+                        )
+                    )}
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
 const MobileEmployeesPage = () => {
     const navigate = useNavigate();
     const { avatarTimestamp } = useAuth();
@@ -195,6 +325,10 @@ const MobileEmployeesPage = () => {
     const [loading, setLoading] = useState(() => !adminCacheData.users['true']);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('Active');
+    const [departments, setDepartments] = useState([]);
+    const [selectedDeptFilter, setSelectedDeptFilter] = useState('All');
+    const [designations, setDesignations] = useState([]);
+    const [selectedDesgFilter, setSelectedDesgFilter] = useState('All');
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false,
@@ -205,14 +339,70 @@ const MobileEmployeesPage = () => {
         confirmText: 'Confirm'
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [direction, setDirection] = useState(0); // 1 for next, -1 for prev
+    const [direction, setDirection] = useState(0);
+    const [isDeptDesgOpen, setIsDeptDesgOpen] = useState(false);
+    const [isAddingItem, setIsAddingItem] = useState(false);
+
+    const handleAddDept = async (name) => {
+        try {
+            setIsAddingItem(true);
+            await adminService.createDepartment(name);
+            toast.success("Department added successfully!");
+            await fetchDepartments();
+        } catch (err) {
+            toast.error(err.message || "Failed to add department");
+        } finally {
+            setIsAddingItem(false);
+        }
+    };
+
+    const handleAddDesg = async (name) => {
+        try {
+            setIsAddingItem(true);
+            await adminService.createDesignation(name);
+            toast.success("Designation added successfully!");
+            await fetchDesignations();
+        } catch (err) {
+            toast.error(err.message || "Failed to add designation");
+        } finally {
+            setIsAddingItem(false);
+        }
+    };
+
 
     const tabs = ['Active', 'Inactive', 'Deleted'];
     const currentIndex = tabs.indexOf(statusFilter);
 
     useEffect(() => {
         fetchEmployees();
+        fetchDepartments();
+        fetchDesignations();
     }, []);
+
+    const fetchDepartments = async () => {
+        try {
+            const deptRes = await adminService.getDepartments();
+            if (deptRes && deptRes.departments) {
+                const sortedDepts = [...deptRes.departments].sort((a, b) => a.dept_name.localeCompare(b.dept_name));
+                setDepartments(sortedDepts);
+            }
+        } catch (err) {
+            console.error("Failed to load departments (mobile)", err);
+        }
+    };
+
+    const fetchDesignations = async () => {
+        try {
+            const desgRes = await adminService.getDesignations();
+            if (desgRes && desgRes.designations) {
+                const sortedDesgs = [...desgRes.designations].sort((a, b) => a.desg_name.localeCompare(b.desg_name));
+                setDesignations(sortedDesgs);
+            }
+        } catch (err) {
+            console.error("Failed to load designations (mobile)", err);
+        }
+    };
+
 
     const fetchEmployees = async () => {
         try {
@@ -353,9 +543,12 @@ const MobileEmployeesPage = () => {
             const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                  emp.email.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = statusFilter === 'All' || emp.status === statusFilter;
-            return matchesSearch && matchesStatus;
+            const matchesDept = selectedDeptFilter === 'All' || emp.department === selectedDeptFilter;
+            const matchesDesg = selectedDesgFilter === 'All' || emp.role === selectedDesgFilter;
+            return matchesSearch && matchesStatus && matchesDept && matchesDesg;
         })
         .sort((a, b) => a.name.localeCompare(b.name));
+
 
     return (
         <MobileDashboardLayout title="Employees">
@@ -376,8 +569,101 @@ const MobileEmployeesPage = () => {
                             />
                         </div>
 
+                        {/* Manage Depts & Desgs Button */}
+                        <div className="flex">
+                            <button
+                                onClick={() => setIsDeptDesgOpen(true)}
+                                className="w-full py-3 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-2xl text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-350 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all"
+                            >
+                                <Settings size={14} className="text-slate-500" />
+                                <span>Departments & Designations</span>
+                            </button>
+                        </div>
+
+                        {/* Department Pills Carousel */}
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 pt-1 -mx-4 px-4 scroll-smooth">
+                            <button
+                                onClick={() => setSelectedDeptFilter('All')}
+                                className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl whitespace-nowrap transition-all border active:scale-95 flex items-center gap-1.5 ${
+                                    selectedDeptFilter === 'All'
+                                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                                        : 'bg-white dark:bg-github-dark-subtle border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted'
+                                }`}
+                            >
+                                <span>All Depts</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                    selectedDeptFilter === 'All' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                                }`}>
+                                    {employees.length}
+                                </span>
+                            </button>
+                            {departments.map(dept => {
+                                const count = employees.filter(e => e.department === dept.dept_name).length;
+                                const isSelected = selectedDeptFilter === dept.dept_name;
+                                return (
+                                    <button
+                                        key={dept.dept_id}
+                                        onClick={() => setSelectedDeptFilter(dept.dept_name)}
+                                        className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl whitespace-nowrap transition-all border active:scale-95 flex items-center gap-1.5 ${
+                                            isSelected
+                                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                                                : 'bg-white dark:bg-github-dark-subtle border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted'
+                                        }`}
+                                    >
+                                        <span>{dept.dept_name}</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                            isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                                        }`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Designation Pills Carousel */}
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 pt-1 -mx-4 px-4 scroll-smooth">
+                            <button
+                                onClick={() => setSelectedDesgFilter('All')}
+                                className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl whitespace-nowrap transition-all border active:scale-95 flex items-center gap-1.5 ${
+                                    selectedDesgFilter === 'All'
+                                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                                        : 'bg-white dark:bg-github-dark-subtle border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted'
+                                }`}
+                            >
+                                <span>All Roles</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                    selectedDesgFilter === 'All' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                                }`}>
+                                    {employees.length}
+                                </span>
+                            </button>
+                            {designations.map(desg => {
+                                const count = employees.filter(e => e.role === desg.desg_name).length;
+                                const isSelected = selectedDesgFilter === desg.desg_name;
+                                return (
+                                    <button
+                                        key={desg.desg_id}
+                                        onClick={() => setSelectedDesgFilter(desg.desg_name)}
+                                        className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl whitespace-nowrap transition-all border active:scale-95 flex items-center gap-1.5 ${
+                                            isSelected
+                                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                                                : 'bg-white dark:bg-github-dark-subtle border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-muted'
+                                        }`}
+                                    >
+                                        <span>{desg.desg_name}</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                            isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                                        }`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
                         {/* Status Tabs - Pill Style - Standardized */}
-                        <div className="bg-slate-200/50 dark:bg-github-dark-border/50 p-1.5 flex rounded-2xl backdrop-blur-md border border-white/20 dark:border-white/5">
+                        <div className="bg-[#f6f8fa] dark:bg-github-dark-subtle p-1.5 flex rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
                             {['Active', 'Inactive', 'Deleted'].map((status) => {
                                 const icons = {
                                     Active: <UserCheck size={14} />,
@@ -390,8 +676,8 @@ const MobileEmployeesPage = () => {
                                         onClick={() => handleTabChange(status)}
                                         className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
                                             statusFilter === status
-                                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02]'
-                                                : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
+                                                ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 transform scale-[1.02] border border-slate-200 dark:border-github-dark-border shadow-sm'
+                                                : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-[#21262d]/50'
                                         }`}
                                     >
                                         <div className={statusFilter === status ? 'text-indigo-500' : 'text-slate-400'}>
@@ -404,6 +690,7 @@ const MobileEmployeesPage = () => {
                         </div>
                     </div>
                 </div>
+
 
                 {/* Employees List with Smooth Swipe & Tab Transitions */}
                 <div className="relative min-h-[60vh]">
@@ -570,6 +857,21 @@ const MobileEmployeesPage = () => {
                             onClose={() => setSelectedEmployee(null)}
                             onAction={handleAction}
                             avatarTimestamp={avatarTimestamp}
+                        />
+                    )}
+                </AnimatePresence>
+
+                {/* Departments & Designations Modal */}
+                <AnimatePresence>
+                    {isDeptDesgOpen && (
+                        <DeptDesgModal
+                            isOpen={isDeptDesgOpen}
+                            onClose={() => setIsDeptDesgOpen(false)}
+                            departments={departments}
+                            designations={designations}
+                            onAddDept={handleAddDept}
+                            onAddDesg={handleAddDesg}
+                            isAddingItem={isAddingItem}
                         />
                     )}
                 </AnimatePresence>
