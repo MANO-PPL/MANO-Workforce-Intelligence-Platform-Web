@@ -343,8 +343,8 @@ export const styleExcelWorksheet = (worksheet, type) => {
                     color: { argb: 'FFB06000' } // Dark Orange/Brown
                 };
             }
-            // Weekend Sat/Sun (Lavender)
-            else if (val === 'Sun' || val === 'Sat') {
+            // Weekend Sat/Sun/WEEK_OFF (Lavender)
+            else if (val === 'Sun' || val === 'Sat' || val === 'WEEK_OFF') {
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
@@ -355,6 +355,20 @@ export const styleExcelWorksheet = (worksheet, type) => {
                     size: 10,
                     bold: true,
                     color: { argb: 'FF5F6368' }
+                };
+            }
+            // Not Recorded status (Soft grey font)
+            else if (val === 'Not Recorded') {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFF1F3F4' }
+                };
+                cell.font = {
+                    name: 'Segoe UI',
+                    size: 10,
+                    bold: true,
+                    color: { argb: 'FF8E8E93' }
                 };
             }
             // Leaves status
@@ -400,7 +414,7 @@ export const previewReport = catchAsync(async (req, res) => {
         return res.status(403).json({ ok: false, message: "Access denied" });
     }
 
-    const { month, date, type, startDate, endDate, columns } = req.query;
+    const { month, date, type, startDate, endDate, columns, dept_id, desg_id } = req.query;
     const org_id = req.user.org_id;
 
     if (!type) {
@@ -418,19 +432,20 @@ export const previewReport = catchAsync(async (req, res) => {
     }
 
     const { startDate: resolvedStart, endDate: resolvedEnd } = reportsService.resolveDateRange({ type, month, date, startDate, endDate });
-    const data = await reportsService.getPreviewData({ type, org_id, month, startDate: resolvedStart, endDate: resolvedEnd, targetUserId, columns });
+    const data = await reportsService.getPreviewData({ type, org_id, month, startDate: resolvedStart, endDate: resolvedEnd, targetUserId, columns, dept_id, desg_id });
 
     res.json({ ok: true, data });
 });
 
-export const compileReportBuffer = async ({ org_id, targetUserId, month, date, type, format, startDate: queryStart, endDate: queryEnd, columns }) => {
+export const compileReportBuffer = async ({ org_id, targetUserId, month, date, type, format, startDate: queryStart, endDate: queryEnd, columns, dept_id, desg_id }) => {
     const colsObj = typeof columns === 'string' ? JSON.parse(columns) : (columns || {});
     const { startDate, endDate } = reportsService.resolveDateRange({ type, month, date, startDate: queryStart, endDate: queryEnd });
+    const todayStr = await reportsService.getTodayStr(org_id);
 
-    const users = await reportsService.getUsers({ org_id, targetUserId });
+    const users = await reportsService.getUsers({ org_id, targetUserId, dept_id, desg_id });
     let records = [];
     if (type !== "employee_master") {
-        records = await reportsService.getAttendanceRecords({ org_id, startDate, endDate, targetUserId });
+        records = await reportsService.getAttendanceRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id });
     }
 
     if (format === "pdf") {
@@ -438,7 +453,7 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
         let pdfCols, pdfRows;
 
         if (type === "attendance_detailed") {
-            const detailedRecords = await reportsService.getDetailedRecords({ org_id, startDate, endDate, targetUserId });
+            const detailedRecords = await reportsService.getDetailedRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id });
             pdfCols = ["Date", "Name", "Dept", "Shift"];
             const pdfColIndices = [];
 
@@ -537,8 +552,22 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
             pdfRows = users.map(u => {
                 const userRecs = records.filter(r => r.user_id === u.user_id);
                 const aggregated = reportsService.aggregateDayRecords(userRecs, u.policy_rules);
+                const rules = reportsService.getShiftRules(u);
+                const dayType = reportsService.getDayType(startDate, rules.week_off_policy);
+                const dayOfWeek = new Date(startDate + 'T00:00:00Z').getUTCDay();
                 const isPresent = aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave' ? 1 : 0;
-                const reqHrs = reportsService.getShiftHoursForUser(u);
+                
+                let attendanceStatus = isPresent.toString() + ".0";
+                if (!isPresent) {
+                    if (startDate > todayStr && dayType !== 'week_off') {
+                        attendanceStatus = "Not Recorded";
+                    } else if (dayType === 'week_off') {
+                        attendanceStatus = dayOfWeek === 0 ? "Sun" : dayOfWeek === 6 ? "Sat" : "WEEK_OFF";
+                    }
+                }
+                const isAbsent = !isPresent && dayType !== 'week_off' && attendanceStatus !== "Not Recorded" ? 1 : 0;
+
+                const reqHrs = reportsService.getExpectedHours(startDate, rules.week_off_policy, rules);
                 const workedHrs = aggregated.worked_hours;
                 const lateMins = aggregated.late_minutes;
                 const lateHrs = lateMins / 60;
@@ -546,13 +575,13 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                 const fullRow = [
                     u.user_name,
                     u.dept_name || "-",
-                    isPresent.toString() + ".0",
+                    attendanceStatus,
                     reqHrs.toFixed(2),
                     workedHrs.toFixed(2),
                     lateHrs.toFixed(2),
                     lateCount,
                     isPresent,
-                    isPresent ? 0 : 1
+                    isAbsent
                 ];
 
                 const row = [fullRow[0], fullRow[1], fullRow[2]];
@@ -607,12 +636,13 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                 
                 let calculatedAbsentDays = 0;
                 dateHeaders.forEach(d => {
-                    const day = d.getDay();
                     const dateStr = d.toISOString().split('T')[0];
                     const dayRecs = userRecs.filter(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                     const aggregated = reportsService.aggregateDayRecords(dayRecs, u.policy_rules);
+                    const rules = reportsService.getShiftRules(u);
+                    const dayType = reportsService.getDayType(dateStr, rules.week_off_policy);
                     const isPresent = aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave';
-                    if (!isPresent && day !== 0 && day !== 6) {
+                    if (!isPresent && dateStr <= todayStr && dayType !== 'week_off') {
                         calculatedAbsentDays++;
                     }
                 });
@@ -725,7 +755,11 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                         }
                         totalOvertimeHrs += overtime_hours;
                     } else {
-                        absentDays++;
+                        const rules = reportsService.getShiftRules(u);
+                        const dayType = reportsService.getDayType(dateStr, rules.week_off_policy);
+                        if (dateStr <= todayStr && dayType !== 'week_off') {
+                            absentDays++;
+                        }
                     }
                 });
 
@@ -821,7 +855,7 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
             
             const rowData = {
                 name: u.user_name,
-                dept: u.dept_name || "General"
+                dept: u.dept_name || "-"
             };
 
             if (colsObj.timeIn !== false) rowData.time_in = reportsService.formatLocalTimeStr(aggregated.time_in);
@@ -867,8 +901,22 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
         users.forEach(u => {
             const userRecs = records.filter(r => r.user_id === u.user_id);
             const aggregated = reportsService.aggregateDayRecords(userRecs, u.policy_rules);
+            const rules = reportsService.getShiftRules(u);
+            const dayType = reportsService.getDayType(startDate, rules.week_off_policy);
+            const dayOfWeek = new Date(startDate + 'T00:00:00Z').getUTCDay();
             const isPresent = aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave' ? 1 : 0;
-            const reqHrs = reportsService.getShiftHoursForUser(u);
+            
+            let attendanceStatus = isPresent.toString() + ".0";
+            if (!isPresent) {
+                if (startDate > todayStr && dayType !== 'week_off') {
+                    attendanceStatus = "Not Recorded";
+                } else if (dayType === 'week_off') {
+                    attendanceStatus = dayOfWeek === 0 ? "Sun" : dayOfWeek === 6 ? "Sat" : "WEEK_OFF";
+                }
+            }
+            const isAbsent = !isPresent && dayType !== 'week_off' && attendanceStatus !== "Not Recorded" ? 1 : 0;
+
+            const reqHrs = reportsService.getExpectedHours(startDate, rules.week_off_policy, rules);
             const workedHrs = aggregated.worked_hours;
             const lateMins = aggregated.late_minutes;
             const lateHrs = lateMins / 60;
@@ -876,8 +924,8 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
 
             const rowData = {
                 name: u.user_name,
-                dept: u.dept_name || "General",
-                attendance: isPresent.toString() + ".0"
+                dept: u.dept_name || "-",
+                attendance: attendanceStatus
             };
 
             if (colsObj.requiredHours !== false) rowData.req_hrs = parseFloat(reqHrs.toFixed(2));
@@ -888,7 +936,7 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
             }
             if (colsObj.attendanceDays !== false) {
                 rowData.present_days = isPresent;
-                rowData.absent_days = isPresent ? 0 : 1;
+                rowData.absent_days = isAbsent;
             }
 
             worksheet.addRow(rowData);
@@ -954,6 +1002,10 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                 const dateStr = d.toISOString().split('T')[0];
                 const dayRecs = userRecs.filter(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                 const aggregated = reportsService.aggregateDayRecords(dayRecs, u.policy_rules);
+                const rules = reportsService.getShiftRules(u);
+                const dayType = reportsService.getDayType(dateStr, rules.week_off_policy);
+                const dayOfWeek = d.getUTCDay();
+
                 if (aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave') {
                     dateCells.push("1.0");
                     presentDays++;
@@ -961,8 +1013,18 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                     if (aggregated.late_minutes > 0) {
                         totalLateMins += aggregated.late_minutes;
                     }
+                } else if (dateStr > todayStr) {
+                    if (dayType === 'week_off') {
+                        dateCells.push(dayOfWeek === 0 ? "Sun" : dayOfWeek === 6 ? "Sat" : "WEEK_OFF");
+                    } else {
+                        dateCells.push("Not Recorded");
+                    }
                 } else {
-                    dateCells.push("0.0");
+                    if (dayType === 'week_off') {
+                        dateCells.push(dayOfWeek === 0 ? "Sun" : dayOfWeek === 6 ? "Sat" : "WEEK_OFF");
+                    } else {
+                        dateCells.push("0.0");
+                    }
                 }
             });
 
@@ -973,12 +1035,13 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
 
             let calculatedAbsentDays = 0;
             dateHeaders.forEach(d => {
-                const day = d.getDay();
                 const dateStr = d.toISOString().split('T')[0];
                 const dayRecs = userRecs.filter(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                 const aggregated = reportsService.aggregateDayRecords(dayRecs, u.policy_rules);
+                const rules = reportsService.getShiftRules(u);
+                const dayType = reportsService.getDayType(dateStr, rules.week_off_policy);
                 const isPresent = aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave';
-                if (!isPresent && day !== 0 && day !== 6) {
+                if (!isPresent && dateStr <= todayStr && dayType !== 'week_off') {
                     calculatedAbsentDays++;
                 }
             });
@@ -1059,7 +1122,7 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
         pushCol("Out Location", "time_out_address", "location", 40);
 
         worksheet.columns = cols;
-        const detailedRecords = await reportsService.getDetailedRecords({ org_id, startDate, endDate });
+        const detailedRecords = await reportsService.getDetailedRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id });
         detailedRecords.forEach(r => {
             const rowData = {
                 date: reportsService.formatLocalDateStr(r.time_in),
@@ -1167,7 +1230,11 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                     }
                     totalOvertimeHrs += overtime_hours;
                 } else {
-                    absentDays++;
+                    const rules = reportsService.getShiftRules(u);
+                    const dayType = reportsService.getDayType(dateStr, rules.week_off_policy);
+                    if (dateStr <= todayStr && dayType !== 'week_off') {
+                        absentDays++;
+                    }
                 }
             });
 
@@ -1348,6 +1415,10 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                 const dateStr = d.toISOString().split('T')[0];
                 const dayRecs = userRecs.filter(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                 const aggregated = reportsService.aggregateDayRecords(dayRecs, u.policy_rules);
+                const rules = reportsService.getShiftRules(u);
+                const dayType = reportsService.getDayType(dateStr, rules.week_off_policy);
+                const dayOfWeek = d.getUTCDay();
+
                 if (aggregated.time_in) {
                     subCols.forEach(sc => {
                         if (sc.label === "Status") userRow.push(aggregated.status);
@@ -1355,9 +1426,7 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                         else if (sc.label === "Out Time") userRow.push(reportsService.formatLocalTimeStr(aggregated.time_out));
                         else if (sc.label === "Work Hrs") userRow.push(parseFloat(aggregated.worked_hours.toFixed(2)));
                         else if (sc.label === "Req Hrs") {
-                            const dayOfWeek = d.getDay();
-                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                            const req = isWeekend ? 0 : reportsService.getShiftHoursForUser(u);
+                            const req = reportsService.getExpectedHours(dateStr, rules.week_off_policy, rules);
                             userRow.push(parseFloat(req.toFixed(2)));
                         }
                         else if (sc.label === "Late Mins") userRow.push(aggregated.late_minutes);
@@ -1371,10 +1440,25 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                         lateMins += aggregated.late_minutes;
                     }
                 } else {
-                    const day = d.getDay();
-                    const statusStr = day === 0 ? "Sun" : day === 6 ? "Sat" : "Absent";
-                    subCols.forEach((sc, scIdx) => {
+                    let statusStr = "Absent";
+                    if (dateStr > todayStr) {
+                        if (dayType === 'week_off') {
+                            statusStr = dayOfWeek === 0 ? "Sun" : dayOfWeek === 6 ? "Sat" : "WEEK_OFF";
+                        } else {
+                            statusStr = "Not Recorded";
+                        }
+                    } else {
+                        if (dayType === 'week_off') {
+                            statusStr = dayOfWeek === 0 ? "Sun" : dayOfWeek === 6 ? "Sat" : "WEEK_OFF";
+                        }
+                    }
+
+                    subCols.forEach((sc) => {
                         if (sc.label === "Status") userRow.push(statusStr);
+                        else if (sc.label === "Req Hrs") {
+                            const req = reportsService.getExpectedHours(dateStr, rules.week_off_policy, rules);
+                            userRow.push(parseFloat(req.toFixed(2)));
+                        }
                         else userRow.push("-");
                     });
                 }
@@ -1392,9 +1476,13 @@ export const compileReportBuffer = async ({ org_id, targetUserId, month, date, t
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE8E6' } };
                     cell.font = { color: { argb: 'FFC5221F' }, bold: true };
                 }
-                if (cell.value === "Sun" || cell.value === "Sat") {
+                if (cell.value === "Sun" || cell.value === "Sat" || cell.value === "WEEK_OFF") {
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F3F4' } };
                     cell.font = { color: { argb: 'FF5F6368' }, bold: true };
+                }
+                if (cell.value === "Not Recorded") {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F3F4' } };
+                    cell.font = { color: { argb: 'FF8E8E93' }, bold: true };
                 }
             });
         });
@@ -1459,7 +1547,7 @@ import { reportQueue } from '../../config/queues.js';
 import crypto from 'crypto';
 
 export const downloadReport = catchAsync(async (req, res) => {
-    const { month, date, type, format = "xlsx", startDate, endDate, columns } = req.query;
+    const { month, date, type, format = "xlsx", startDate, endDate, columns, dept_id, desg_id } = req.query;
     
     // TEMPORARY DEBUG LOGGING
     try {
@@ -1515,7 +1603,9 @@ export const downloadReport = catchAsync(async (req, res) => {
         filename,
         startDate,
         endDate,
-        columns: typeof columns === 'string' ? columns : JSON.stringify(columns)
+        columns: typeof columns === 'string' ? columns : JSON.stringify(columns),
+        dept_id,
+        desg_id
     }, {
         attempts: 3,
         backoff: 5000

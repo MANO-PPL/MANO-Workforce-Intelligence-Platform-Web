@@ -1,5 +1,48 @@
 import { attendanceDB } from '../../config/database.js';
 import * as S3Service from '../s3/s3Service.js';
+import { getShiftRules, getDayType, getExpectedHours } from '../attendance/shiftManagementService.js';
+
+const isValidDeptId = (deptId) => {
+    return deptId && deptId !== 'All' && deptId !== 'undefined' && deptId !== 'null' && String(deptId).trim() !== '';
+};
+
+const isValidDesgId = (desgId) => {
+    return desgId && desgId !== 'All' && desgId !== 'undefined' && desgId !== 'null' && String(desgId).trim() !== '';
+};
+
+
+export async function getTodayStr(org_id) {
+
+    let timezone = 'UTC';
+    try {
+        const org = await attendanceDB('organizations')
+            .where('org_id', org_id)
+            .select('timezone')
+            .first();
+        if (org && org.timezone) {
+            timezone = org.timezone;
+        }
+    } catch (err) {
+        console.warn(`Failed to fetch organization ${org_id} timezone, defaulting to UTC`, err);
+    }
+
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const parts = formatter.formatToParts(new Date());
+        const year = parts.find(p => p.type === 'year').value;
+        const month = parts.find(p => p.type === 'month').value;
+        const day = parts.find(p => p.type === 'day').value;
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        return new Date().toISOString().split('T')[0];
+    }
+}
+
 
 // Helper: Calculate Work Hours
 export const calculateWorkHours = (timeIn, timeOut) => {
@@ -134,6 +177,7 @@ export const aggregateDayRecords = (dayRecs, userPolicyRules) => {
         time_out: last.time_out,
         worked_hours,
         late_minutes,
+        late_reason: first.late_reason || null,
         status,
         time_in_address: first.time_in_address || "-",
         time_out_address: last.time_out_address || "-"
@@ -191,12 +235,10 @@ export const getShiftHoursForUser = (user) => {
 // Helper: Get total required hours for a period
 export const getRequiredHoursForPeriod = (user, dateHeaders) => {
     let total = 0;
-    const shiftHrs = getShiftHoursForUser(user);
+    const rules = getShiftRules(user);
     dateHeaders.forEach(d => {
-        const day = d.getDay();
-        if (day !== 0 && day !== 6) { // Monday-Friday are standard work days
-            total += shiftHrs;
-        }
+        const dateStr = d.toISOString().split('T')[0];
+        total += getExpectedHours(dateStr, rules.week_off_policy, rules);
     });
     return total;
 };
@@ -230,7 +272,7 @@ export const resolveDateRange = ({ type, month, date, startDate: customStart, en
     return { startDate, endDate };
 };
 
-export async function getUsers({ org_id, targetUserId }) {
+export async function getUsers({ org_id, targetUserId, dept_id, desg_id }) {
     return attendanceDB("users as u")
         .leftJoin("departments as d", "u.dept_id", "d.dept_id")
         .leftJoin("designations as dg", "u.desg_id", "dg.desg_id")
@@ -240,22 +282,38 @@ export async function getUsers({ org_id, targetUserId }) {
         .modify(qb => {
             if (targetUserId) {
                 qb.where("u.user_id", targetUserId);
-            } else {
-                qb.whereNotIn("u.user_type", ["admin", "super_admin"]);
+            }
+            if (isValidDeptId(dept_id)) {
+                qb.where("u.dept_id", dept_id);
+            }
+            if (isValidDesgId(desg_id)) {
+                qb.where("u.desg_id", desg_id);
             }
         })
         .orderBy("u.user_name", "asc");
 }
 
-export async function getAttendanceRecords({ org_id, startDate, endDate, targetUserId }) {
-    return attendanceDB("attendance_records")
-        .where("org_id", org_id)
-        .whereRaw("DATE(time_in) >= ?", [startDate])
-        .whereRaw("DATE(time_in) <= ?", [endDate])
-        .modify(qb => { if (targetUserId) qb.where("user_id", targetUserId); });
+export async function getAttendanceRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id }) {
+    return attendanceDB("attendance_records as ar")
+        .modify(qb => {
+            if (isValidDeptId(dept_id) || isValidDesgId(desg_id)) {
+                qb.join("users as u", "ar.user_id", "u.user_id")
+                  .select("ar.*");
+                if (isValidDeptId(dept_id)) {
+                    qb.where("u.dept_id", dept_id);
+                }
+                if (isValidDesgId(desg_id)) {
+                    qb.where("u.desg_id", desg_id);
+                }
+            }
+        })
+        .where("ar.org_id", org_id)
+        .whereRaw("DATE(ar.time_in) >= ?", [startDate])
+        .whereRaw("DATE(ar.time_in) <= ?", [endDate])
+        .modify(qb => { if (targetUserId) qb.where("ar.user_id", targetUserId); });
 }
 
-export async function getDetailedRecords({ org_id, startDate, endDate, targetUserId }) {
+export async function getDetailedRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id }) {
     return attendanceDB("attendance_records as ar")
         .join("users as u", "ar.user_id", "u.user_id")
         .leftJoin("departments as d", "u.dept_id", "d.dept_id")
@@ -267,8 +325,12 @@ export async function getDetailedRecords({ org_id, startDate, endDate, targetUse
         .modify(qb => {
             if (targetUserId) {
                 qb.where("ar.user_id", targetUserId);
-            } else {
-                qb.whereNotIn("u.user_type", ["admin", "super_admin"]);
+            }
+            if (isValidDeptId(dept_id)) {
+                qb.where("u.dept_id", dept_id);
+            }
+            if (isValidDesgId(desg_id)) {
+                qb.where("u.desg_id", desg_id);
             }
         })
         .orderBy("ar.time_in", "asc");
@@ -276,13 +338,9 @@ export async function getDetailedRecords({ org_id, startDate, endDate, targetUse
 
 
 
-export async function getCardRecords({ org_id, targetUserId, startDate, endDate }) {
-    const users = await getUsers({ org_id, targetUserId });
-    const records = await attendanceDB("attendance_records")
-        .where("org_id", org_id)
-        .whereRaw("DATE(time_in) >= ?", [startDate])
-        .whereRaw("DATE(time_in) <= ?", [endDate])
-        .modify(qb => { if (targetUserId) qb.where("user_id", targetUserId); });
+export async function getCardRecords({ org_id, targetUserId, startDate, endDate, dept_id, desg_id }) {
+    const users = await getUsers({ org_id, targetUserId, dept_id, desg_id });
+    const records = await getAttendanceRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id });
 
     const start = new Date(startDate + 'T00:00:00Z');
     const end = new Date(endDate + 'T00:00:00Z');
@@ -290,6 +348,8 @@ export async function getCardRecords({ org_id, targetUserId, startDate, endDate 
     for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         dateHeaders.push(d.toISOString().split('T')[0]);
     }
+
+    const todayStr = await getTodayStr(org_id);
 
     const list = [];
     for (const u of users) {
@@ -333,17 +393,30 @@ export async function getCardRecords({ org_id, targetUserId, startDate, endDate 
                 }
             }
 
-            const dayOfWeek = new Date(dateStr + 'T00:00:00Z').getUTCDay();
+            const dayOfWeekNum = new Date(dateStr + 'T00:00:00Z').getUTCDay();
             let status = aggregated.status;
-            if (!aggregated.time_in && status === "Absent") {
-                if (dayOfWeek === 0) status = "Sun";
-                else if (dayOfWeek === 6) status = "Sat";
+
+            const rules = getShiftRules(u);
+            const dayType = getDayType(dateStr, rules.week_off_policy);
+
+            if (dateStr > todayStr) {
+                if (dayType === 'week_off') {
+                    if (dayOfWeekNum === 0) status = "Sun";
+                    else if (dayOfWeekNum === 6) status = "Sat";
+                    else status = "WEEK_OFF";
+                } else {
+                    status = "Not Recorded";
+                }
+            } else if (!aggregated.time_in && status === "Absent") {
+                if (dayType === 'week_off') {
+                    if (dayOfWeekNum === 0) status = "Sun";
+                    else if (dayOfWeekNum === 6) status = "Sat";
+                    else status = "WEEK_OFF";
+                }
             }
 
             // Calculate required hours from shift policy
-            const dayOfWeekNum = new Date(dateStr + 'T00:00:00Z').getUTCDay();
-            const isWeekendDay = dayOfWeekNum === 0 || dayOfWeekNum === 6;
-            const requiredHours = isWeekendDay ? 0 : getShiftHoursForUser(u);
+            const requiredHours = getExpectedHours(dateStr, rules.week_off_policy, rules);
 
             list.push({
                 date: formattedDate,
@@ -358,6 +431,7 @@ export async function getCardRecords({ org_id, targetUserId, startDate, endDate 
                 worked_hours: parseFloat(aggregated.worked_hours.toFixed(2)),
                 required_hours: parseFloat(requiredHours.toFixed(2)),
                 late_minutes: aggregated.late_minutes || 0,
+                late_reason: aggregated.late_reason || "-",
                 time_in_address: aggregated.time_in_address || "-",
                 time_out_address: aggregated.time_out_address || "-",
                 time_in_image: timeInImage,
@@ -369,9 +443,10 @@ export async function getCardRecords({ org_id, targetUserId, startDate, endDate 
 }
 
 
-export async function getPreviewData({ type, org_id, month, startDate, endDate, targetUserId, columns }) {
+export async function getPreviewData({ type, org_id, month, startDate, endDate, targetUserId, columns, dept_id, desg_id }) {
     const colsObj = typeof columns === 'string' ? JSON.parse(columns) : (columns || {});
     let data = { columns: [], rows: [] };
+    const todayStr = await getTodayStr(org_id);
 
     if (type.startsWith("matrix_") || type.startsWith("attendance_matrix_")) {
         const users = await attendanceDB("users as u")
@@ -383,13 +458,17 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
             .modify(qb => {
                 if (targetUserId) {
                     qb.where("u.user_id", targetUserId);
-                } else {
-                    qb.whereNotIn("u.user_type", ["admin", "super_admin"]);
+                }
+                if (isValidDeptId(dept_id)) {
+                    qb.where("u.dept_id", dept_id);
+                }
+                if (isValidDesgId(desg_id)) {
+                    qb.where("u.desg_id", desg_id);
                 }
             })
             .orderBy("u.user_name", "asc");
 
-        const records = await getAttendanceRecords({ org_id, startDate, endDate, targetUserId });
+        const records = await getAttendanceRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id });
 
         if (type === "matrix_daily") {
             const cols = [];
@@ -471,8 +550,23 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
             data.rows = users.map(u => {
                 const userRecs = records.filter(r => r.user_id === u.user_id);
                 const aggregated = aggregateDayRecords(userRecs, u.policy_rules);
+                const rules = getShiftRules(u);
+                const dayType = getDayType(startDate, rules.week_off_policy);
+                const dayOfWeek = new Date(startDate + 'T00:00:00Z').getUTCDay();
                 const isPresent = aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave' ? 1 : 0;
-                const reqHrs = getShiftHoursForUser(u);
+                
+                let attendanceStatus = isPresent.toString() + ".0";
+                if (!isPresent) {
+                    if (startDate > todayStr && dayType !== 'week_off') {
+                        attendanceStatus = "Not Recorded";
+                    } else if (dayType === 'week_off') {
+                        attendanceStatus = dayOfWeek === 0 ? "Sun" : dayOfWeek === 6 ? "Sat" : "WEEK_OFF";
+                    }
+                }
+                
+                const isAbsent = !isPresent && dayType !== 'week_off' && attendanceStatus !== "Not Recorded" ? 1 : 0;
+
+                const reqHrs = getExpectedHours(startDate, rules.week_off_policy, rules);
                 const workedHrs = aggregated.worked_hours;
                 const lateMins = aggregated.late_minutes;
                 const lateHrs = lateMins / 60;
@@ -481,13 +575,13 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
                 const fullRow = [
                     u.user_name,
                     u.dept_name || "-",
-                    isPresent.toString() + ".0",
+                    attendanceStatus,
                     reqHrs.toFixed(2),
                     workedHrs.toFixed(2),
                     lateHrs.toFixed(2),
                     lateCount,
                     isPresent,
-                    isPresent ? 0 : 1
+                    isAbsent
                 ];
 
                 const row = [fullRow[0], fullRow[1], fullRow[2]];
@@ -563,6 +657,8 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
                     const dateStr = d.toISOString().split('T')[0];
                     const dayRecs = userRecs.filter(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                     const aggregated = aggregateDayRecords(dayRecs, u.policy_rules);
+                    const rules = getShiftRules(u);
+                    const dayType = getDayType(dateStr, rules.week_off_policy);
                     if (aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave') {
                         dateCells.push("1.0");
                         presentDays++;
@@ -570,8 +666,20 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
                         if (aggregated.late_minutes > 0) {
                             totalLateMins += aggregated.late_minutes;
                         }
+                    } else if (dateStr > todayStr) {
+                        if (dayType === 'week_off') {
+                            const day = d.getDay();
+                            dateCells.push(day === 0 ? "Sun" : day === 6 ? "Sat" : "WEEK_OFF");
+                        } else {
+                            dateCells.push("Not Recorded");
+                        }
                     } else {
-                        dateCells.push("0.0");
+                        if (dayType === 'week_off') {
+                            const day = d.getDay();
+                            dateCells.push(day === 0 ? "Sun" : day === 6 ? "Sat" : "WEEK_OFF");
+                        } else {
+                            dateCells.push("0.0");
+                        }
                     }
                 });
 
@@ -582,12 +690,13 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
 
                 let calculatedAbsentDays = 0;
                 dateHeaders.forEach(d => {
-                    const day = d.getDay();
                     const dateStr = d.toISOString().split('T')[0];
                     const dayRecs = userRecs.filter(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                     const aggregated = aggregateDayRecords(dayRecs, u.policy_rules);
+                    const rules = getShiftRules(u);
+                    const dayType = getDayType(dateStr, rules.week_off_policy);
                     const isPresent = aggregated.time_in && aggregated.status !== 'Absent' && aggregated.status !== 'On Leave';
-                    if (!isPresent && day !== 0 && day !== 6) {
+                    if (!isPresent && dateStr <= todayStr && dayType !== 'week_off') {
                         calculatedAbsentDays++;
                     }
                 });
@@ -741,6 +850,8 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
                     const dateStr = d.toISOString().split('T')[0];
                     const dayRecs = userRecs.filter(r => new Date(r.time_in).toISOString().split('T')[0] === dateStr);
                     const aggregated = aggregateDayRecords(dayRecs, u.policy_rules);
+                    const rules = getShiftRules(u);
+                    const dayType = getDayType(dateStr, rules.week_off_policy);
                     if (aggregated.time_in) {
                         subCols.forEach(sc => {
                             if (sc.label === "Status") userRow.push(aggregated.status);
@@ -748,9 +859,7 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
                             else if (sc.label === "Out Time") userRow.push(formatLocalTimeStr(aggregated.time_out));
                             else if (sc.label === "Work Hrs") userRow.push(aggregated.worked_hours.toFixed(2));
                             else if (sc.label === "Req Hrs") {
-                                const dayOfWeek = d.getDay();
-                                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                                const req = isWeekend ? 0 : getShiftHoursForUser(u);
+                                const req = getExpectedHours(dateStr, rules.week_off_policy, rules);
                                 userRow.push(req.toFixed(2));
                             }
                             else if (sc.label === "Late Mins") userRow.push(aggregated.late_minutes.toString());
@@ -765,9 +874,25 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
                         }
                     } else {
                         const day = d.getDay();
-                        const statusStr = day === 0 ? "Sun" : day === 6 ? "Sat" : "Absent";
+                        let statusStr = "Absent";
+                        if (dateStr > todayStr) {
+                            if (dayType === 'week_off') {
+                                statusStr = day === 0 ? "Sun" : day === 6 ? "Sat" : "WEEK_OFF";
+                            } else {
+                                statusStr = "Not Recorded";
+                            }
+                        } else {
+                            if (dayType === 'week_off') {
+                                statusStr = day === 0 ? "Sun" : day === 6 ? "Sat" : "WEEK_OFF";
+                            }
+                        }
+
                         subCols.forEach((sc, scIdx) => {
                             if (sc.label === "Status") userRow.push(statusStr);
+                            else if (sc.label === "Req Hrs") {
+                                const req = getExpectedHours(dateStr, rules.week_off_policy, rules);
+                                userRow.push(req.toFixed(2));
+                            }
                             else userRow.push("-");
                         });
                     }
@@ -781,7 +906,7 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
             });
         }
     } else if (type === "attendance_detailed") {
-        const records = await getDetailedRecords({ org_id, startDate, endDate, targetUserId });
+        const records = await getDetailedRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id });
         const cols = ["Date", "Name", "Dept", "Shift"];
         const colIndices = [];
 
@@ -826,18 +951,23 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
 
         const users = await attendanceDB("users as u")
             .leftJoin("departments as d", "u.dept_id", "d.dept_id")
+            .leftJoin("designations as dg", "u.desg_id", "dg.desg_id")
             .leftJoin("shifts as s", "u.shift_id", "s.shift_id")
             .select("u.user_id", "u.user_name", "d.dept_name", "s.policy_rules")
             .where("u.org_id", org_id)
             .modify(qb => {
                 if (targetUserId) {
                     qb.where("u.user_id", targetUserId);
-                } else {
-                    qb.whereNotIn("u.user_type", ["admin", "super_admin"]);
+                }
+                if (isValidDeptId(dept_id)) {
+                    qb.where("u.dept_id", dept_id);
+                }
+                if (isValidDesgId(desg_id)) {
+                    qb.where("u.desg_id", desg_id);
                 }
             });
 
-        const records = await getAttendanceRecords({ org_id, startDate, endDate, targetUserId });
+        const records = await getAttendanceRecords({ org_id, startDate, endDate, targetUserId, dept_id, desg_id });
 
         const cols = ["Name", "Dept", "Total Days"];
         const colIndices = [];
@@ -924,7 +1054,11 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
                     }
                     totalOvertimeHrs += overtime_hours;
                 } else {
-                    absentDays++;
+                    const rules = getShiftRules(u);
+                    const dayType = getDayType(dateStr, rules.week_off_policy);
+                    if (dateStr <= todayStr && dayType !== 'week_off') {
+                        absentDays++;
+                    }
                 }
             });
 
@@ -987,14 +1121,21 @@ export async function getPreviewData({ type, org_id, month, startDate, endDate, 
             .leftJoin("designations as dg", "u.desg_id", "dg.desg_id")
             .select("u.user_id", "u.user_name", "u.email", "u.phone_no", "d.dept_name", "dg.desg_name", "u.user_type")
             .where("u.org_id", org_id)
-            .whereNotIn("u.user_type", ["admin", "super_admin"]);
+            .modify(qb => {
+                if (isValidDeptId(dept_id)) {
+                    qb.where("u.dept_id", dept_id);
+                }
+                if (isValidDesgId(desg_id)) {
+                    qb.where("u.desg_id", desg_id);
+                }
+            });
 
         data.columns = ["Name", "Email", "Phone", "Dept", "Designation", "Role"];
         data.rows = users.map(u => [u.user_name, u.email, u.phone_no, u.dept_name || "-", u.desg_name || "-", u.user_type]);
     }
 
     if (type !== "employee_master") {
-        data.cardRecords = await getCardRecords({ org_id, targetUserId, startDate, endDate });
+        data.cardRecords = await getCardRecords({ org_id, targetUserId, startDate, endDate, dept_id, desg_id });
     } else {
         data.cardRecords = [];
     }

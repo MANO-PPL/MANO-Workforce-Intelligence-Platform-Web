@@ -96,11 +96,20 @@ const getCellStyle = (cellValue, colHeader, isTotalsRow, isEven) => {
             border: defaultBorder
         };
     }
-    // Weekend Sat/Sun (Lavender)
-    if (val === 'Sun' || val === 'Sat') {
+    // Weekend Sat/Sun/WEEK_OFF (Lavender)
+    if (val === 'Sun' || val === 'Sat' || val === 'WEEK_OFF') {
         return {
             backgroundColor: '#F1F3F4',
             color: '#5F6368',
+            fontWeight: 'bold',
+            border: defaultBorder
+        };
+    }
+    // Not Recorded status (Soft grey font)
+    if (val === 'Not Recorded') {
+        return {
+            backgroundColor: '#F1F3F4',
+            color: '#8E8E93',
             fontWeight: 'bold',
             border: defaultBorder
         };
@@ -287,8 +296,10 @@ const EmployeeCard = ({ row, columns }) => {
                                 colorClass = 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-500/20';
                             } else if (statusVal.toLowerCase() === 'on leave' || statusVal.toLowerCase() === 'leave' || statusVal.toLowerCase() === 'half day') {
                                 colorClass = 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20';
-                            } else if (statusVal === 'Sun' || statusVal === 'Sat') {
+                            } else if (statusVal === 'Sun' || statusVal === 'Sat' || statusVal === 'WEEK_OFF') {
                                 colorClass = 'bg-slate-100 dark:bg-slate-800/45 text-slate-400 border border-slate-200 dark:border-slate-700/50';
+                            } else if (statusVal === 'Not Recorded') {
+                                colorClass = 'bg-slate-100/50 dark:bg-slate-800/20 text-slate-400/60 border border-slate-200/50 dark:border-slate-700/30 opacity-60';
                             }
 
                             return (
@@ -381,13 +392,13 @@ const EmployeeCard = ({ row, columns }) => {
 
 const getStatusColor = (status) => {
     const s = status || '';
-    if (!s || s === '-') return 'bg-slate-50 text-slate-300 dark:bg-slate-900 dark:text-slate-700 border border-slate-200 dark:border-slate-800';
+    if (!s || s === '-' || s === 'Not Recorded') return 'bg-slate-50 text-slate-300 dark:bg-slate-900/50 dark:text-slate-700 border border-slate-200 dark:border-slate-800 opacity-60';
     if (s === 'Present' || s.includes('Present')) return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-800/50';
     if (s === 'Absent') return 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 ring-1 ring-rose-200 dark:ring-rose-800/50';
     if (s.toLowerCase().includes('late') && s.toLowerCase().includes('overtime')) return 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400 ring-1 ring-orange-200 dark:ring-orange-800/50';
     if (s.toLowerCase().includes('late')) return 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 ring-1 ring-amber-200 dark:ring-amber-800/50';
     if (s.toLowerCase().includes('overtime')) return 'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400 ring-1 ring-purple-200 dark:ring-purple-800/50';
-    if (s === 'Sun' || s === 'Sat') return 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 dark:text-slate-500';
+    if (s === 'Sun' || s === 'Sat' || s === 'WEEK_OFF') return 'bg-slate-100 dark:bg-slate-800/60 text-slate-400 dark:text-slate-500';
     if (s.toLowerCase() === 'on leave') return 'bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-400 ring-1 ring-sky-200 dark:ring-sky-800/50';
     if (s.toLowerCase() === 'half day') return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 ring-1 ring-indigo-200 dark:ring-indigo-800/50';
     return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
@@ -395,11 +406,12 @@ const getStatusColor = (status) => {
 
 const getStatusLabel = (status) => {
     const s = status || '';
-    if (!s || s === '-') return '·';
+    if (!s || s === '-' || s === 'Not Recorded') return '·';
     if (s === 'Present') return 'P';
     if (s === 'Absent') return 'A';
     if (s === 'Sun') return 'Su';
     if (s === 'Sat') return 'Sa';
+    if (s === 'WEEK_OFF') return 'WO';
     if (s.toLowerCase() === 'on leave') return 'L';
     if (s.toLowerCase() === 'half day') return 'HD';
     if (s.toLowerCase().includes('late') && s.toLowerCase().includes('overtime')) return 'LO';
@@ -457,13 +469,37 @@ const Reports = () => {
     const [hoveredPosition, setHoveredPosition] = useState({ top: 0, left: 0 });
 
     const [employees, setEmployees] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [designations, setDesignations] = useState([]);
+
+    // Department states
+    const [attendanceDeptId, setAttendanceDeptId] = useState('');
+    const [attendanceDeptSearchQuery, setAttendanceDeptSearchQuery] = useState('');
+    const [attendanceIsDeptDropdownOpen, setAttendanceIsDeptDropdownOpen] = useState(false);
+
+    const [tableDeptId, setTableDeptId] = useState('');
+    const [tableDeptSearchQuery, setTableDeptSearchQuery] = useState('');
+    const [tableIsDeptDropdownOpen, setTableIsDeptDropdownOpen] = useState(false);
+
+    // Designation states
+    const [attendanceDesgId, setAttendanceDesgId] = useState('');
+    const [attendanceDesgSearchQuery, setAttendanceDesgSearchQuery] = useState('');
+    const [attendanceIsDesgDropdownOpen, setAttendanceIsDesgDropdownOpen] = useState(false);
+
+    const [tableDesgId, setTableDesgId] = useState('');
+    const [tableDesgSearchQuery, setTableDesgSearchQuery] = useState('');
+    const [tableIsDesgDropdownOpen, setTableIsDesgDropdownOpen] = useState(false);
 
     const attendanceEmpDropdownRef = React.useRef(null);
     const attendanceWeekDropdownRef = React.useRef(null);
+    const attendanceDeptDropdownRef = React.useRef(null);
+    const attendanceDesgDropdownRef = React.useRef(null);
     const tableEmpDropdownRef = React.useRef(null);
     const tableTypeDropdownRef = React.useRef(null);
     const tableWeekDropdownRef = React.useRef(null);
     const tableColsDropdownRef = React.useRef(null);
+    const tableDeptDropdownRef = React.useRef(null);
+    const tableDesgDropdownRef = React.useRef(null);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -472,6 +508,12 @@ const Reports = () => {
             }
             if (attendanceWeekDropdownRef.current && !attendanceWeekDropdownRef.current.contains(event.target)) {
                 setAttendanceIsWeekDropdownOpen(false);
+            }
+            if (attendanceDeptDropdownRef.current && !attendanceDeptDropdownRef.current.contains(event.target)) {
+                setAttendanceIsDeptDropdownOpen(false);
+            }
+            if (attendanceDesgDropdownRef.current && !attendanceDesgDropdownRef.current.contains(event.target)) {
+                setAttendanceIsDesgDropdownOpen(false);
             }
             if (tableEmpDropdownRef.current && !tableEmpDropdownRef.current.contains(event.target)) {
                 setTableIsEmpDropdownOpen(false);
@@ -485,20 +527,32 @@ const Reports = () => {
             if (tableColsDropdownRef.current && !tableColsDropdownRef.current.contains(event.target)) {
                 setTableIsColsDropdownOpen(false);
             }
+            if (tableDeptDropdownRef.current && !tableDeptDropdownRef.current.contains(event.target)) {
+                setTableIsDeptDropdownOpen(false);
+            }
+            if (tableDesgDropdownRef.current && !tableDesgDropdownRef.current.contains(event.target)) {
+                setTableIsDesgDropdownOpen(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const attendanceSelectedEmployeeName = employees.find(emp => emp.user_id === attendanceEmployeeId)?.user_name || 'All Employees';
-    const attendanceFilteredEmployees = employees.filter(emp =>
-        emp.user_name.toLowerCase().includes(attendanceEmpSearchQuery.toLowerCase())
-    );
+    const attendanceFilteredEmployees = employees.filter(emp => {
+        const matchesDept = !attendanceDeptId || String(emp.dept_id) === String(attendanceDeptId);
+        const matchesDesg = !attendanceDesgId || String(emp.desg_id) === String(attendanceDesgId);
+        const matchesQuery = emp.user_name.toLowerCase().includes(attendanceEmpSearchQuery.toLowerCase());
+        return matchesDept && matchesDesg && matchesQuery;
+    });
 
     const tableSelectedEmployeeName = employees.find(emp => emp.user_id === tableEmployeeId)?.user_name || 'All Employees';
-    const tableFilteredEmployees = employees.filter(emp =>
-        emp.user_name.toLowerCase().includes(tableEmpSearchQuery.toLowerCase())
-    );
+    const tableFilteredEmployees = employees.filter(emp => {
+        const matchesDept = !tableDeptId || String(emp.dept_id) === String(tableDeptId);
+        const matchesDesg = !tableDesgId || String(emp.desg_id) === String(tableDesgId);
+        const matchesQuery = emp.user_name.toLowerCase().includes(tableEmpSearchQuery.toLowerCase());
+        return matchesDept && matchesDesg && matchesQuery;
+    });
 
     const attendanceWeeks = React.useMemo(() => getWeeksOfMonth(attendanceMonth), [attendanceMonth]);
     const tableWeeks = React.useMemo(() => getWeeksOfMonth(tableMonth), [tableMonth]);
@@ -516,18 +570,56 @@ const Reports = () => {
     }, [tableWeeks]);
 
     useEffect(() => {
-        const fetchEmployees = async () => {
+        if (attendanceEmployeeId) {
+            const emp = employees.find(e => e.user_id === attendanceEmployeeId);
+            if (emp) {
+                const deptMismatch = attendanceDeptId && String(emp.dept_id) !== String(attendanceDeptId);
+                const desgMismatch = attendanceDesgId && String(emp.desg_id) !== String(attendanceDesgId);
+                if (deptMismatch || desgMismatch) {
+                    setAttendanceEmployeeId('');
+                }
+            }
+        }
+    }, [attendanceDeptId, attendanceDesgId, employees, attendanceEmployeeId]);
+
+    useEffect(() => {
+        if (tableEmployeeId) {
+            const emp = employees.find(e => e.user_id === tableEmployeeId);
+            if (emp) {
+                const deptMismatch = tableDeptId && String(emp.dept_id) !== String(tableDeptId);
+                const desgMismatch = tableDesgId && String(emp.desg_id) !== String(tableDesgId);
+                if (deptMismatch || desgMismatch) {
+                    setTableEmployeeId('');
+                }
+            }
+        }
+    }, [tableDeptId, tableDesgId, employees, tableEmployeeId]);
+
+    useEffect(() => {
+        const fetchEmployeesAndDepts = async () => {
             try {
-                const res = await adminService.getAllUsers();
-                if (res.success && res.users) {
-                    const sorted = [...res.users].sort((a, b) => a.user_name.localeCompare(b.user_name));
+                const [empRes, deptRes, desgRes] = await Promise.all([
+                    adminService.getAllUsers(),
+                    adminService.getDepartments(),
+                    adminService.getDesignations()
+                ]);
+                if (empRes.success && empRes.users) {
+                    const sorted = [...empRes.users].sort((a, b) => a.user_name.localeCompare(b.user_name));
                     setEmployees(sorted);
                 }
+                if (deptRes && deptRes.departments) {
+                    const sortedDepts = [...deptRes.departments].sort((a, b) => a.dept_name.localeCompare(b.dept_name));
+                    setDepartments(sortedDepts);
+                }
+                if (desgRes && desgRes.designations) {
+                    const sortedDesgs = [...desgRes.designations].sort((a, b) => a.desg_name.localeCompare(b.desg_name));
+                    setDesignations(sortedDesgs);
+                }
             } catch (err) {
-                console.error("Failed to load employees for filtering", err);
+                console.error("Failed to load filter metadata", err);
             }
         };
-        fetchEmployees();
+        fetchEmployeesAndDepts();
     }, []);
 
     React.useEffect(() => {
@@ -564,6 +656,8 @@ const Reports = () => {
         const selectedDate = isCard ? attendanceDate : tableDate;
         const selectedWeek = isCard ? attendanceWeek : tableWeek;
         const selectedEmployeeId = isCard ? attendanceEmployeeId : tableEmployeeId;
+        const selectedDeptId = isCard ? attendanceDeptId : tableDeptId;
+        const selectedDesgId = isCard ? attendanceDesgId : tableDesgId;
         const useCustomRange = isCard ? false : tableUseCustomRange;
         const customStartDate = isCard ? '' : tableCustomStartDate;
         const customEndDate = isCard ? '' : tableCustomEndDate;
@@ -589,6 +683,8 @@ const Reports = () => {
             selectedDate,
             selectedWeek,
             selectedEmployeeId,
+            selectedDeptId,
+            selectedDesgId,
             useCustomRange,
             customStartDate,
             customEndDate,
@@ -599,8 +695,8 @@ const Reports = () => {
         };
     }, [
         previewMode,
-        attendanceReportType, attendanceMonth, attendanceDate, attendanceWeek, attendanceEmployeeId,
-        tableReportType, tableMonth, tableDate, tableWeek, tableEmployeeId, tableUseCustomRange, tableCustomStartDate, tableCustomEndDate, tableExportColumns
+        attendanceReportType, attendanceMonth, attendanceDate, attendanceWeek, attendanceEmployeeId, attendanceDeptId, attendanceDesgId,
+        tableReportType, tableMonth, tableDate, tableWeek, tableEmployeeId, tableDeptId, tableDesgId, tableUseCustomRange, tableCustomStartDate, tableCustomEndDate, tableExportColumns
     ]);
 
     // Build a stable cache key from activeFilters
@@ -610,6 +706,8 @@ const Reports = () => {
             reportType: activeFilters.reportType,
             dateToUse: activeFilters.dateToUse,
             selectedEmployeeId: activeFilters.selectedEmployeeId,
+            selectedDeptId: activeFilters.selectedDeptId,
+            selectedDesgId: activeFilters.selectedDesgId,
             useCustomRange: activeFilters.useCustomRange,
             customStartDate: activeFilters.customStartDate,
             customEndDate: activeFilters.customEndDate,
@@ -629,7 +727,9 @@ const Reports = () => {
                 activeFilters.selectedEmployeeId,
                 activeFilters.qStart,
                 activeFilters.qEnd,
-                activeFilters.exportColumnsKey
+                activeFilters.exportColumnsKey,
+                activeFilters.selectedDeptId,
+                activeFilters.selectedDesgId
             );
             if (!cancelled && res.ok) {
                 attendanceViewCache.set(key, { data: res.data, fetchedAt: Date.now() });
@@ -651,7 +751,26 @@ const Reports = () => {
         setHoveredRecord(null);
         setSelectedRecord(null);
         setIsDetailSidebarOpen(false);
-    }, [cacheKey, previewMode]);
+    }, [
+        attendanceDeptId,
+        attendanceDesgId,
+        attendanceMonth,
+        attendanceDate,
+        attendanceWeek,
+        attendanceEmployeeId,
+        attendanceReportType,
+        tableDeptId,
+        tableDesgId,
+        tableMonth,
+        tableDate,
+        tableWeek,
+        tableEmployeeId,
+        tableReportType,
+        tableUseCustomRange,
+        tableCustomStartDate,
+        tableCustomEndDate,
+        previewMode
+    ]);
 
     // Clear hover record if loading starts
     React.useEffect(() => {
@@ -715,7 +834,9 @@ const Reports = () => {
                 dateToUse,
                 qStart,
                 qEnd,
-                JSON.stringify(tableExportColumns)
+                JSON.stringify(tableExportColumns),
+                tableDeptId,
+                tableDesgId
             );
             if (res.ok) {
                 const reportId = res.reportId;
@@ -1005,6 +1126,146 @@ const Reports = () => {
                                 </div>
                             )}
 
+                            {/* Searchable Department Selector */}
+                            <div className="relative" ref={attendanceDeptDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setAttendanceIsDeptDropdownOpen(!attendanceIsDeptDropdownOpen);
+                                        setAttendanceDeptSearchQuery('');
+                                    }}
+                                    className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-semibold text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer transition-all text-left shadow-sm select-none hover:bg-slate-100 dark:hover:bg-[#21262d] min-w-[180px]"
+                                >
+                                    <span className="truncate">
+                                        {departments.find(d => d.dept_id === attendanceDeptId)?.dept_name || 'All Departments'}
+                                    </span>
+                                    <ChevronDown size={14} className="text-slate-400 shrink-0 ml-2" />
+                                </button>
+
+                                {attendanceIsDeptDropdownOpen && (
+                                    <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-xl z-50 p-2 flex flex-col animate-in fade-in duration-200">
+                                        <div className="relative mb-2">
+                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search departments..."
+                                                value={attendanceDeptSearchQuery}
+                                                onChange={(e) => setAttendanceDeptSearchQuery(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto no-scrollbar space-y-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setAttendanceDeptId('');
+                                                    setAttendanceIsDeptDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${attendanceDeptId === ''
+                                                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                        : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                    }`}
+                                            >
+                                                All Departments
+                                            </button>
+                                            {departments.filter(d => d.dept_name.toLowerCase().includes(attendanceDeptSearchQuery.toLowerCase())).length > 0 ? (
+                                                departments.filter(d => d.dept_name.toLowerCase().includes(attendanceDeptSearchQuery.toLowerCase())).map(d => (
+                                                    <button
+                                                        key={d.dept_id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAttendanceDeptId(d.dept_id);
+                                                            setAttendanceIsDeptDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${attendanceDeptId === d.dept_id
+                                                                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                                : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        {d.dept_name}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="text-xs text-slate-400 dark:text-github-dark-muted text-center py-3">
+                                                    No departments found
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Searchable Designation Selector */}
+                            <div className="relative" ref={attendanceDesgDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setAttendanceIsDesgDropdownOpen(!attendanceIsDesgDropdownOpen);
+                                        setAttendanceDesgSearchQuery('');
+                                    }}
+                                    className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-semibold text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer transition-all text-left shadow-sm select-none hover:bg-slate-100 dark:hover:bg-[#21262d] min-w-[180px]"
+                                >
+                                    <span className="truncate">
+                                        {designations.find(d => String(d.desg_id) === String(attendanceDesgId))?.desg_name || 'All Designations'}
+                                    </span>
+                                    <ChevronDown size={14} className="text-slate-400 shrink-0 ml-2" />
+                                </button>
+
+                                {attendanceIsDesgDropdownOpen && (
+                                    <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-xl z-50 p-2 flex flex-col animate-in fade-in duration-200">
+                                        <div className="relative mb-2">
+                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search designations..."
+                                                value={attendanceDesgSearchQuery}
+                                                onChange={(e) => setAttendanceDesgSearchQuery(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto no-scrollbar space-y-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setAttendanceDesgId('');
+                                                    setAttendanceIsDesgDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${attendanceDesgId === ''
+                                                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                        : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                    }`}
+                                            >
+                                                All Designations
+                                            </button>
+                                            {designations.filter(d => d.desg_name.toLowerCase().includes(attendanceDesgSearchQuery.toLowerCase())).length > 0 ? (
+                                                designations.filter(d => d.desg_name.toLowerCase().includes(attendanceDesgSearchQuery.toLowerCase())).map(d => (
+                                                    <button
+                                                        key={d.desg_id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAttendanceDesgId(d.desg_id);
+                                                            setAttendanceIsDesgDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${String(attendanceDesgId) === String(d.desg_id)
+                                                                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                                : 'text-slate-600 dark:text-[#8b949e] hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        {d.desg_name}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="text-xs text-slate-400 dark:text-github-dark-muted text-center py-3">
+                                                    No designations found
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Searchable Employee Selector */}
                             <div className="relative" ref={attendanceEmpDropdownRef}>
                                 <button
@@ -1083,7 +1344,7 @@ const Reports = () => {
                         {/* Row 1: Parameters Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 items-end">
                             {/* Custom Report Type Dropdown */}
-                            <div className="relative xl:col-span-3" ref={tableTypeDropdownRef}>
+                            <div className="relative xl:col-span-2" ref={tableTypeDropdownRef}>
                                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted mb-1 ml-0.5">Report Type</label>
                                 <button
                                     type="button"
@@ -1116,8 +1377,150 @@ const Reports = () => {
                                 )}
                             </div>
 
+                            {/* Custom Searchable Department Selector */}
+                            <div className="relative xl:col-span-2" ref={tableDeptDropdownRef}>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted mb-1 ml-0.5">Department</label>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setTableIsDeptDropdownOpen(!tableIsDeptDropdownOpen);
+                                        setTableDeptSearchQuery('');
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-semibold text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer transition-all text-left shadow-sm select-none hover:bg-slate-100 dark:hover:bg-[#21262d]"
+                                >
+                                    <span className="truncate">
+                                        {departments.find(d => d.dept_id === tableDeptId)?.dept_name || 'All Departments'}
+                                    </span>
+                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-300 ${tableIsDeptDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {tableIsDeptDropdownOpen && (
+                                    <div className="absolute left-0 mt-1 w-full bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-xl z-50 p-2 flex flex-col">
+                                        <div className="relative mb-2">
+                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search departments..."
+                                                value={tableDeptSearchQuery}
+                                                onChange={(e) => setTableDeptSearchQuery(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto no-scrollbar space-y-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTableDeptId('');
+                                                    setTableIsDeptDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${tableDeptId === ''
+                                                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                        : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                    }`}
+                                            >
+                                                All Departments
+                                            </button>
+                                            {departments.filter(d => d.dept_name.toLowerCase().includes(tableDeptSearchQuery.toLowerCase())).length > 0 ? (
+                                                departments.filter(d => d.dept_name.toLowerCase().includes(tableDeptSearchQuery.toLowerCase())).map(d => (
+                                                    <button
+                                                        key={d.dept_id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setTableDeptId(d.dept_id);
+                                                            setTableIsDeptDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${tableDeptId === d.dept_id
+                                                                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                                : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        {d.dept_name}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="text-xs text-slate-400 dark:text-github-dark-muted text-center py-3">
+                                                    No departments found
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Custom Searchable Designation Selector */}
+                            <div className="relative xl:col-span-2" ref={tableDesgDropdownRef}>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted mb-1 ml-0.5">Designation</label>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setTableIsDesgDropdownOpen(!tableIsDesgDropdownOpen);
+                                        setTableDesgSearchQuery('');
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-xl text-xs font-semibold text-slate-700 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer transition-all text-left shadow-sm select-none hover:bg-slate-100 dark:hover:bg-[#21262d]"
+                                >
+                                    <span className="truncate">
+                                        {designations.find(d => String(d.desg_id) === String(tableDesgId))?.desg_name || 'All Designations'}
+                                    </span>
+                                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform duration-300 ${tableIsDesgDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {tableIsDesgDropdownOpen && (
+                                    <div className="absolute left-0 mt-1 w-full bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-xl z-50 p-2 flex flex-col">
+                                        <div className="relative mb-2">
+                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search designations..."
+                                                value={tableDesgSearchQuery}
+                                                onChange={(e) => setTableDesgSearchQuery(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 dark:text-github-dark-text"
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto no-scrollbar space-y-0.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTableDesgId('');
+                                                    setTableIsDesgDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${tableDesgId === ''
+                                                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                        : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                    }`}
+                                            >
+                                                All Designations
+                                            </button>
+                                            {designations.filter(d => d.desg_name.toLowerCase().includes(tableDesgSearchQuery.toLowerCase())).length > 0 ? (
+                                                designations.filter(d => d.desg_name.toLowerCase().includes(tableDesgSearchQuery.toLowerCase())).map(d => (
+                                                    <button
+                                                        key={d.desg_id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setTableDesgId(d.desg_id);
+                                                            setTableIsDesgDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${String(tableDesgId) === String(d.desg_id)
+                                                                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                                                : 'text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        {d.desg_name}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="text-xs text-slate-400 dark:text-github-dark-muted text-center py-3">
+                                                    No designations found
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Custom Searchable Employee Select */}
-                            <div className="relative xl:col-span-3" ref={tableEmpDropdownRef}>
+                            <div className="relative xl:col-span-2" ref={tableEmpDropdownRef}>
                                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted mb-1 ml-0.5">Employee</label>
                                 <button
                                     type="button"
@@ -1187,7 +1590,7 @@ const Reports = () => {
 
                         {/* Date Picker Grid Item */}
                         {tableReportType !== 'employee_master' && (
-                            <div className="xl:col-span-4">
+                            <div className="xl:col-span-2">
                                 {tableUseCustomRange ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                         <DatePicker
@@ -1456,8 +1859,8 @@ const Reports = () => {
                                                 {matrixData.dates.map(rawDate => {
                                                     const record = emp.records[rawDate];
                                                     const status = record?.status || '-';
-                                                    const isWeekend = status === 'Sun' || status === 'Sat';
-                                                    const isClickable = !!record && !isWeekend;
+                                                    const isNonClickableStatus = ['Sun', 'Sat', 'WEEK_OFF', 'Not Recorded', '-'].includes(status);
+                                                    const isClickable = !!record && !isNonClickableStatus;
                                                     return (
                                                         <td key={rawDate} className="px-1 py-3 text-center">
                                                             <button
@@ -1835,7 +2238,14 @@ const Reports = () => {
                                                         {selectedRecord.late_minutes != null ? `${selectedRecord.late_minutes} min` : '—'}
                                                     </span>
                                                     {selectedRecord.late_minutes > 0 && (
-                                                        <span className="block text-[9px] text-amber-500 font-semibold mt-1">Arrived late</span>
+                                                        <>
+                                                            <span className="block text-[9px] text-amber-500 font-semibold mt-1">Arrived late</span>
+                                                            {selectedRecord.late_reason && selectedRecord.late_reason !== '-' && (
+                                                                <span className="block text-[9px] text-slate-500 dark:text-github-dark-muted font-medium mt-1 leading-snug">
+                                                                    Message: <span className="italic">"{selectedRecord.late_reason}"</span>
+                                                                </span>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             </div>
@@ -1982,6 +2392,11 @@ const Reports = () => {
                                         <span className={`font-bold ${hoveredRecord.late_minutes > 0 ? 'text-amber-400' : 'text-slate-200 dark:text-[#c9d1d9]'}`}>
                                             {hoveredRecord.late_minutes != null ? `${hoveredRecord.late_minutes} min` : '—'}
                                         </span>
+                                        {hoveredRecord.late_minutes > 0 && hoveredRecord.late_reason && hoveredRecord.late_reason !== '-' && (
+                                            <span className="block text-[8px] text-slate-400 dark:text-github-dark-muted italic truncate max-w-[120px] mt-0.5" title={hoveredRecord.late_reason}>
+                                                "{hoveredRecord.late_reason}"
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
