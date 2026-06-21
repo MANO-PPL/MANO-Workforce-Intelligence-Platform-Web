@@ -217,8 +217,10 @@ const SuperAdminLoginMobile = () => {
 
                 {/* Footer */}
                 <footer className="mt-auto pt-10 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] whitespace-nowrap">
-                        Authorized Personnel Only <span className="mx-2">•</span> <Link to="/login" className="text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 transition-colors opacity-80">User Login</Link>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] leading-relaxed text-center flex flex-wrap justify-center items-center gap-x-2 gap-y-1">
+                        <span className="whitespace-nowrap">Authorized Personnel Only</span>
+                        <span className="hidden sm:inline text-slate-300 dark:text-slate-700">•</span>
+                        <Link to="/login" className="text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 transition-colors opacity-80 whitespace-nowrap">User Login</Link>
                     </p>
                 </footer>
             </div>

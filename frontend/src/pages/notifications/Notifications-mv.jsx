@@ -117,13 +117,13 @@ const Notifications = () => {
             <main className="pt-16">
                 {/* Tab Bar — Pill Style — Standardized */}
                 <div className="py-3 bg-white dark:bg-black px-4 sticky top-16 z-30 transition-all duration-300 border-b border-slate-100 dark:border-slate-800">
-                    <div className="bg-slate-200/50 dark:bg-github-dark-border/50 p-1.5 flex rounded-2xl backdrop-blur-md">
+                    <div className="bg-[#f6f8fa] dark:bg-github-dark-subtle p-1.5 flex rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
                         <button
                             onClick={() => setActiveTab('all')}
                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold transition-all duration-300 ${
                                 activeTab === 'all' 
-                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02]' 
-                                : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
+                                ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 transform scale-[1.02] border border-slate-200 dark:border-github-dark-border shadow-sm' 
+                                : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-[#21262d]/50'
                             }`}
                         >
                             <Bell size={14} className={activeTab === 'all' ? 'text-indigo-500' : 'text-slate-400'} />
@@ -133,8 +133,8 @@ const Notifications = () => {
                             onClick={() => setActiveTab('unread')}
                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold transition-all duration-300 relative ${
                                 activeTab === 'unread' 
-                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02]' 
-                                : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
+                                ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 transform scale-[1.02] border border-slate-200 dark:border-github-dark-border shadow-sm' 
+                                : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-[#21262d]/50'
                             }`}
                         >
                             <div className="relative">

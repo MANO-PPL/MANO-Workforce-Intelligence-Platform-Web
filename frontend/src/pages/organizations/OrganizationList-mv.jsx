@@ -439,21 +439,21 @@ const OrganizationListMobile = () => {
             </div>
 
             {/* Tabs */}
-            <div className="bg-slate-200/50 dark:bg-github-dark-border/50 p-1.5 flex rounded-2xl backdrop-blur-md border border-white/20 dark:border-white/5">
+            <div className="bg-[#f6f8fa] dark:bg-github-dark-subtle p-1.5 flex rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
               <button
                 type="button"
                 onClick={() => setListTab('active')}
                 className={`flex-1 py-2.5 text-[11px] font-bold rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                   listTab === 'active'
-                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02] shadow-sm'
-                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
+                    ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 transform scale-[1.02] shadow-sm border border-slate-200 dark:border-github-dark-border'
+                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-[#21262d]/50'
                 }`}
               >
                 <span>Active</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
                   listTab === 'active'
-                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300'
-                    : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                    ? 'bg-indigo-50 text-indigo-605 dark:bg-indigo-900/40 dark:text-indigo-300'
+                    : 'bg-slate-200 text-slate-600 dark:bg-[#21262d] dark:border-github-dark-border border'
                 }`}>{activeOrgs.length}</span>
               </button>
 
@@ -462,15 +462,15 @@ const OrganizationListMobile = () => {
                 onClick={() => setListTab('deleted')}
                 className={`flex-1 py-2.5 text-[11px] font-bold rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                   listTab === 'deleted'
-                    ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 transform scale-[1.02] shadow-sm'
-                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
+                    ? 'bg-white dark:bg-[#21262d] text-amber-600 dark:text-amber-400 transform scale-[1.02] shadow-sm border border-slate-200 dark:border-github-dark-border'
+                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-[#21262d]/50'
                 }`}
               >
                 <span>Deleted</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
                   listTab === 'deleted'
-                    ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300'
-                    : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                    ? 'bg-amber-50 text-amber-605 dark:bg-amber-900/40 dark:text-amber-300'
+                    : 'bg-slate-200 text-slate-600 dark:bg-[#21262d] dark:border-github-dark-border border'
                 }`}>{pendingOrgs.length}</span>
               </button>
             </div>

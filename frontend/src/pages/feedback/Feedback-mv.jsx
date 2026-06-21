@@ -70,13 +70,13 @@ const Feedback = () => {
 
                 <div className="px-5 py-6 space-y-8">
                     {/* Standardized Tab Switcher */}
-                    <div className="bg-slate-200/50 dark:bg-github-dark-border/50 p-1.5 flex rounded-2xl backdrop-blur-md border border-white/20 dark:border-white/5">
+                    <div className="bg-[#f6f8fa] dark:bg-github-dark-subtle p-1.5 flex rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
                         <button
                             onClick={() => setActiveTab('bug')}
                             className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
                                 activeTab === 'bug' 
-                                    ? 'bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 transform scale-[1.02]' 
-                                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
+                                    ? 'bg-white dark:bg-[#21262d] text-red-600 dark:text-red-400 transform scale-[1.02] border border-slate-200 dark:border-github-dark-border shadow-sm' 
+                                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-[#21262d]/50'
                             }`}
                         >
                             <Bug size={14} className={activeTab === 'bug' ? 'text-red-500' : 'text-slate-400'} />
@@ -86,8 +86,8 @@ const Feedback = () => {
                             onClick={() => setActiveTab('feedback')}
                             className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
                                 activeTab === 'feedback' 
-                                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 transform scale-[1.02]' 
-                                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-slate-800/50'
+                                    ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 transform scale-[1.02] border border-slate-200 dark:border-github-dark-border shadow-sm' 
+                                    : 'text-slate-500 dark:text-github-dark-muted hover:bg-slate-100 dark:hover:bg-[#21262d]/50'
                             }`}
                         >
                             <MessageSquare size={14} className={activeTab === 'feedback' ? 'text-indigo-500' : 'text-slate-400'} />

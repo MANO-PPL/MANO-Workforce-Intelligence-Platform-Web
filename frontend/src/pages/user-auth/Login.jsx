@@ -314,8 +314,9 @@ const Login = () => {
                             transition={{ delay: 0.3 }}
                             className="text-center pt-4"
                         >
-                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] whitespace-nowrap">
-                                Problem with access? <a href="#" className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors opacity-80">Contact Site Administrator</a>
+                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] leading-relaxed text-center flex flex-wrap justify-center gap-x-2 gap-y-1">
+                                <span className="whitespace-nowrap">Don't have an account?</span>
+                                <Link to="/signup" className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors opacity-80 whitespace-nowrap">Create your organization login</Link>
                             </p>
                         </motion.div>
                     </div>

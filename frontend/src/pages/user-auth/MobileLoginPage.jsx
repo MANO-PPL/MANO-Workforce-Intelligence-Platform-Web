@@ -259,9 +259,8 @@ const MobileLoginPage = () => {
                 {/* Footer */}
                 <footer className="mt-auto pt-10 text-center">
                     <p className="text-[9px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] leading-relaxed">
-                        Authorized Personnel Only <br />
-                        <span className="opacity-60">Problem with access? </span>
-                        <a href="#" className="text-indigo-600 dark:text-indigo-400 hover:underline">Support</a>
+                        Don't have an account? <br />
+                        <Link to="/signup" className="text-indigo-600 dark:text-indigo-400 hover:underline">Create your organization login</Link>
                     </p>
                 </footer>
             </div>

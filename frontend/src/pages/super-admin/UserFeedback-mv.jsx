@@ -312,13 +312,13 @@ const UserFeedbackMobile = () => {
         <div className="sticky top-16 -mx-4 px-4 py-3 bg-slate-50 dark:bg-black z-20 space-y-3 transition-all duration-300">
           
           {/* Category Tabs */}
-          <div className="bg-slate-200/50 dark:bg-github-dark-border/50 p-1.5 flex rounded-2xl backdrop-blur-md border border-white/20 dark:border-white/5">
+          <div className="bg-[#f6f8fa] dark:bg-github-dark-subtle p-1.5 flex rounded-2xl border border-slate-200 dark:border-github-dark-border shadow-sm">
             <button
               onClick={() => { setActiveCategoryTab('bug'); setFilterStatus('all'); }}
               className={`flex-1 py-2 text-[10px] font-bold rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
                 activeCategoryTab === 'bug'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 transform scale-[1.02] shadow-sm'
-                  : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50'
+                  ? 'bg-white dark:bg-[#21262d] text-indigo-650 dark:text-indigo-400 transform scale-[1.02] shadow-sm border border-slate-200 dark:border-github-dark-border'
+                  : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-[#21262d]/50'
               }`}
             >
               Bug Reports
@@ -328,8 +328,8 @@ const UserFeedbackMobile = () => {
               onClick={() => { setActiveCategoryTab('feedback'); setFilterStatus('all'); }}
               className={`flex-1 py-2 text-[10px] font-bold rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
                 activeCategoryTab === 'feedback'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 transform scale-[1.02] shadow-sm'
-                  : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50'
+                  ? 'bg-white dark:bg-[#21262d] text-indigo-650 dark:text-indigo-400 transform scale-[1.02] shadow-sm border border-slate-200 dark:border-github-dark-border'
+                  : 'text-slate-500 dark:text-github-dark-muted hover:bg-white/50 dark:hover:bg-[#21262d]/50'
               }`}
             >
               Feedbacks
