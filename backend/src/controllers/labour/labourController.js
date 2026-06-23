@@ -113,13 +113,25 @@ export const deleteSite = catchAsync(async (req, res) => {
 
 export const getAllLabours = catchAsync(async (req, res) => {
     const labours = await attendanceDB('labours as l')
-        .leftJoin('labour_sites as s', 'l.site_id', 's.site_id')
-        .select('l.*', 's.site_name')
+        .leftJoin('labour_site_relations as r', 'l.labour_id', 'r.labour_id')
+        .leftJoin('labour_sites as s', 'r.site_id', 's.site_id')
+        .select(
+            'l.*',
+            attendanceDB.raw('GROUP_CONCAT(s.site_name SEPARATOR ", ") as site_names'),
+            attendanceDB.raw('GROUP_CONCAT(s.site_id SEPARATOR ",") as site_ids')
+        )
+        .groupBy('l.labour_id')
         .orderBy('l.name', 'asc');
+
+    const formattedLabours = labours.map(lab => ({
+        ...lab,
+        site_ids: lab.site_ids ? lab.site_ids.split(',').map(Number) : [],
+        site_name: lab.site_names || 'Unassigned'
+    }));
 
     res.json({
         success: true,
-        labours
+        labours: formattedLabours
     });
 });
 
@@ -130,9 +142,18 @@ export const createLabour = catchAsync(async (req, res) => {
         throw new AppError('Name, role and monthly salary are required', 400);
     }
 
+    if (phone) {
+        const existing = await attendanceDB('labours')
+            .where('phone', phone.trim())
+            .first();
+        if (existing) {
+            throw new AppError('A worker with this phone number already exists', 400);
+        }
+    }
+
     const [labour_id] = await attendanceDB('labours').insert({
         name,
-        phone,
+        phone: phone || null,
         sex,
         role,
         wage_type: wage_type || 'Daily Wage',
@@ -141,6 +162,13 @@ export const createLabour = catchAsync(async (req, res) => {
         site_id: site_id || null,
         status: 'Active'
     });
+
+    if (site_id) {
+        await attendanceDB('labour_site_relations').insert({
+            labour_id,
+            site_id: Number(site_id)
+        });
+    }
 
     res.status(201).json({
         success: true,
@@ -153,11 +181,21 @@ export const updateLabour = catchAsync(async (req, res) => {
     const { id } = req.params;
     const { name, phone, sex, role, wage_type, monthly_salary, allowed_leaves, site_id, status } = req.body;
 
+    if (phone) {
+        const existing = await attendanceDB('labours')
+            .where('phone', phone.trim())
+            .andWhereNot('labour_id', id)
+            .first();
+        if (existing) {
+            throw new AppError('A worker with this phone number already exists', 400);
+        }
+    }
+
     const affected = await attendanceDB('labours')
         .where('labour_id', id)
         .update({
             name,
-            phone,
+            phone: phone || null,
             sex,
             role,
             wage_type,
@@ -170,6 +208,18 @@ export const updateLabour = catchAsync(async (req, res) => {
 
     if (affected === 0) {
         throw new AppError('Labour not found', 404);
+    }
+
+    if (site_id) {
+        const existingRelation = await attendanceDB('labour_site_relations')
+            .where({ labour_id: id, site_id: Number(site_id) })
+            .first();
+        if (!existingRelation) {
+            await attendanceDB('labour_site_relations').insert({
+                labour_id: id,
+                site_id: Number(site_id)
+            });
+        }
     }
 
     res.json({
@@ -206,10 +256,27 @@ export const getSiteAttendance = catchAsync(async (req, res) => {
         throw new AppError('site_id and date parameters are required', 400);
     }
 
-    // Get all active labours permanently assigned to this site
-    const labours = await attendanceDB('labours')
-        .where({ site_id, status: 'Active' })
-        .select('labour_id', 'name', 'role', 'wage_type');
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+    // Get all active labours associated with this site, sorted by attendance frequency in the last 30 days
+    const labours = await attendanceDB('labours as l')
+        .join('labour_site_relations as r', 'l.labour_id', 'r.labour_id')
+        .leftJoin('labour_attendance as a', function() {
+            this.on('l.labour_id', '=', 'a.labour_id')
+                .andOn('a.site_id', '=', attendanceDB.raw('?', [Number(site_id)]))
+                .andOn('a.date', '>=', attendanceDB.raw('?', [thirtyDaysAgoStr]))
+                .andOnIn('a.status', ['Present', 'Half Day', 'Paid Leave']);
+        })
+        .where({ 'r.site_id': Number(site_id), 'l.status': 'Active' })
+        .select('l.labour_id', 'l.name', 'l.role', 'l.wage_type', 'l.site_id as primary_site_id')
+        .count('a.attendance_id as frequent_count')
+        .groupBy('l.labour_id', 'l.name', 'l.role', 'l.wage_type', 'l.site_id')
+        .orderBy('frequent_count', 'desc')
+        .orderBy('l.name', 'asc');
+
+    const associatedIds = new Set(labours.map(l => l.labour_id));
 
     // Get attendance marked for any labours on this date at this site
     const attendanceRecords = await attendanceDB('labour_attendance')
@@ -221,19 +288,18 @@ export const getSiteAttendance = catchAsync(async (req, res) => {
         attendanceMap[rec.labour_id] = rec.status;
     });
 
-    const permanentIds = new Set(labours.map(l => l.labour_id));
-    const borrowedLabourIds = attendanceRecords
+    const extraLabourIds = attendanceRecords
         .map(rec => rec.labour_id)
-        .filter(id => !permanentIds.has(id));
+        .filter(id => !associatedIds.has(id));
 
-    let borrowedLabours = [];
-    if (borrowedLabourIds.length > 0) {
-        borrowedLabours = await attendanceDB('labours')
-            .whereIn('labour_id', borrowedLabourIds)
+    let extraLabours = [];
+    if (extraLabourIds.length > 0) {
+        extraLabours = await attendanceDB('labours')
+            .whereIn('labour_id', extraLabourIds)
             .select('labour_id', 'name', 'role', 'wage_type');
     }
 
-    const allLabours = [...labours, ...borrowedLabours];
+    const allLabours = [...labours, ...extraLabours];
 
     const roster = allLabours.map(lab => ({
         labour_id: lab.labour_id,
@@ -241,7 +307,8 @@ export const getSiteAttendance = catchAsync(async (req, res) => {
         role: lab.role,
         wage_type: lab.wage_type,
         status: attendanceMap[lab.labour_id] || '', // Default to empty string (unmarked) if not marked
-        is_borrowed: !permanentIds.has(lab.labour_id)
+        is_borrowed: !associatedIds.has(lab.labour_id),
+        frequent_count: Number(lab.frequent_count || 0)
     }));
 
     res.json({
@@ -280,7 +347,22 @@ export const saveSiteAttendance = catchAsync(async (req, res) => {
                 marked_by
             }));
 
-            await trx('labour_attendance').insert(insertData);
+            if (insertData.length > 0) {
+                await trx('labour_attendance').insert(insertData);
+            }
+
+            // Auto-associate roster workers with this site permanently
+            for (const labId of labourIds) {
+                const existing = await trx('labour_site_relations')
+                    .where({ labour_id: labId, site_id: Number(site_id) })
+                    .first();
+                if (!existing) {
+                    await trx('labour_site_relations').insert({
+                        labour_id: labId,
+                        site_id: Number(site_id)
+                    });
+                }
+            }
         }
     });
 
@@ -298,11 +380,17 @@ export const getFinancesSummary = catchAsync(async (req, res) => {
     const { date } = req.query; // optional date to select month
     const { start, end, totalDays, elapsedDays } = getMonthDetails(date);
 
-    // 1. Get all active labours
+    // 1. Get all active labours and their associated sites
     const labours = await attendanceDB('labours as l')
-        .leftJoin('labour_sites as s', 'l.site_id', 's.site_id')
-        .select('l.labour_id', 'l.name', 'l.role', 'l.wage_type', 'l.monthly_salary', 'l.allowed_leaves', 'l.site_id', 's.site_name')
-        .where('l.status', 'Active');
+        .leftJoin('labour_site_relations as r', 'l.labour_id', 'r.labour_id')
+        .leftJoin('labour_sites as s', 'r.site_id', 's.site_id')
+        .select(
+            'l.labour_id', 'l.name', 'l.role', 'l.wage_type', 'l.monthly_salary', 'l.allowed_leaves', 'l.site_id as primary_site_id',
+            attendanceDB.raw('GROUP_CONCAT(s.site_id SEPARATOR ",") as site_ids'),
+            attendanceDB.raw('GROUP_CONCAT(s.site_name SEPARATOR ", ") as site_names')
+        )
+        .where('l.status', 'Active')
+        .groupBy('l.labour_id');
 
     if (labours.length === 0) {
         return res.json({
@@ -393,8 +481,9 @@ export const getFinancesSummary = catchAsync(async (req, res) => {
             labour_id: lab.labour_id,
             name: lab.name,
             role: lab.role,
-            site_id: lab.site_id,
-            site_name: lab.site_name || 'Unassigned',
+            site_id: lab.primary_site_id,
+            site_name: lab.site_names || 'Unassigned',
+            site_ids: lab.site_ids ? lab.site_ids.split(',').map(Number) : [],
             wage_type: lab.wage_type,
             monthly_salary: monthlySalary,
             allowed_leaves: lab.allowed_leaves,
@@ -464,17 +553,21 @@ export const getMonthlyGridAttendance = catchAsync(async (req, res) => {
             .where('status', 'Active')
             .select('labour_id', 'name', 'role');
     } else {
-        // Fetch active labours who either belong to the site OR have attendance records logged on this site this month
+        // Fetch active labours who are associated with the site in labour_site_relations
+        // OR have attendance records logged on this site this month
         labours = await attendanceDB('labours as l')
             .where(function() {
-                this.where('l.site_id', site_id)
-                    .orWhereIn('l.labour_id', function() {
-                        this.select('labour_id')
-                            .from('labour_attendance')
-                            .where('site_id', site_id)
-                            .where('date', '>=', start)
-                            .where('date', '<=', end);
-                    });
+                this.whereIn('l.labour_id', function() {
+                    this.select('labour_id')
+                        .from('labour_site_relations')
+                        .where('site_id', Number(site_id));
+                }).orWhereIn('l.labour_id', function() {
+                    this.select('labour_id')
+                        .from('labour_attendance')
+                        .where('site_id', Number(site_id))
+                        .where('date', '>=', start)
+                        .where('date', '<=', end);
+                });
             })
             .andWhere('l.status', 'Active')
             .select('l.labour_id', 'l.name', 'l.role');
@@ -556,6 +649,20 @@ export const bulkTransferLabours = catchAsync(async (req, res) => {
             updated_at: attendanceDB.fn.now()
         });
 
+    if (targetSiteId) {
+        for (const labId of labour_ids) {
+            const existing = await attendanceDB('labour_site_relations')
+                .where({ labour_id: labId, site_id: targetSiteId })
+                .first();
+            if (!existing) {
+                await attendanceDB('labour_site_relations').insert({
+                    labour_id: labId,
+                    site_id: targetSiteId
+                });
+            }
+        }
+    }
+
     res.json({
         success: true,
         message: `Successfully transferred ${labour_ids.length} workers.`
@@ -579,11 +686,24 @@ export const bulkCreateLabours = catchAsync(async (req, res) => {
         siteMap[s.site_name.trim().toLowerCase()] = s.site_id;
     });
 
+    // Check unique phone numbers
+    const existingLabours = await attendanceDB('labours').select('phone');
+    const existingPhones = new Set(existingLabours.map(l => l.phone).filter(Boolean));
+    const phonesInBatch = new Set();
+
     const insertData = labours.map(lab => {
         const { name, phone, sex, role, wage_type, monthly_salary, allowed_leaves, site_id, site_name } = lab;
 
         if (!name || !role || monthly_salary === undefined) {
             throw new AppError('Name, role and monthly salary are required for all workers', 400);
+        }
+
+        const cleanPhone = phone ? String(phone).trim() : null;
+        if (cleanPhone) {
+            if (existingPhones.has(cleanPhone) || phonesInBatch.has(cleanPhone)) {
+                throw new AppError(`A worker with phone number ${cleanPhone} already exists`, 400);
+            }
+            phonesInBatch.add(cleanPhone);
         }
 
         // Resolve site_id if not explicitly provided but site_name is
@@ -596,7 +716,7 @@ export const bulkCreateLabours = catchAsync(async (req, res) => {
 
         return {
             name,
-            phone: phone || null,
+            phone: cleanPhone,
             sex: sex || 'Male',
             role,
             wage_type: wage_type || 'Daily Wage',
@@ -608,7 +728,15 @@ export const bulkCreateLabours = catchAsync(async (req, res) => {
     });
 
     await attendanceDB.transaction(async (trx) => {
-        await trx('labours').insert(insertData);
+        for (const data of insertData) {
+            const [labour_id] = await trx('labours').insert(data);
+            if (data.site_id) {
+                await trx('labour_site_relations').insert({
+                    labour_id,
+                    site_id: data.site_id
+                });
+            }
+        }
     });
 
     res.status(201).json({

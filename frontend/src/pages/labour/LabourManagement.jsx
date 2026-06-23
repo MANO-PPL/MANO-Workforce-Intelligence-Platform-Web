@@ -10,6 +10,18 @@ import {
     XCircle, Info, HelpCircle, ChevronRight, User, Phone, Briefcase, X, Upload
 } from 'lucide-react';
 
+const getInitialsAvatarStyle = (name) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash) % 360;
+    return {
+        backgroundColor: `hsl(${h}, 75%, 92%)`,
+        color: `hsl(${h}, 80%, 25%)`
+    };
+};
+
 const LabourManagement = () => {
     // Navigation / Tab state
     const [activeTab, setActiveTab] = useState('sites'); // 'sites', 'directory'
@@ -33,6 +45,7 @@ const LabourManagement = () => {
     const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
     const [attendanceRoster, setAttendanceRoster] = useState([]);
     const [attendanceLoading, setAttendanceLoading] = useState(false);
+    const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
 
     // Monthly Grid States
     const [gridSiteId, setGridSiteId] = useState('');
@@ -45,7 +58,7 @@ const LabourManagement = () => {
     // Modal Control States
     const [showSiteModal, setShowSiteModal] = useState(false);
     const [editingSite, setEditingSite] = useState(null);
-    const [siteForm, setSiteForm] = useState({ site_name: '', location_details: '', status: 'Active' });
+    const [siteForm, setSiteForm] = useState({ site_name: '', location_details: '', status: 'Active', end_date: '' });
 
     const [showLabourModal, setShowLabourModal] = useState(false);
     const [editingLabour, setEditingLabour] = useState(null);
@@ -341,7 +354,7 @@ const LabourManagement = () => {
             }
             setShowSiteModal(false);
             setEditingSite(null);
-            setSiteForm({ site_name: '', location_details: '', status: 'Active' });
+            setSiteForm({ site_name: '', location_details: '', status: 'Active', end_date: '' });
             fetchSites();
         } catch (err) {
             toast.error(err.message || 'Failed to save site');
@@ -362,7 +375,7 @@ const LabourManagement = () => {
             toast.success(`Site status updated. Transferred ${labourIdsToTransfer.length} workers.`);
             setShowSiteClosurePrompt(false);
             setEditingSite(null);
-            setSiteForm({ site_name: '', location_details: '', status: 'Active' });
+            setSiteForm({ site_name: '', location_details: '', status: 'Active', end_date: '' });
             fetchSites();
             fetchLabours();
         } catch (err) {
@@ -508,7 +521,12 @@ const LabourManagement = () => {
 
     const handleStatusChange = (labourId, newStatus) => {
         setAttendanceRoster(prev =>
-            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus } : item)
+            prev.map(item => {
+                if (item.labour_id === labourId) {
+                    return { ...item, status: item.status === newStatus ? '' : newStatus };
+                }
+                return item;
+            })
         );
     };
 
@@ -685,7 +703,7 @@ const LabourManagement = () => {
                                             <p className="text-slate-450 dark:text-github-dark-muted text-[11px] mt-0.5">Manage building sites and click a site to access its daily attendance roll call, matrix grid, and salary ledger.</p>
                                         </div>
                                         <button
-                                            onClick={() => { setEditingSite(null); setSiteForm({ site_name: '', location_details: '', status: 'Active' }); setShowSiteModal(true); }}
+                                            onClick={() => { setEditingSite(null); setSiteForm({ site_name: '', location_details: '', status: 'Active', end_date: '' }); setShowSiteModal(true); }}
                                             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all"
                                         >
                                             <Plus size={14} />
@@ -725,13 +743,47 @@ const LabourManagement = () => {
                                                     </div>
 
                                                     <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-github-dark-border/40 text-xs">
-                                                        <div className="flex flex-col gap-0.5">
+                                                        <div className="flex flex-col gap-1.5">
                                                             <span className="text-slate-400 dark:text-github-dark-muted text-[10px]">
-                                                                Created {new Date(site.created_at).toLocaleDateString()}
+                                                                {site.status === 'Completed' && site.end_date 
+                                                                    ? `Completed ${new Date(site.end_date).toLocaleDateString()}` 
+                                                                    : `Created ${new Date(site.created_at).toLocaleDateString()}`
+                                                                }
                                                             </span>
-                                                            <span className="text-[10px] font-bold text-indigo-650 dark:text-indigo-400">
-                                                                👥 {labours.filter(l => l.site_id === site.site_id).length} Assigned
-                                                            </span>
+                                                            {(() => {
+                                                                const assignedLabours = labours.filter(l => l.site_ids && l.site_ids.includes(site.site_id));
+                                                                const displayLabours = assignedLabours.slice(0, 3);
+                                                                const remainingCount = assignedLabours.length - 3;
+                                                                return (
+                                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                                        {assignedLabours.length > 0 ? (
+                                                                            <div className="flex -space-x-1.5 overflow-hidden">
+                                                                                {displayLabours.map((lab) => {
+                                                                                    const initials = lab.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                                                                                    const avatarStyle = getInitialsAvatarStyle(lab.name);
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={lab.labour_id}
+                                                                                            className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-white dark:border-slate-900 text-[8px] font-black shadow-sm"
+                                                                                            style={avatarStyle}
+                                                                                            title={`${lab.name} (${lab.role})`}
+                                                                                        >
+                                                                                            {initials}
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                                {remainingCount > 0 && (
+                                                                                    <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 border border-white dark:border-slate-900 text-slate-500 dark:text-slate-400 text-[8px] font-bold shadow-sm">
+                                                                                        +{remainingCount}
+                                                                                    </div>
+                                                                            </div>
+                                                                        ) : null}
+                                                                        <span className="text-[10px] font-extrabold text-indigo-650 dark:text-indigo-400">
+                                                                            {assignedLabours.length} {assignedLabours.length === 1 ? 'Worker' : 'Workers'}
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
                                                         <div className="flex gap-2">
                                                             <button
@@ -802,18 +854,31 @@ const LabourManagement = () => {
                                     {/* Component Renders (filtered for this site) */}
                                     {subTab === 'attendance' && (
                                         <div className="space-y-4 animate-in fade-in duration-150">
-                                            <div className="flex justify-between items-center bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border p-4 rounded-xl shadow-sm">
-                                                <div className="flex items-center gap-4 w-full sm:w-auto">
-                                                    <div className="flex flex-col gap-1 w-full">
-                                                        <label className="text-[10px] uppercase font-bold text-slate-400">Roster Attendance Date</label>
-                                                        <input
-                                                            type="date"
-                                                            value={attendanceDate}
-                                                            onChange={(e) => setAttendanceDate(e.target.value)}
-                                                            className="px-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg text-xs font-semibold text-slate-700 dark:text-github-dark-text focus:outline-none"
-                                                        />
-                                                    </div>
-                                                </div>
+                                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border p-4 rounded-xl shadow-sm">
+                                                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full">
+                                                     <div className="flex flex-col gap-1 w-full sm:w-48">
+                                                         <label className="text-[10px] uppercase font-bold text-slate-400">Roster Attendance Date</label>
+                                                         <input
+                                                             type="date"
+                                                             value={attendanceDate}
+                                                             onChange={(e) => setAttendanceDate(e.target.value)}
+                                                             className="px-3 py-1.5 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg text-xs font-semibold text-slate-700 dark:text-github-dark-text focus:outline-none"
+                                                         />
+                                                     </div>
+                                                     <div className="flex flex-col gap-1 flex-1">
+                                                         <label className="text-[10px] uppercase font-bold text-slate-400">Search Workers</label>
+                                                         <div className="relative w-full">
+                                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                                             <input
+                                                                 type="text"
+                                                                 placeholder="Search worker by name or designation..."
+                                                                 value={attendanceSearchQuery}
+                                                                 onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                                                                 className="pl-9 pr-4 py-1.5 w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-lg text-xs text-slate-700 dark:text-github-dark-text focus:outline-none"
+                                                             />
+                                                         </div>
+                                                     </div>
+                                                 </div>
                                             </div>
 
                                             {attendanceLoading ? (
@@ -825,7 +890,15 @@ const LabourManagement = () => {
                                                     <div className="p-4 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-github-dark-border/10">
                                                         <div>
                                                             <span className="font-bold text-xs text-slate-800 dark:text-github-dark-text">Daily Roll Call Checklist</span>
-                                                            <span className="ml-2 text-[10px] text-slate-450 dark:text-github-dark-muted font-mono">{attendanceRoster.length} workers registered</span>
+                                                            <span className="ml-2 text-[10px] text-slate-450 dark:text-github-dark-muted font-mono">
+                                                                {attendanceSearchQuery
+                                                                    ? `${attendanceRoster.filter(item => {
+                                                                        const q = attendanceSearchQuery.toLowerCase().trim();
+                                                                        return item.name.toLowerCase().includes(q) || item.role.toLowerCase().includes(q);
+                                                                      }).length} shown of ${attendanceRoster.length} registered`
+                                                                    : `${attendanceRoster.length} workers registered`
+                                                                }
+                                                            </span>
                                                         </div>
                                                         <div className="flex gap-2">
                                                             <button
@@ -857,21 +930,36 @@ const LabourManagement = () => {
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
-                                                                {attendanceRoster.length === 0 ? (
+                                                                {attendanceRoster.filter(item => {
+                                                                    const q = attendanceSearchQuery.toLowerCase().trim();
+                                                                    if (!q) return true;
+                                                                    return item.name.toLowerCase().includes(q) || item.role.toLowerCase().includes(q);
+                                                                }).length === 0 ? (
                                                                     <tr>
-                                                                        <td colSpan="4" className="p-10 text-center text-slate-400 italic">No labours assigned to this site. Assign labours in Labour Force Directory.</td>
+                                                                        <td colSpan="4" className="p-10 text-center text-slate-400 italic">
+                                                                            {attendanceSearchQuery ? "No matching workers found." : "No labours assigned to this site. Assign labours in Labour Force Directory."}
+                                                                        </td>
                                                                     </tr>
                                                                 ) : (
-                                                                    attendanceRoster.map(item => (
-                                                                        <tr key={item.labour_id} className="border-b border-slate-100 dark:border-github-dark-border/50 hover:bg-slate-50/20 dark:hover:bg-slate-800/10 relative">
-                                                                            <td className="p-3 font-semibold text-slate-800 dark:text-github-dark-text">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <span>{item.name}</span>
-                                                                                    {item.is_borrowed && (
-                                                                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-extrabold text-[8px] uppercase tracking-wider">Borrowed</span>
-                                                                                    )}
-                                                                                </div>
-                                                                            </td>
+                                                                    attendanceRoster
+                                                                        .filter(item => {
+                                                                            const q = attendanceSearchQuery.toLowerCase().trim();
+                                                                            if (!q) return true;
+                                                                            return item.name.toLowerCase().includes(q) || item.role.toLowerCase().includes(q);
+                                                                        })
+                                                                        .map(item => (
+                                                                            <tr key={item.labour_id} className="border-b border-slate-100 dark:border-github-dark-border/50 hover:bg-slate-50/20 dark:hover:bg-slate-800/10 relative">
+                                                                                <td className="p-3 font-semibold text-slate-800 dark:text-github-dark-text">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span>{item.name}</span>
+                                                                                        {item.frequent_count > 0 && (
+                                                                                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 font-extrabold text-[8px] uppercase tracking-wider" title={`${item.frequent_count} days present in last 30 days`}>★ Frequent</span>
+                                                                                        )}
+                                                                                        {item.is_borrowed && (
+                                                                                            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-extrabold text-[8px] uppercase tracking-wider">Borrowed</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </td>
                                                                             <td className="p-3 text-slate-650 dark:text-slate-400">{item.role}</td>
                                                                             <td className="p-3">
                                                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.wage_type === 'Fixed Salary'
@@ -882,26 +970,27 @@ const LabourManagement = () => {
                                                                                 </span>
                                                                             </td>
                                                                             <td className="p-3">
-                                                                                <div className="flex justify-center items-center gap-2">
-                                                                                    {[
-                                                                                        { id: 'Present', label: 'Present (Full Day)', activeColor: 'bg-emerald-500 text-white dark:bg-emerald-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
-                                                                                        { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
-                                                                                        { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
-                                                                                        { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' }
-                                                                                    ].map(statusOpt => {
-                                                                                        const isSelected = item.status === statusOpt.id;
-                                                                                        return (
-                                                                                            <button
-                                                                                                key={statusOpt.id}
-                                                                                                onClick={() => handleStatusChange(item.labour_id, statusOpt.id)}
-                                                                                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-150 cursor-pointer ${isSelected ? statusOpt.activeColor + ' shadow-sm' : statusOpt.inactiveColor
-                                                                                                    }`}
-                                                                                            >
-                                                                                                {statusOpt.label}
-                                                                                            </button>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
+                                                                                       <div className="flex justify-center items-center gap-2">
+                                                                                        {[
+                                                                                            { id: 'Present', label: 'Present (Full Day)', activeColor: 'bg-emerald-500 text-white dark:bg-emerald-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
+                                                                                            { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
+                                                                                            { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
+                                                                                            { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' }
+                                                                                        ].map(statusOpt => {
+                                                                                            const isSelected = item.status === statusOpt.id;
+                                                                                            return (
+                                                                                                <button
+                                                                                                    key={statusOpt.id}
+                                                                                                    onClick={() => handleStatusChange(item.labour_id, statusOpt.id)}
+                                                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-150 cursor-pointer ${isSelected ? statusOpt.activeColor + ' shadow-sm' : statusOpt.inactiveColor
+                                                                                                        }`}
+                                                                                                >
+                                                                                                    {statusOpt.label}
+                                                                                                </button>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                )}
                                                                             </td>
                                                                         </tr>
                                                                     ))
@@ -1092,13 +1181,13 @@ const LabourManagement = () => {
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {financeSummary.filter(row => row.site_id === selectedSite.site_id).length === 0 ? (
+                                                            {financeSummary.filter(row => row.site_ids && row.site_ids.includes(selectedSite.site_id)).length === 0 ? (
                                                                 <tr>
                                                                     <td colSpan="7" className="p-10 text-center text-slate-400 italic">No salary ledger details for workers on this site this month.</td>
                                                                 </tr>
                                                             ) : (
                                                                 financeSummary
-                                                                    .filter(row => row.site_id === selectedSite.site_id)
+                                                                    .filter(row => row.site_ids && row.site_ids.includes(selectedSite.site_id))
                                                                     .map(row => {
                                                                         const advanceAlert = row.advances_taken > row.accrued_credit;
                                                                         return (
@@ -1270,9 +1359,9 @@ const LabourManagement = () => {
 
                                                     let matchesSite = true;
                                                     if (labourSiteFilter === 'Unassigned') {
-                                                        matchesSite = lab.site_id === null;
+                                                        matchesSite = !lab.site_ids || lab.site_ids.length === 0;
                                                     } else if (labourSiteFilter !== 'All') {
-                                                        matchesSite = lab.site_id === Number(labourSiteFilter);
+                                                        matchesSite = lab.site_ids && lab.site_ids.includes(Number(labourSiteFilter));
                                                     }
 
                                                     return matchesSearch && matchesSite;
@@ -1367,7 +1456,7 @@ const LabourManagement = () => {
                                 </div>
                                 <form onSubmit={handleSaveSite} className="flex-1 overflow-y-auto p-6 space-y-6 text-xs custom-scrollbar">
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-2">Site Name</label>
+                                        <label className="block text-slate-455 font-semibold mb-2">Site Name</label>
                                         <input
                                             type="text"
                                             value={siteForm.site_name}
@@ -1378,7 +1467,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-2">Location Details / Address</label>
+                                        <label className="block text-slate-455 font-semibold mb-2">Location Details / Address</label>
                                         <textarea
                                             value={siteForm.location_details}
                                             onChange={(e) => setSiteForm({ ...siteForm, location_details: e.target.value })}
@@ -1389,7 +1478,7 @@ const LabourManagement = () => {
                                     </div>
                                     {editingSite && (
                                         <div>
-                                            <label className="block text-slate-450 font-semibold mb-2">Status</label>
+                                            <label className="block text-slate-455 font-semibold mb-2">Status</label>
                                             <select
                                                 value={siteForm.status}
                                                 onChange={(e) => setSiteForm({ ...siteForm, status: e.target.value })}
@@ -1399,6 +1488,19 @@ const LabourManagement = () => {
                                                 <option value="Completed">Completed</option>
                                                 <option value="Inactive">Inactive</option>
                                             </select>
+                                        </div>
+                                    )}
+
+                                    {siteForm.status === 'Completed' && (
+                                        <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <label className="block text-slate-455 font-semibold mb-2">Completion End Date</label>
+                                            <input
+                                                type="date"
+                                                value={siteForm.end_date || ''}
+                                                onChange={(e) => setSiteForm({ ...siteForm, end_date: e.target.value })}
+                                                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-lg focus:outline-none focus:border-indigo-500"
+                                                required
+                                            />
                                         </div>
                                     )}
 
@@ -1455,7 +1557,7 @@ const LabourManagement = () => {
                                 </div>
                                 <form onSubmit={handleSaveLabour} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs custom-scrollbar">
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Labour Full Name</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Labour Full Name</label>
                                         <input
                                             type="text"
                                             value={labourForm.name}
@@ -1466,7 +1568,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Contact Phone</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Contact Phone</label>
                                         <input
                                             type="tel"
                                             value={labourForm.phone}
@@ -1476,7 +1578,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Sex</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Sex</label>
                                         <select
                                             value={labourForm.sex}
                                             onChange={(e) => setLabourForm({ ...labourForm, sex: e.target.value })}
@@ -1488,7 +1590,7 @@ const LabourManagement = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Role</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Role</label>
                                         <input
                                             type="text"
                                             value={labourForm.role}
@@ -1499,7 +1601,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Assign Construction Site</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Assign Construction Site</label>
                                         <select
                                             value={labourForm.site_id}
                                             onChange={(e) => setLabourForm({ ...labourForm, site_id: e.target.value })}
@@ -1512,7 +1614,7 @@ const LabourManagement = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Wage Model</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Wage Model</label>
                                         <select
                                             value={labourForm.wage_type}
                                             onChange={(e) => setLabourForm({ ...labourForm, wage_type: e.target.value })}
@@ -1523,7 +1625,7 @@ const LabourManagement = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Monthly Salary (INR)</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">{labourForm.wage_type === 'Fixed Salary' ? 'Monthly Salary (INR)' : 'Daily Wage (INR)'}</label>
                                         <input
                                             type="number"
                                             value={labourForm.monthly_salary}
@@ -1531,12 +1633,12 @@ const LabourManagement = () => {
                                             className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-lg focus:outline-none focus:border-indigo-500"
                                             required
                                             min="0"
-                                            placeholder="e.g., 25000"
+                                            placeholder={labourForm.wage_type === 'Fixed Salary' ? 'e.g., 25000' : 'e.g., 600'}
                                         />
                                     </div>
                                     {editingLabour && (
                                         <div>
-                                            <label className="block text-slate-450 font-semibold mb-1">Status</label>
+                                            <label className="block text-slate-455 font-semibold mb-1">Status</label>
                                             <select
                                                 value={labourForm.status}
                                                 onChange={(e) => setLabourForm({ ...labourForm, status: e.target.value })}
@@ -1602,7 +1704,7 @@ const LabourManagement = () => {
                                         Logging salary advance for <strong>{advanceForm.name}</strong>. This amount will be automatically deducted from their next payroll payout credit.
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Advance Amount (INR)</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Advance Amount (INR)</label>
                                         <input
                                             type="number"
                                             value={advanceForm.amount}
@@ -1614,7 +1716,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Logging Date</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Logging Date</label>
                                         <input
                                             type="date"
                                             value={advanceForm.date}
@@ -1713,7 +1815,7 @@ const LabourManagement = () => {
 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-slate-450 font-semibold mb-1">Paid Amount (INR)</label>
+                                            <label className="block text-slate-455 font-semibold mb-1">Paid Amount (INR)</label>
                                             <input
                                                 type="number"
                                                 value={payoutForm.paid_amount}
@@ -1725,7 +1827,7 @@ const LabourManagement = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-slate-450 font-semibold mb-1">Payout Status</label>
+                                            <label className="block text-slate-455 font-semibold mb-1">Payout Status</label>
                                             <select
                                                 value={payoutForm.status}
                                                 onChange={(e) => setPayoutForm({ ...payoutForm, status: e.target.value })}
@@ -1738,7 +1840,7 @@ const LabourManagement = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-slate-450 font-semibold mb-1">Payment Date</label>
+                                        <label className="block text-slate-455 font-semibold mb-1">Payment Date</label>
                                         <input
                                             type="date"
                                             value={payoutForm.payment_date}
@@ -1845,7 +1947,7 @@ const LabourManagement = () => {
                                     </div>
 
                                     <div className="space-y-2 pt-2">
-                                        <div className="flex justify-between items-center text-slate-450 font-semibold">
+                                        <div className="flex justify-between items-center text-slate-455 font-semibold">
                                             <span>Select Workers to Move</span>
                                             <button
                                                 type="button"
@@ -1988,7 +2090,7 @@ const LabourManagement = () => {
                                                 lab.role.toLowerCase().includes(borrowSearchQuery.toLowerCase());
                                             return !isAlreadyInRoster && matchesSearch && lab.status === 'Active';
                                         }).length === 0 && (
-                                                <div className="p-8 text-center text-slate-400 italic">No borrowable workers found.</div>
+                                                <div className="p-8 text-center text-slate-400 italic">No workers found to add.</div>
                                             )}
                                     </div>
                                 </div>

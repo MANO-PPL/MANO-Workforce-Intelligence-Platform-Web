@@ -10,6 +10,18 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const getInitialsAvatarStyle = (name) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash) % 360;
+    return {
+        backgroundColor: `hsl(${h}, 75%, 92%)`,
+        color: `hsl(${h}, 80%, 25%)`
+    };
+};
+
 const MobileLabourManagement = () => {
     // Navigation / Tab state
     const [activeTab, setActiveTab] = useState('sites'); // 'sites', 'directory'
@@ -32,6 +44,7 @@ const MobileLabourManagement = () => {
     const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
     const [attendanceRoster, setAttendanceRoster] = useState([]);
     const [attendanceLoading, setAttendanceLoading] = useState(false);
+    const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
 
     // Monthly Grid States
     const [gridSiteId, setGridSiteId] = useState('');
@@ -44,7 +57,7 @@ const MobileLabourManagement = () => {
     // Modal Control States
     const [showSiteModal, setShowSiteModal] = useState(false);
     const [editingSite, setEditingSite] = useState(null);
-    const [siteForm, setSiteForm] = useState({ site_name: '', location_details: '', status: 'Active' });
+    const [siteForm, setSiteForm] = useState({ site_name: '', location_details: '', status: 'Active', end_date: '' });
 
     const [showLabourModal, setShowLabourModal] = useState(false);
     const [editingLabour, setEditingLabour] = useState(null);
@@ -358,7 +371,7 @@ const MobileLabourManagement = () => {
             }
             setShowSiteModal(false);
             setEditingSite(null);
-            setSiteForm({ site_name: '', location_details: '', status: 'Active' });
+            setSiteForm({ site_name: '', location_details: '', status: 'Active', end_date: '' });
             fetchSites();
         } catch (err) {
             toast.error(err.message || 'Failed to save site');
@@ -379,7 +392,7 @@ const MobileLabourManagement = () => {
             toast.success(`Site status updated. Transferred ${labourIdsToTransfer.length} workers.`);
             setShowSiteClosurePrompt(false);
             setEditingSite(null);
-            setSiteForm({ site_name: '', location_details: '', status: 'Active' });
+            setSiteForm({ site_name: '', location_details: '', status: 'Active', end_date: '' });
             fetchSites();
             fetchLabours();
         } catch (err) {
@@ -525,7 +538,12 @@ const MobileLabourManagement = () => {
 
     const handleStatusChange = (labourId, newStatus) => {
         setAttendanceRoster(prev =>
-            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus } : item)
+            prev.map(item => {
+                if (item.labour_id === labourId) {
+                    return { ...item, status: item.status === newStatus ? '' : newStatus };
+                }
+                return item;
+            })
         );
     };
 
@@ -664,7 +682,7 @@ const MobileLabourManagement = () => {
                                     <div className="flex justify-between items-center bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border p-3 rounded-xl shadow-sm">
                                         <span className="font-bold text-slate-700 dark:text-white">Active Projects</span>
                                         <button
-                                            onClick={() => { setEditingSite(null); setSiteForm({ site_name: '', location_details: '', status: 'Active' }); setShowSiteModal(true); }}
+                                            onClick={() => { setEditingSite(null); setSiteForm({ site_name: '', location_details: '', status: 'Active', end_date: '' }); setShowSiteModal(true); }}
                                             className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg font-bold flex items-center gap-1 text-[10px]"
                                         >
                                             <Plus size={12} /> Add Site
@@ -691,9 +709,46 @@ const MobileLabourManagement = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-[10px] text-slate-500 dark:text-github-dark-muted mt-1">{site.location_details || 'No details.'}</p>
-                                                    <span className="text-[9px] font-bold text-indigo-650 dark:text-indigo-400 mt-1 block">
-                                                        👥 {labours.filter(l => l.site_id === site.site_id).length} Assigned Workers
-                                                    </span>
+                                                    {site.status === 'Completed' && site.end_date && (
+                                                        <span className="text-[9px] text-slate-450 dark:text-github-dark-muted mt-1 block">
+                                                            Completed: {new Date(site.end_date).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                    {(() => {
+                                                        const assignedLabours = labours.filter(l => l.site_ids && l.site_ids.includes(site.site_id));
+                                                        const displayLabours = assignedLabours.slice(0, 3);
+                                                        const remainingCount = assignedLabours.length - 3;
+                                                        return (
+                                                            <div className="flex items-center gap-1.5 mt-2">
+                                                                {assignedLabours.length > 0 ? (
+                                                                    <div className="flex -space-x-1.5 overflow-hidden">
+                                                                        {displayLabours.map((lab) => {
+                                                                            const initials = lab.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                                                                            const avatarStyle = getInitialsAvatarStyle(lab.name);
+                                                                            return (
+                                                                                <div
+                                                                                    key={lab.labour_id}
+                                                                                    className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-white dark:border-slate-900 text-[8px] font-black shadow-sm"
+                                                                                    style={avatarStyle}
+                                                                                    title={`${lab.name} (${lab.role})`}
+                                                                                >
+                                                                                    {initials}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                        {remainingCount > 0 && (
+                                                                            <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 border border-white dark:border-slate-900 text-slate-500 dark:text-slate-400 text-[8px] font-bold shadow-sm">
+                                                                                +{remainingCount}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ) : null}
+                                                                <span className="text-[9px] font-bold text-indigo-650 dark:text-indigo-400">
+                                                                    {assignedLabours.length} {assignedLabours.length === 1 ? 'Worker' : 'Workers'} Assigned
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-github-dark-border/40">
                                                     <button onClick={(e) => { e.stopPropagation(); handleEditSite(site); }} className="p-1.5 text-slate-500 rounded border border-slate-200 dark:border-github-dark-border"><Edit2 size={10} /></button>
@@ -741,27 +796,48 @@ const MobileLabourManagement = () => {
                                     {/* Component views filtered for selectedSite */}
                                     {subTab === 'attendance' && (
                                         <div className="space-y-3 animate-in fade-in duration-100">
-                                            <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border p-3 rounded-xl shadow-sm grid grid-cols-1 gap-2">
+                                            <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border p-3 rounded-xl shadow-sm flex flex-col gap-2">
                                                 <div className="flex flex-col gap-0.5">
                                                     <label className="text-[9px] uppercase font-bold text-slate-400">Roster Date</label>
                                                     <input
                                                         type="date"
                                                         value={attendanceDate}
                                                         onChange={(e) => setAttendanceDate(e.target.value)}
-                                                        className="px-2 py-1 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-lg text-xs"
+                                                        className="px-2 py-1 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-lg text-xs w-full"
                                                     />
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <label className="text-[9px] uppercase font-bold text-slate-400">Search Workers</label>
+                                                    <div className="relative w-full">
+                                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={12} />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search by name or role..."
+                                                            value={attendanceSearchQuery}
+                                                            onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                                                            className="pl-8 pr-3 py-1 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-lg text-xs w-full"
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
 
                                             <div className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-xl overflow-hidden shadow-sm">
                                                 <div className="p-3 border-b border-slate-105 dark:border-github-dark-border flex justify-between items-center bg-slate-50 dark:bg-github-dark-border/40 gap-2">
-                                                    <span className="font-bold text-[11px] truncate">Roster ({attendanceRoster.length})</span>
+                                                    <span className="font-bold text-[11px] truncate">
+                                                        {attendanceSearchQuery
+                                                            ? `Roster (${attendanceRoster.filter(item => {
+                                                                const q = attendanceSearchQuery.toLowerCase().trim();
+                                                                return item.name.toLowerCase().includes(q) || item.role.toLowerCase().includes(q);
+                                                            }).length}/${attendanceRoster.length})`
+                                                            : `Roster (${attendanceRoster.length})`
+                                                        }
+                                                    </span>
                                                     <div className="flex gap-1.5 shrink-0">
                                                         <button
                                                             onClick={() => setShowBorrowModal(true)}
                                                             className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-205 rounded-lg font-bold flex items-center gap-1 border border-slate-200 dark:border-github-dark-border text-[9px]"
                                                         >
-                                                            <Plus size={10} /> Borrow
+                                                            <Plus size={10} /> Borrow Worker
                                                         </button>
                                                         <button
                                                             disabled={attendanceRoster.length === 0}
@@ -775,40 +851,66 @@ const MobileLabourManagement = () => {
 
                                                 {attendanceLoading ? (
                                                     <div className="py-10 flex justify-center"><Clock className="animate-spin text-indigo-500" size={20} /></div>
-                                                ) : attendanceRoster.length === 0 ? (
-                                                    <div className="p-8 text-center text-slate-400 italic">No labours on this site. Assign them in Directory.</div>
+                                                ) : attendanceRoster.filter(item => {
+                                                    const q = attendanceSearchQuery.toLowerCase().trim();
+                                                    if (!q) return true;
+                                                    return item.name.toLowerCase().includes(q) || item.role.toLowerCase().includes(q);
+                                                }).length === 0 ? (
+                                                    <div className="p-8 text-center text-slate-400 italic">
+                                                        {attendanceSearchQuery ? "No matching workers found." : "No labours on this site. Assign them in Directory."}
+                                                    </div>
                                                 ) : (
                                                     <div className="grid grid-cols-1 gap-2.5 p-2.5 bg-slate-50/50 dark:bg-transparent">
-                                                        {attendanceRoster.map(item => (
+                                                        {attendanceRoster
+                                                            .filter(item => {
+                                                                const q = attendanceSearchQuery.toLowerCase().trim();
+                                                                if (!q) return true;
+                                                                return item.name.toLowerCase().includes(q) || item.role.toLowerCase().includes(q);
+                                                            })
+                                                            .map(item => (
                                                             <div key={item.labour_id} className="bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg p-3 flex flex-col gap-3 shadow-sm relative overflow-hidden">
                                                                 {item.is_borrowed && (
                                                                     <span className="absolute top-0 right-0 bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl uppercase">Borrowed</span>
                                                                 )}
                                                                 <div>
-                                                                    <h4 className="font-bold text-slate-800 dark:text-white text-xs truncate pr-12">{item.name}</h4>
+                                                                    <div className="flex items-center gap-1.5 pr-12">
+                                                                        <h4 className="font-bold text-slate-800 dark:text-white text-xs truncate">{item.name}</h4>
+                                                                        {item.frequent_count > 0 && (
+                                                                            <span className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-455 font-extrabold text-[7px] uppercase tracking-wider" title={`${item.frequent_count} days present in last 30 days`}>★ Frequent</span>
+                                                                        )}
+                                                                    </div>
                                                                     <p className="text-[9px] text-slate-450 dark:text-github-dark-muted font-mono uppercase mt-0.5">{item.role}</p>
                                                                 </div>
 
-                                                                <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-slate-100 dark:border-github-dark-border/40">
-                                                                    {[
-                                                                        { id: 'Present', label: 'Full Day', activeColor: 'bg-emerald-500 text-white dark:bg-emerald-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
-                                                                        { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
-                                                                        { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
-                                                                        { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' }
-                                                                    ].map(statusOpt => {
-                                                                        const isSelected = item.status === statusOpt.id;
-                                                                        return (
-                                                                            <button
-                                                                                key={statusOpt.id}
-                                                                                onClick={() => handleStatusChange(item.labour_id, statusOpt.id)}
-                                                                                className={`py-1.5 rounded text-[8px] font-bold text-center transition-all cursor-pointer ${isSelected ? statusOpt.activeColor : statusOpt.inactiveColor
-                                                                                    }`}
-                                                                            >
-                                                                                {statusOpt.label}
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
+                                                                {item.already_marked_at ? (
+                                                                    <div className="pt-1.5 border-t border-slate-100 dark:border-github-dark-border/40 text-center">
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[8px] font-black border border-amber-300/30 w-full justify-center">
+                                                                            <AlertTriangle size={10} className="text-amber-500 shrink-0" />
+                                                                            <span>Already marked "{item.already_marked_at.status}" at "{item.already_marked_at.site_name}"</span>
+                                                                        </span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-slate-100 dark:border-github-dark-border/40">
+                                                                        {[
+                                                                            { id: 'Present', label: 'Full Day', activeColor: 'bg-emerald-500 text-white dark:bg-emerald-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
+                                                                            { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
+                                                                            { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
+                                                                            { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' }
+                                                                        ].map(statusOpt => {
+                                                                            const isSelected = item.status === statusOpt.id;
+                                                                            return (
+                                                                                <button
+                                                                                    key={statusOpt.id}
+                                                                                    onClick={() => handleStatusChange(item.labour_id, statusOpt.id)}
+                                                                                    className={`py-1.5 rounded text-[8px] font-bold text-center transition-all cursor-pointer ${isSelected ? statusOpt.activeColor : statusOpt.inactiveColor
+                                                                                        }`}
+                                                                                >
+                                                                                    {statusOpt.label}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -895,7 +997,7 @@ const MobileLabourManagement = () => {
 
                                                                                 if (statusStr === 'Present') {
                                                                                     cellContent = isOtherSite ? (
-                                                                                        <span className="w-5 h-5 flex items-center justify-center rounded-full bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-450 border border-emerald-300 dark:border-emerald-850/50 text-[8px] font-black" title={tooltipText}>P</span>
+                                                                                        <span className="w-5 h-5 flex items-center justify-center rounded-full bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-455 border border-emerald-300 dark:border-emerald-850/50 text-[8px] font-black" title={tooltipText}>P</span>
                                                                                     ) : (
                                                                                         <span className="w-5 h-5 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[8px] font-black" title={tooltipText}>P</span>
                                                                                     );
@@ -960,13 +1062,11 @@ const MobileLabourManagement = () => {
                                             )}
 
                                             <div className="grid gap-3">
-                                                {financeSummary.filter(row => row.site_id === selectedSite.site_id).length === 0 ? (
-                                                    <div className="p-10 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 bg-white dark:bg-github-dark-subtle">
-                                                        No finances ledger for this site.
-                                                    </div>
+                                                {financeSummary.filter(row => row.site_ids && row.site_ids.includes(selectedSite.site_id)).length === 0 ? (
+                                                    <div className="p-8 text-center text-slate-400 italic">No salary ledger details for workers on this site this month.</div>
                                                 ) : (
                                                     financeSummary
-                                                        .filter(row => row.site_id === selectedSite.site_id)
+                                                        .filter(row => row.site_ids && row.site_ids.includes(selectedSite.site_id))
                                                         .map(row => {
                                                             const advanceAlert = row.advances_taken > row.accrued_credit;
                                                             return (
@@ -1087,7 +1187,7 @@ const MobileLabourManagement = () => {
                                             onClick={() => { setEditingLabour(null); setLabourForm({ name: '', phone: '', sex: 'Male', role: '', wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '' }); setShowLabourModal(true); }}
                                             className="px-2.5 bg-indigo-650 text-white rounded-xl font-bold flex items-center gap-1 text-[9px] shrink-0"
                                         >
-                                            <Plus size={12} /> Add Worker
+                                            <Plus size={12} /> Borrow Worker
                                         </button>
                                     </div>
                                 </div>
@@ -1098,8 +1198,8 @@ const MobileLabourManagement = () => {
                                             const matchesSearch = lab.name.toLowerCase().includes(labourSearch.toLowerCase()) ||
                                                 lab.role.toLowerCase().includes(labourSearch.toLowerCase());
                                             let matchesSite = true;
-                                            if (labourSiteFilter === 'Unassigned') matchesSite = lab.site_id === null;
-                                            else if (labourSiteFilter !== 'All') matchesSite = lab.site_id === Number(labourSiteFilter);
+                                            if (labourSiteFilter === 'Unassigned') matchesSite = !lab.site_ids || lab.site_ids.length === 0;
+                                            else if (labourSiteFilter !== 'All') matchesSite = lab.site_ids && lab.site_ids.includes(Number(labourSiteFilter));
                                             return matchesSearch && matchesSite;
                                         })
                                         .map(lab => (
@@ -1109,7 +1209,7 @@ const MobileLabourManagement = () => {
                                                         <span>{lab.name}</span>
                                                         <span className="text-[8px] text-indigo-500 font-bold uppercase bg-indigo-50 dark:bg-indigo-950/20 px-1 rounded">History</span>
                                                     </h4>
-                                                    <p className="text-[9px] text-slate-450 mt-0.5">{lab.role} | {lab.wage_type}</p>
+                                                    <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">{lab.role} | {lab.wage_type}</p>
                                                     <p className="text-[9px] text-slate-500 mt-1 uppercase flex items-center gap-1 font-semibold">
                                                         <Building size={10} /> {lab.site_name || 'Unassigned'}
                                                     </p>
@@ -1182,6 +1282,18 @@ const MobileLabourManagement = () => {
                                             <option value="Completed">Completed</option>
                                             <option value="Inactive">Inactive</option>
                                         </select>
+                                    )}
+                                    {siteForm.status === 'Completed' && (
+                                        <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                            <label className="block text-slate-450 dark:text-github-dark-muted font-semibold mb-1">Completion End Date</label>
+                                            <input
+                                                type="date"
+                                                value={siteForm.end_date || ''}
+                                                onChange={(e) => setSiteForm({ ...siteForm, end_date: e.target.value })}
+                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-xl text-xs"
+                                                required
+                                            />
+                                        </div>
                                     )}
                                     <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-[#30363d]">
                                         <button type="button" onClick={() => setShowSiteModal(false)} className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-xl font-bold">Cancel</button>
@@ -1409,7 +1521,7 @@ const MobileLabourManagement = () => {
                                         <div>
                                             <span className="text-slate-405 block">Attendance:</span>
                                             <span className="font-bold text-slate-705 dark:text-slate-350">
-                                                {payoutForm.present_days}P / {payoutForm.half_days}HD / {payoutForm.absent_days}A
+{payoutForm.present_days}P / {payoutForm.half_days}HD / {payoutForm.absent_days}A
                                             </span>
                                         </div>
                                         <div>
@@ -1421,14 +1533,14 @@ const MobileLabourManagement = () => {
                                             <span className="font-bold text-amber-500">-₹{payoutForm.advances_taken}</span>
                                         </div>
                                         <div>
-                                            <span className="text-slate-450 font-bold block">Net Payable:</span>
+                                            <span className="text-slate-455 font-bold block">Net Payable:</span>
                                             <span className="font-extrabold text-indigo-650 dark:text-indigo-400">₹{payoutForm.net_payable}</span>
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <label className="block text-slate-450 font-semibold mb-1 text-[10px]">Paid Amount</label>
+                                            <label className="block text-slate-455 font-semibold mb-1 text-[10px]">Paid Amount</label>
                                             <input
                                                 type="number"
                                                 value={payoutForm.paid_amount}
@@ -1551,7 +1663,7 @@ const MobileLabourManagement = () => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <div className="flex justify-between items-center text-slate-450 font-bold">
+                                        <div className="flex justify-between items-center text-slate-455 font-bold">
                                             <span>Select Workers ({selectedLabourIds.length})</span>
                                             <button
                                                 type="button"
@@ -1644,7 +1756,7 @@ const MobileLabourManagement = () => {
                                 <div className="flex justify-between items-center px-5 pb-4 border-b border-slate-100 dark:border-[#30363d]">
                                     <div className="flex items-center gap-1.5">
                                         <Plus size={16} className="text-indigo-505" />
-                                        <h4 className="font-bold text-slate-800 dark:text-[#f0f6fc] text-sm">Borrow Worker Today</h4>
+                                        <h4 className="font-bold text-slate-808 dark:text-[#f0f6fc] text-sm">Borrow Worker for Today</h4>
                                     </div>
                                     <button onClick={() => setShowBorrowModal(false)} className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-[#30363d]"><X size={16} /></button>
                                 </div>
