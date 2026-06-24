@@ -278,17 +278,33 @@ export const getSiteAttendance = catchAsync(async (req, res) => {
 
     const associatedIds = new Set(labours.map(l => l.labour_id));
 
-    // Get attendance marked for any labours on this date at this site
-    const attendanceRecords = await attendanceDB('labour_attendance')
-        .where({ site_id, date })
-        .select('labour_id', 'status', 'attendance_id');
+    // Get attendance marked for any labours on this date across ALL sites
+    // This allows us to detect if a labour has been marked at another site
+    const attendanceRecords = await attendanceDB('labour_attendance as a')
+        .leftJoin('labour_sites as s', 'a.site_id', 's.site_id')
+        .where({ 'a.date': date })
+        .select('a.labour_id', 'a.status', 'a.attendance_id', 'a.site_id', 's.site_name');
 
+    // Filter attendance records to find extra (borrowed/marked) labours on this date at this specific site
+    const currentSiteAttendance = attendanceRecords.filter(rec => Number(rec.site_id) === Number(site_id));
     const attendanceMap = {};
-    attendanceRecords.forEach(rec => {
+    currentSiteAttendance.forEach(rec => {
         attendanceMap[rec.labour_id] = rec.status;
     });
 
-    const extraLabourIds = attendanceRecords
+    // Create maps of attendance at other sites
+    const otherSitesAttendanceMap = {};
+    attendanceRecords.forEach(rec => {
+        if (Number(rec.site_id) !== Number(site_id) && rec.status && rec.status !== '') {
+            otherSitesAttendanceMap[rec.labour_id] = {
+                site_id: rec.site_id,
+                site_name: rec.site_name || 'Another Site',
+                status: rec.status
+            };
+        }
+    });
+
+    const extraLabourIds = currentSiteAttendance
         .map(rec => rec.labour_id)
         .filter(id => !associatedIds.has(id));
 
@@ -296,7 +312,7 @@ export const getSiteAttendance = catchAsync(async (req, res) => {
     if (extraLabourIds.length > 0) {
         extraLabours = await attendanceDB('labours')
             .whereIn('labour_id', extraLabourIds)
-            .select('labour_id', 'name', 'role', 'wage_type');
+            .select('labour_id', 'name', 'role', 'wage_type', 'site_id as primary_site_id');
     }
 
     const allLabours = [...labours, ...extraLabours];
@@ -308,7 +324,8 @@ export const getSiteAttendance = catchAsync(async (req, res) => {
         wage_type: lab.wage_type,
         status: attendanceMap[lab.labour_id] || '', // Default to empty string (unmarked) if not marked
         is_borrowed: !associatedIds.has(lab.labour_id),
-        frequent_count: Number(lab.frequent_count || 0)
+        frequent_count: Number(lab.frequent_count || 0),
+        already_marked_at: otherSitesAttendanceMap[lab.labour_id] || null
     }));
 
     res.json({
@@ -332,20 +349,36 @@ export const saveSiteAttendance = catchAsync(async (req, res) => {
         const labourIds = roster.map(r => r.labour_id);
 
         if (labourIds.length > 0) {
-            // Delete existing attendance records for these labours on this date
+            // Delete existing attendance records for these labours on this date at this specific site only
             await trx('labour_attendance')
-                .where({ date })
+                .where({ date, site_id: Number(site_id) })
                 .whereIn('labour_id', labourIds)
                 .del();
 
-            // Insert new records
-            const insertData = roster.map(r => ({
-                labour_id: r.labour_id,
-                site_id: Number(site_id),
-                date,
-                status: r.status || '',
-                marked_by
-            }));
+            // Check if any of these labours are already marked at other sites to avoid duplicate marking
+            const otherSiteRecords = await trx('labour_attendance')
+                .where({ date })
+                .whereNot({ site_id: Number(site_id) })
+                .whereIn('labour_id', labourIds)
+                .select('labour_id');
+            const otherSiteLabourIds = new Set(otherSiteRecords.map(r => r.labour_id));
+
+            // Insert new records (filtering out any that are already marked at another site)
+            const insertData = [];
+            for (const r of roster) {
+                // If they have attendance marked at another site, do not insert a duplicate record
+                if (otherSiteLabourIds.has(r.labour_id)) {
+                    console.log(`⚠️ Skipping attendance save for labour_id ${r.labour_id} on ${date} at site ${site_id} (already marked at another site)`);
+                    continue;
+                }
+                insertData.push({
+                    labour_id: r.labour_id,
+                    site_id: Number(site_id),
+                    date,
+                    status: r.status || '',
+                    marked_by
+                });
+            }
 
             if (insertData.length > 0) {
                 await trx('labour_attendance').insert(insertData);

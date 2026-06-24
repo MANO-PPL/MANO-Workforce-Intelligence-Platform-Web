@@ -776,6 +776,7 @@ const LabourManagement = () => {
                                                                                     <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 border border-white dark:border-slate-900 text-slate-500 dark:text-slate-400 text-[8px] font-bold shadow-sm">
                                                                                         +{remainingCount}
                                                                                     </div>
+                                                                                )}
                                                                             </div>
                                                                         ) : null}
                                                                         <span className="text-[10px] font-extrabold text-indigo-650 dark:text-indigo-400">
@@ -970,7 +971,15 @@ const LabourManagement = () => {
                                                                                 </span>
                                                                             </td>
                                                                             <td className="p-3">
-                                                                                       <div className="flex justify-center items-center gap-2">
+                                                                                {item.already_marked_at ? (
+                                                                                    <div className="flex justify-center items-center">
+                                                                                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black border border-amber-300/40">
+                                                                                            <AlertTriangle size={12} className="text-amber-500 shrink-0" />
+                                                                                            <span>Already marked "{item.already_marked_at.status}" at "{item.already_marked_at.site_name}"</span>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex justify-center items-center gap-2">
                                                                                         {[
                                                                                             { id: 'Present', label: 'Present (Full Day)', activeColor: 'bg-emerald-500 text-white dark:bg-emerald-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
                                                                                             { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
