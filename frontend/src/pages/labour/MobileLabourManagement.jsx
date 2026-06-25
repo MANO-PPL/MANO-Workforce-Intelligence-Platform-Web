@@ -457,7 +457,8 @@ const MobileLabourManagement = () => {
         setSiteForm({
             site_name: site.site_name,
             location_details: site.location_details || '',
-            status: site.status
+            status: site.status,
+            end_date: site.end_date ? site.end_date.split('T')[0] : ''
         });
         setShowSiteModal(true);
     };
@@ -837,7 +838,7 @@ const MobileLabourManagement = () => {
                                                             onClick={() => setShowBorrowModal(true)}
                                                             className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-205 rounded-lg font-bold flex items-center gap-1 border border-slate-200 dark:border-github-dark-border text-[9px]"
                                                         >
-                                                            <Plus size={10} /> Borrow Worker
+                                                            <Plus size={10} /> Add Worker
                                                         </button>
                                                         <button
                                                             disabled={attendanceRoster.length === 0}
@@ -1187,7 +1188,7 @@ const MobileLabourManagement = () => {
                                             onClick={() => { setEditingLabour(null); setLabourForm({ name: '', phone: '', sex: 'Male', role: '', wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '' }); setShowLabourModal(true); }}
                                             className="px-2.5 bg-indigo-650 text-white rounded-xl font-bold flex items-center gap-1 text-[9px] shrink-0"
                                         >
-                                            <Plus size={12} /> Borrow Worker
+                                            <Plus size={12} /> Add Worker
                                         </button>
                                     </div>
                                 </div>
@@ -1756,7 +1757,7 @@ const MobileLabourManagement = () => {
                                 <div className="flex justify-between items-center px-5 pb-4 border-b border-slate-100 dark:border-[#30363d]">
                                     <div className="flex items-center gap-1.5">
                                         <Plus size={16} className="text-indigo-505" />
-                                        <h4 className="font-bold text-slate-808 dark:text-[#f0f6fc] text-sm">Borrow Worker for Today</h4>
+                                        <h4 className="font-bold text-slate-808 dark:text-[#f0f6fc] text-sm">Add Worker Today</h4>
                                     </div>
                                     <button onClick={() => setShowBorrowModal(false)} className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-[#30363d]"><X size={16} /></button>
                                 </div>

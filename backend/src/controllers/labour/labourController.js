@@ -48,7 +48,7 @@ export const getAllSites = catchAsync(async (req, res) => {
 });
 
 export const createSite = catchAsync(async (req, res) => {
-    const { site_name, location_details } = req.body;
+    const { site_name, location_details, status, end_date } = req.body;
     if (!site_name) {
         throw new AppError('Site name is required', 400);
     }
@@ -56,7 +56,8 @@ export const createSite = catchAsync(async (req, res) => {
     const [site_id] = await attendanceDB('labour_sites').insert({
         site_name,
         location_details,
-        status: 'Active'
+        status: status || 'Active',
+        end_date: status === 'Completed' ? (end_date || attendanceDB.fn.now()) : null
     });
 
     res.status(201).json({
@@ -68,7 +69,7 @@ export const createSite = catchAsync(async (req, res) => {
 
 export const updateSite = catchAsync(async (req, res) => {
     const { id } = req.params;
-    const { site_name, location_details, status } = req.body;
+    const { site_name, location_details, status, end_date } = req.body;
 
     const affected = await attendanceDB('labour_sites')
         .where('site_id', id)
@@ -76,6 +77,7 @@ export const updateSite = catchAsync(async (req, res) => {
             site_name,
             location_details,
             status,
+            end_date: status === 'Completed' ? (end_date || attendanceDB.fn.now()) : null,
             updated_at: attendanceDB.fn.now()
         });
 

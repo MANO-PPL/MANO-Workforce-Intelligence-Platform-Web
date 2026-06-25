@@ -440,7 +440,8 @@ const LabourManagement = () => {
         setSiteForm({
             site_name: site.site_name,
             location_details: site.location_details || '',
-            status: site.status
+            status: site.status,
+            end_date: site.end_date ? site.end_date.split('T')[0] : ''
         });
         setShowSiteModal(true);
     };
@@ -907,7 +908,7 @@ const LabourManagement = () => {
                                                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold shadow-sm transition-all cursor-pointer border border-[#d0d7de] dark:border-[#30363d]"
                                                             >
                                                                 <Plus size={14} />
-                                                                <span>Borrow Worker</span>
+                                                                <span>Add Worker</span>
                                                             </button>
                                                             <button
                                                                 onClick={handleSaveAttendance}
@@ -2054,7 +2055,7 @@ const LabourManagement = () => {
                                 <div className="flex justify-between items-center p-5 border-b border-slate-100 dark:border-[#30363d] bg-slate-50/30 dark:bg-[#010409]/40">
                                     <div className="flex items-center gap-1.5">
                                         <Plus size={16} className="text-indigo-500" />
-                                        <h4 className="font-bold text-sm text-slate-800 dark:text-[#f0f6fc] uppercase tracking-wider">Borrow Worker for Today</h4>
+                                        <h4 className="font-bold text-sm text-slate-800 dark:text-[#f0f6fc] uppercase tracking-wider">Add Worker for Today</h4>
                                     </div>
                                     <button onClick={() => setShowBorrowModal(false)} className="p-1.5 rounded-full text-slate-400 hover:text-slate-650 hover:bg-slate-100 dark:hover:bg-[#30363d] transition-all"><X size={18} /></button>
                                 </div>
