@@ -980,14 +980,14 @@ const LabourManagement = () => {
                                                                                         </span>
                                                                                     </div>
                                                                                 ) : (
-                                                                                    <div className="flex justify-center items-center gap-2">
-                                                                                        {[
-                                                                                            { id: 'Present', label: 'Present (Full Day)', activeColor: 'bg-emerald-500 text-white dark:bg-emerald-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
-                                                                                            { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
-                                                                                            { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
-                                                                                            { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' }
-                                                                                        ].filter(opt => opt.id !== 'Paid Leave' || item.wage_type !== 'Daily Wage').map(statusOpt => {
-                                                                                            const isSelected = item.status === statusOpt.id;
+                                                                                     <div className="flex justify-center items-center gap-2">
+                                                                                         {[
+                                                                                             { id: 'Present', label: 'Present (Full Day)', activeColor: 'bg-emerald-500 text-white dark:bg-emerald-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
+                                                                                             { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
+                                                                                             { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
+                                                                                             { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' }
+                                                                                         ].filter(opt => opt.id !== 'Paid Leave' || item.wage_type === 'Fixed Salary').map(statusOpt => {
+                                                                                             const isSelected = item.status === statusOpt.id;
                                                                                             return (
                                                                                                 <button
                                                                                                     key={statusOpt.id}
@@ -1221,7 +1221,7 @@ const LabourManagement = () => {
                                                                                         <span>/</span>
                                                                                         <span className="text-amber-500" title="Half Days">{row.attendance.half_day}HD</span>
                                                                                         <span>/</span>
-                                                                                        {row.wage_type !== 'Daily Wage' && (
+                                                                                        {row.wage_type === 'Fixed Salary' && (
                                                                                             <>
                                                                                                 <span className="text-indigo-500" title="Paid Leaves">{row.attendance.paid_leave}PL</span>
                                                                                                 <span>/</span>
