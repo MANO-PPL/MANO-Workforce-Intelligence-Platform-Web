@@ -897,7 +897,7 @@ const MobileLabourManagement = () => {
                                                                             { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
                                                                             { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' },
                                                                             { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-655 border border-slate-200 dark:border-github-dark-border/60' }
-                                                                        ].map(statusOpt => {
+                                                                        ].filter(opt => opt.id !== 'Paid Leave' || item.wage_type !== 'Daily Wage').map(statusOpt => {
                                                                             const isSelected = item.status === statusOpt.id;
                                                                             return (
                                                                                 <button
@@ -1394,7 +1394,7 @@ const MobileLabourManagement = () => {
                                         onChange={(e) => setLabourForm({ ...labourForm, monthly_salary: e.target.value })}
                                         className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border rounded-xl text-xs"
                                         required
-                                        placeholder="Monthly Wage Salary"
+                                        placeholder={labourForm.wage_type === 'Fixed Salary' ? 'Monthly Salary' : 'Daily Wage'}
                                     />
                                     {editingLabour && (
                                         <select
@@ -1522,7 +1522,10 @@ const MobileLabourManagement = () => {
                                         <div>
                                             <span className="text-slate-405 block">Attendance:</span>
                                             <span className="font-bold text-slate-705 dark:text-slate-350">
-{payoutForm.present_days}P / {payoutForm.half_days}HD / {payoutForm.absent_days}A
+                                                {payoutForm.wage_type === 'Daily Wage'
+                                                    ? `${payoutForm.present_days}P / ${payoutForm.half_days}HD / ${payoutForm.absent_days}A`
+                                                    : `${payoutForm.present_days}P / ${payoutForm.half_days}HD / ${payoutForm.absent_days}A / ${payoutForm.paid_leaves}PL`
+                                                }
                                             </span>
                                         </div>
                                         <div>
@@ -1534,14 +1537,14 @@ const MobileLabourManagement = () => {
                                             <span className="font-bold text-amber-500">-₹{payoutForm.advances_taken}</span>
                                         </div>
                                         <div>
-                                            <span className="text-slate-455 font-bold block">Net Payable:</span>
+                                            <span className="text-slate-600 dark:text-slate-300 font-bold block">Net Payable:</span>
                                             <span className="font-extrabold text-indigo-650 dark:text-indigo-400">₹{payoutForm.net_payable}</span>
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-1 text-[10px]">Paid Amount</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1 text-[10px]">Paid Amount</label>
                                             <input
                                                 type="number"
                                                 value={payoutForm.paid_amount}
@@ -1552,7 +1555,7 @@ const MobileLabourManagement = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-1 text-[10px]">Status</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1 text-[10px]">Status</label>
                                             <select
                                                 value={payoutForm.status}
                                                 onChange={(e) => setPayoutForm({ ...payoutForm, status: e.target.value })}
@@ -1565,7 +1568,7 @@ const MobileLabourManagement = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1 text-[10px]">Payment Date</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1 text-[10px]">Payment Date</label>
                                         <input
                                             type="date"
                                             value={payoutForm.payment_date}
@@ -1576,7 +1579,7 @@ const MobileLabourManagement = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1 text-[10px]">Notes</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1 text-[10px]">Notes</label>
                                         <input
                                             type="text"
                                             value={payoutForm.notes}
@@ -1630,7 +1633,7 @@ const MobileLabourManagement = () => {
                                 <form onSubmit={handleExecuteBulkTransfer} className="flex-1 overflow-y-auto p-5 space-y-4 text-xs custom-scrollbar">
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-1 text-[10px]">From Site</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1 text-[10px]">From Site</label>
                                             <select
                                                 value={bulkSourceSiteId}
                                                 onChange={(e) => {
@@ -1647,7 +1650,7 @@ const MobileLabourManagement = () => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-1 text-[10px]">To Site</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1 text-[10px]">To Site</label>
                                             <select
                                                 value={bulkDestinationSiteId}
                                                 onChange={(e) => setBulkDestinationSiteId(e.target.value)}
@@ -1664,7 +1667,7 @@ const MobileLabourManagement = () => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <div className="flex justify-between items-center text-slate-455 font-bold">
+                                        <div className="flex justify-between items-center text-slate-600 dark:text-slate-300 font-bold">
                                             <span>Select Workers ({selectedLabourIds.length})</span>
                                             <button
                                                 type="button"

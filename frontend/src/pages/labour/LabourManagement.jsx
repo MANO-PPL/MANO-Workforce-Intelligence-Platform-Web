@@ -986,7 +986,7 @@ const LabourManagement = () => {
                                                                                             { id: 'Half Day', label: 'Half Day', activeColor: 'bg-amber-500 text-white dark:bg-amber-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
                                                                                             { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' },
                                                                                             { id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' }
-                                                                                        ].map(statusOpt => {
+                                                                                        ].filter(opt => opt.id !== 'Paid Leave' || item.wage_type !== 'Daily Wage').map(statusOpt => {
                                                                                             const isSelected = item.status === statusOpt.id;
                                                                                             return (
                                                                                                 <button
@@ -1221,8 +1221,12 @@ const LabourManagement = () => {
                                                                                         <span>/</span>
                                                                                         <span className="text-amber-500" title="Half Days">{row.attendance.half_day}HD</span>
                                                                                         <span>/</span>
-                                                                                        <span className="text-indigo-500" title="Paid Leaves">{row.attendance.paid_leave}PL</span>
-                                                                                        <span>/</span>
+                                                                                        {row.wage_type !== 'Daily Wage' && (
+                                                                                            <>
+                                                                                                <span className="text-indigo-500" title="Paid Leaves">{row.attendance.paid_leave}PL</span>
+                                                                                                <span>/</span>
+                                                                                            </>
+                                                                                        )}
                                                                                         <span className="text-rose-500" title="Absent">{row.attendance.absent}A</span>
                                                                                     </div>
                                                                                 </td>
@@ -1466,7 +1470,7 @@ const LabourManagement = () => {
                                 </div>
                                 <form onSubmit={handleSaveSite} className="flex-1 overflow-y-auto p-6 space-y-6 text-xs custom-scrollbar">
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-2">Site Name</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-2">Site Name</label>
                                         <input
                                             type="text"
                                             value={siteForm.site_name}
@@ -1477,7 +1481,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-2">Location Details / Address</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-2">Location Details / Address</label>
                                         <textarea
                                             value={siteForm.location_details}
                                             onChange={(e) => setSiteForm({ ...siteForm, location_details: e.target.value })}
@@ -1488,7 +1492,7 @@ const LabourManagement = () => {
                                     </div>
                                     {editingSite && (
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-2">Status</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-2">Status</label>
                                             <select
                                                 value={siteForm.status}
                                                 onChange={(e) => setSiteForm({ ...siteForm, status: e.target.value })}
@@ -1503,7 +1507,7 @@ const LabourManagement = () => {
 
                                     {siteForm.status === 'Completed' && (
                                         <div className="animate-in fade-in slide-in-from-top-1 duration-200">
-                                            <label className="block text-slate-455 font-semibold mb-2">Completion End Date</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-2">Completion End Date</label>
                                             <input
                                                 type="date"
                                                 value={siteForm.end_date || ''}
@@ -1567,7 +1571,7 @@ const LabourManagement = () => {
                                 </div>
                                 <form onSubmit={handleSaveLabour} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs custom-scrollbar">
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Labour Full Name</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Labour Full Name</label>
                                         <input
                                             type="text"
                                             value={labourForm.name}
@@ -1578,7 +1582,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Contact Phone</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Contact Phone</label>
                                         <input
                                             type="tel"
                                             value={labourForm.phone}
@@ -1588,7 +1592,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Sex</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Sex</label>
                                         <select
                                             value={labourForm.sex}
                                             onChange={(e) => setLabourForm({ ...labourForm, sex: e.target.value })}
@@ -1600,7 +1604,7 @@ const LabourManagement = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Role</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Role</label>
                                         <input
                                             type="text"
                                             value={labourForm.role}
@@ -1611,7 +1615,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Assign Construction Site</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Assign Construction Site</label>
                                         <select
                                             value={labourForm.site_id}
                                             onChange={(e) => setLabourForm({ ...labourForm, site_id: e.target.value })}
@@ -1624,7 +1628,7 @@ const LabourManagement = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Wage Model</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Wage Model</label>
                                         <select
                                             value={labourForm.wage_type}
                                             onChange={(e) => setLabourForm({ ...labourForm, wage_type: e.target.value })}
@@ -1635,7 +1639,7 @@ const LabourManagement = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">{labourForm.wage_type === 'Fixed Salary' ? 'Monthly Salary (INR)' : 'Daily Wage (INR)'}</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">{labourForm.wage_type === 'Fixed Salary' ? 'Monthly Salary (INR)' : 'Daily Wage (INR)'}</label>
                                         <input
                                             type="number"
                                             value={labourForm.monthly_salary}
@@ -1648,7 +1652,7 @@ const LabourManagement = () => {
                                     </div>
                                     {editingLabour && (
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-1">Status</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Status</label>
                                             <select
                                                 value={labourForm.status}
                                                 onChange={(e) => setLabourForm({ ...labourForm, status: e.target.value })}
@@ -1714,7 +1718,7 @@ const LabourManagement = () => {
                                         Logging salary advance for <strong>{advanceForm.name}</strong>. This amount will be automatically deducted from their next payroll payout credit.
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Advance Amount (INR)</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Advance Amount (INR)</label>
                                         <input
                                             type="number"
                                             value={advanceForm.amount}
@@ -1726,7 +1730,7 @@ const LabourManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Logging Date</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Logging Date</label>
                                         <input
                                             type="date"
                                             value={advanceForm.date}
@@ -1806,7 +1810,10 @@ const LabourManagement = () => {
                                         <div className="space-y-0.5">
                                             <div className="text-slate-400">Attendance:</div>
                                             <div className="font-bold text-slate-700 dark:text-slate-300">
-                                                {payoutForm.present_days}P / {payoutForm.half_days}HD / {payoutForm.absent_days}A / {payoutForm.paid_leaves}PL
+                                                {payoutForm.wage_type === 'Daily Wage'
+                                                    ? `${payoutForm.present_days}P / ${payoutForm.half_days}HD / ${payoutForm.absent_days}A`
+                                                    : `${payoutForm.present_days}P / ${payoutForm.half_days}HD / ${payoutForm.absent_days}A / ${payoutForm.paid_leaves}PL`
+                                                }
                                             </div>
                                         </div>
                                         <div className="space-y-0.5">
@@ -1825,7 +1832,7 @@ const LabourManagement = () => {
 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-1">Paid Amount (INR)</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Paid Amount (INR)</label>
                                             <input
                                                 type="number"
                                                 value={payoutForm.paid_amount}
@@ -1837,7 +1844,7 @@ const LabourManagement = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-slate-455 font-semibold mb-1">Payout Status</label>
+                                            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Payout Status</label>
                                             <select
                                                 value={payoutForm.status}
                                                 onChange={(e) => setPayoutForm({ ...payoutForm, status: e.target.value })}
@@ -1850,7 +1857,7 @@ const LabourManagement = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-slate-455 font-semibold mb-1">Payment Date</label>
+                                        <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Payment Date</label>
                                         <input
                                             type="date"
                                             value={payoutForm.payment_date}
@@ -1957,7 +1964,7 @@ const LabourManagement = () => {
                                     </div>
 
                                     <div className="space-y-2 pt-2">
-                                        <div className="flex justify-between items-center text-slate-455 font-semibold">
+                                        <div className="flex justify-between items-center text-slate-600 dark:text-slate-300 font-semibold">
                                             <span>Select Workers to Move</span>
                                             <button
                                                 type="button"
@@ -2289,7 +2296,7 @@ const LabourManagement = () => {
                                                                         <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full">{attendanceRate}% Active</span>
                                                                     </div>
 
-                                                                    <div className="grid grid-cols-4 gap-1.5 text-center mt-3 pt-3 border-t border-slate-100 dark:border-github-dark-border/40 text-[9px] font-bold">
+                                                                    <div className={`grid ${selectedHistoryLabour?.wage_type === 'Daily Wage' ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5 text-center mt-3 pt-3 border-t border-slate-100 dark:border-github-dark-border/40 text-[9px] font-bold`}>
                                                                         <div className="bg-emerald-50 dark:bg-emerald-955/10 p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400">
                                                                             <span className="block text-[8px] uppercase text-slate-400 font-medium">Present</span>
                                                                             {siteLog.present_days}
@@ -2298,10 +2305,12 @@ const LabourManagement = () => {
                                                                             <span className="block text-[8px] uppercase text-slate-400 font-medium">Half Day</span>
                                                                             {siteLog.half_day_days}
                                                                         </div>
-                                                                        <div className="bg-indigo-50 dark:bg-indigo-955/10 p-1.5 rounded-lg text-indigo-650 dark:text-indigo-400">
-                                                                            <span className="block text-[8px] uppercase text-slate-400 font-medium">Paid L.</span>
-                                                                            {siteLog.paid_leave_days}
-                                                                        </div>
+                                                                        {selectedHistoryLabour?.wage_type !== 'Daily Wage' && (
+                                                                            <div className="bg-indigo-50 dark:bg-indigo-955/10 p-1.5 rounded-lg text-indigo-650 dark:text-indigo-400">
+                                                                                <span className="block text-[8px] uppercase text-slate-400 font-medium">Paid L.</span>
+                                                                                {siteLog.paid_leave_days}
+                                                                            </div>
+                                                                        )}
                                                                         <div className="bg-rose-50 dark:bg-rose-955/10 p-1.5 rounded-lg text-rose-600 dark:text-rose-455">
                                                                             <span className="block text-[8px] uppercase text-slate-400 font-medium">Absent</span>
                                                                             {siteLog.absent_days}

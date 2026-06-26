@@ -491,7 +491,9 @@ export const getFinancesSummary = catchAsync(async (req, res) => {
         const counts = attendanceMap[lab.labour_id] || { Present: 0, Absent: 0, HalfDay: 0, PaidLeave: 0 };
         const totalAdvances = advancesMap[lab.labour_id] || 0;
         const monthlySalary = Number(lab.monthly_salary);
-        const dailyRate = monthlySalary / totalDays;
+        const dailyRate = lab.wage_type === 'Daily Wage'
+            ? monthlySalary
+            : (monthlySalary / totalDays);
 
         let accruedCredit = 0;
 
@@ -503,9 +505,15 @@ export const getFinancesSummary = catchAsync(async (req, res) => {
             // Fixed Salary Mode:
             // Deductions made only for unpaid absent days (Absent + 0.5 * Half Day)
             // Paid Leave is supervisor approved and paid (no deduction)
-            const absentDaysCount = counts.Absent + (0.5 * counts.HalfDay);
-            const paidDays = Math.max(0, elapsedDays - absentDaysCount);
-            accruedCredit = paidDays * dailyRate;
+            // If they have absolutely zero attendance records of any status (Present, Half Day, Paid Leave, Absent) for the entire month, they accrue ₹0 credit.
+            const totalAttendanceRecords = counts.Present + counts.HalfDay + counts.PaidLeave + counts.Absent;
+            if (totalAttendanceRecords === 0) {
+                accruedCredit = 0;
+            } else {
+                const absentDaysCount = counts.Absent + (0.5 * counts.HalfDay);
+                const paidDays = Math.max(0, elapsedDays - absentDaysCount);
+                accruedCredit = paidDays * dailyRate;
+            }
         }
 
         // Round to nearest integer for clean display
