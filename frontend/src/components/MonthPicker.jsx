@@ -89,7 +89,7 @@ const MonthPicker = ({ label, value, onChange, placeholder = "Select month", com
             </div>
 
             {isOpen && (
-                <div className="absolute left-0 mt-2 w-full min-w-[240px] bg-white dark:bg-github-dark-subtle rounded-2xl shadow-2xl border border-slate-100 dark:border-white/10 z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-full min-w-[240px] bg-white dark:bg-github-dark-subtle rounded-2xl shadow-2xl border border-slate-100 dark:border-white/10 z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                     {/* Header */}
                     <div className="p-4 border-b border-slate-50 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-black/20">
                         <button onClick={() => setCurrentYear(currentYear - 1)} type="button" className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl text-slate-500 transition-colors">

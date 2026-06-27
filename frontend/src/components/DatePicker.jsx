@@ -163,20 +163,11 @@ const DatePicker = ({ label, value, onChange, placeholder = "Select date", minDa
                     </span>
                 </div>
 
-                {value ? (
-                    <button
-                        onClick={clearDate}
-                        className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 shrink-0"
-                    >
-                        <X size={14} />
-                    </button>
-                ) : (
-                    <ChevronDown size={14} className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 shrink-0" />
-                )}
+                <ChevronDown size={14} className={`text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
             </div>
 
             {isOpen && (
-                <div className="absolute left-0 mt-2 w-[280px] bg-white dark:bg-github-dark-subtle rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-[280px] bg-white dark:bg-github-dark-subtle rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
                     {/* Header */}
                     <div className="p-3 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between bg-slate-50/50 dark:bg-github-dark-subtle/50">
                         <button onClick={handlePrevMonth} type="button" className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-500 transition-colors">

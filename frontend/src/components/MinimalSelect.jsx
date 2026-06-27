@@ -11,7 +11,8 @@ const MinimalSelect = ({
     searchable = false,
     size = "md", // "sm" | "md"
     triggerClassName = "",
-    menuWidth = 200
+    menuWidth = 200,
+    variant = "minimal" // "minimal" | "input"
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -23,9 +24,18 @@ const MinimalSelect = ({
     const toggleDropdown = () => {
         if (!isOpen && triggerRef.current) {
             const rect = triggerRef.current.getBoundingClientRect();
+            const dropdownW = Math.max(menuWidth, rect.width);
+            const viewportW = window.innerWidth;
+
+            // Flip to right-align if it would overflow the right edge
+            const wouldOverflowRight = rect.left + dropdownW > viewportW - 8;
+            const leftPos = wouldOverflowRight
+                ? rect.right - dropdownW   // right-align to trigger
+                : rect.left;               // left-align to trigger
+
             setPosition({
                 top: rect.bottom + 8,
-                left: rect.left,
+                left: Math.max(8, leftPos), // never go off left edge either
                 width: rect.width
             });
         }
@@ -79,15 +89,21 @@ const MinimalSelect = ({
     const selectedOption = options.find(opt => String(getOptionValue(opt)) === String(value));
     const displayValue = selectedOption ? getOptionLabel(selectedOption) : placeholder;
 
+    const variantClasses = variant === "input"
+        ? (isOpen
+            ? 'bg-slate-50 dark:bg-[#161b22] border-indigo-500 text-slate-900 dark:text-[#f0f6fc]'
+            : 'bg-slate-50 dark:bg-[#161b22] border-slate-200 dark:border-github-dark-border text-slate-900 dark:text-[#f0f6fc] hover:bg-slate-100 dark:hover:bg-[#21262d]')
+        : (isOpen
+            ? 'bg-slate-50 dark:bg-github-dark-subtle border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400'
+            : 'bg-white dark:bg-dark-card border-transparent hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300');
+
     return (
         <>
             <button
                 ref={triggerRef}
+                type="button"
                 onClick={toggleDropdown}
-                className={`group flex items-center gap-2 rounded-lg font-medium transition-all duration-200 border ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'} ${isOpen
-                        ? 'bg-slate-50 dark:bg-github-dark-subtle border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400'
-                        : 'bg-white dark:bg-dark-card border-transparent hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
-                    } ${triggerClassName}`}
+                className={`group flex items-center justify-between gap-2 rounded-lg font-medium transition-all duration-200 border ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'} ${variantClasses} ${triggerClassName}`}
             >
                 {Icon && (
                     <span className={`opacity-70 group-hover:opacity-100 transition-opacity ${isOpen ? 'text-indigo-500' : 'text-slate-400'
@@ -138,6 +154,7 @@ const MinimalSelect = ({
                                 return (
                                     <button
                                         key={i}
+                                        type="button"
                                         onClick={() => {
                                             onChange(optVal);
                                             setIsOpen(false);
