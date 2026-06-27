@@ -2,12 +2,14 @@ import catchAsync from '../../utils/catchAsync.js';
 import { attendanceDB } from '../../config/database.js';
 import AppError from '../../utils/AppError.js';
 import bcrypt from 'bcrypt';
+import { deactivateExpiredOrganizations } from '../../cron/cleanupScheduler.js';
 
 export const createOrganization = catchAsync(async (req, res, next) => {
     const {
         org_name, org_code, subscription_plan, subscription_expiry, grace_period_days, max_users,
         contact_name, contact_email, contact_phone,
-        admin_name, admin_email, admin_phone, admin_password
+        admin_name, admin_email, admin_phone, admin_password,
+        gst_number, pan_number
     } = req.body;
 
     if (!org_name || !org_code) {
@@ -51,7 +53,9 @@ export const createOrganization = catchAsync(async (req, res, next) => {
             is_trial: (subscription_plan || 'Trial') === 'Trial' ? 1 : 0,
             status: 'active',
             max_users: max_users || 50,
-            last_user_number: 1 // We're creating the first user right now
+            last_user_number: 1, // We're creating the first user right now
+            gst_number: gst_number || null,
+            pan_number: pan_number || null
         });
 
         // Create the admin user for this organization
@@ -77,6 +81,9 @@ export const createOrganization = catchAsync(async (req, res, next) => {
 });
 
 export const getOrganizations = catchAsync(async (req, res, next) => {
+    // Sync expired organizations dynamically to keep database status up to date
+    await deactivateExpiredOrganizations();
+
     // Left join users table to get counts
     const orgs = await attendanceDB('organizations as o')
         .leftJoin('users as u', 'o.org_id', 'u.org_id')
@@ -95,7 +102,8 @@ export const updateOrganization = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const {
         org_name, org_code, status, subscription_plan, subscription_expiry, grace_period_days, max_users,
-        contact_name, contact_email, contact_phone
+        contact_name, contact_email, contact_phone,
+        gst_number, pan_number
     } = req.body;
 
     const org = await attendanceDB('organizations').where('org_id', id).first();
@@ -106,10 +114,13 @@ export const updateOrganization = catchAsync(async (req, res, next) => {
     if (status !== undefined) updates.status = status;
     if (subscription_plan !== undefined) updates.subscription_plan = subscription_plan;
     if (subscription_expiry !== undefined) updates.subscription_expiry = subscription_expiry;
+    if (grace_period_days !== undefined) updates.grace_period_days = grace_period_days;
     if (max_users !== undefined) updates.max_users = max_users;
     if (contact_name !== undefined) updates.contact_name = contact_name;
     if (contact_email !== undefined) updates.contact_email = contact_email;
     if (contact_phone !== undefined) updates.contact_phone = contact_phone;
+    if (gst_number !== undefined) updates.gst_number = gst_number;
+    if (pan_number !== undefined) updates.pan_number = pan_number;
 
     if (org_code !== undefined) {
         const cleanOrgCode = org_code.trim().toUpperCase();
@@ -145,6 +156,9 @@ export const updateOrganization = catchAsync(async (req, res, next) => {
             }
             await trx('organizations').where('org_id', id).update(updates);
         });
+
+        // Immediately sync database status in case expiry date was set to a past date
+        await deactivateExpiredOrganizations();
     }
 
     res.status(200).json({ success: true, message: "Organization updated successfully" });

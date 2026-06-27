@@ -192,6 +192,38 @@ async function cleanupDeletedOrganizations() {
 }
 
 /**
+ * Deactivate Expired Organizations
+ * Automatically switches the status of organizations whose subscription expiry
+ * date plus grace period has passed to 'inactive'.
+ */
+export async function deactivateExpiredOrganizations() {
+    try {
+        console.log('🧹 Running deactivateExpiredOrganizations...');
+        const now = new Date();
+        
+        // Find all active organizations with subscription_expiry in the past (including grace period)
+        const expiredOrgs = await attendanceDB('organizations')
+            .where('status', 'active')
+            .whereNotNull('subscription_expiry')
+            .andWhereRaw('DATE_ADD(subscription_expiry, INTERVAL grace_period_days DAY) < ?', [now]);
+
+        console.log(`Found ${expiredOrgs.length} expired organization(s) to deactivate.`);
+
+        for (const org of expiredOrgs) {
+            await attendanceDB('organizations')
+                .where('org_id', org.org_id)
+                .update({
+                    status: 'inactive',
+                    updated_at: attendanceDB.fn.now()
+                });
+            console.log(`Deactivated expired organization: ${org.org_name} (expired on ${org.subscription_expiry})`);
+        }
+    } catch (error) {
+        console.error('❌ Error deactivating expired organizations:', error);
+    }
+}
+
+/**
  * Run all cleanup tasks.
  */
 export async function runCleanup() {
@@ -200,6 +232,7 @@ export async function runCleanup() {
     await cleanupAttendanceImages();
     await cleanupDeletedUsers();
     await cleanupDeletedOrganizations();
+    await deactivateExpiredOrganizations();
     console.log('✅ All cleanup tasks completed.');
 }
 

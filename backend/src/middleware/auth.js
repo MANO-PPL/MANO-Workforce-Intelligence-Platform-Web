@@ -45,7 +45,12 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
         // Token belongs to regular user
         user = await attendanceDB('users')
             .leftJoin('organizations', 'users.org_id', 'organizations.org_id')
-            .select('users.*', 'organizations.status as org_status')
+            .select(
+                'users.*',
+                'organizations.status as org_status',
+                'organizations.subscription_expiry as org_subscription_expiry',
+                'organizations.grace_period_days as org_grace_period_days'
+            )
             .where({ 'users.user_id': decoded.user_id })
             .first();
 
@@ -55,12 +60,26 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
 
         // STRICT SECURITY CHECK: Block Inactive/Suspended Orgs and Inactive Users
         // NOTE: 'admin' user_type is allowed through so they can access subscription/billing features, unless org is deleted or pending deletion
+        let isOrgExpired = false;
         if (user.org_id) {
             if (!user.org_status || user.org_status === 'pending_deletion') {
                 return res.status(403).json({ message: "Access Denied: Your organization has been deleted or is scheduled for deletion." });
             }
-            if (user.org_status !== 'active' && user.user_type !== 'admin') {
-                return res.status(403).json({ message: `Access Denied: Your organization account is ${user.org_status}.` });
+
+            if (user.org_subscription_expiry) {
+                const expiry = new Date(user.org_subscription_expiry);
+                const graceDate = new Date(expiry);
+                graceDate.setDate(graceDate.getDate() + (user.org_grace_period_days || 0));
+                graceDate.setHours(23, 59, 59, 999);
+                if (new Date() > graceDate) {
+                    isOrgExpired = true;
+                }
+            }
+
+            const orgStatus = isOrgExpired ? 'inactive' : user.org_status;
+
+            if (orgStatus !== 'active' && user.user_type !== 'admin') {
+                return res.status(403).json({ message: `Access Denied: Your organization account is inactive or expired.` });
             }
         }
 
@@ -80,7 +99,8 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
             id: user.user_id || user.id, // standardized ID accessor
             user_type: user.user_type ? user.user_type.toLowerCase() : 'employee',
             org_id: user.org_id || null,
-            force_password_change: isForcePasswordChange
+            force_password_change: isForcePasswordChange,
+            isOrgExpired: isOrgExpired
         };
 
         // Intercept requests if the user is forced to change their password
@@ -118,12 +138,30 @@ export const authenticateJWT = catchAsync(async (req, res, next) => {
 export const requireActiveOrg = catchAsync(async (req, res, next) => {
     // If the user belongs to an org, and it is NOT active, block them from using platform features
     if (req.user && req.user.org_id) {
-        const org = await attendanceDB('organizations').where({ org_id: req.user.org_id }).select('status').first();
+        const org = await attendanceDB('organizations')
+            .where({ org_id: req.user.org_id })
+            .select('status', 'subscription_expiry', 'grace_period_days')
+            .first();
+
         if (!org || org.status === 'pending_deletion') {
             return res.status(403).json({ message: "Action Denied: Your organization has been deleted or is scheduled for deletion." });
         }
-        if (org.status !== 'active' && req.user.user_type !== 'admin') {
-            return res.status(403).json({ message: `Action Denied: Your organization account is currently ${org.status}. Please renew your subscription to restore access.` });
+
+        let isOrgExpired = false;
+        if (org.subscription_expiry) {
+            const expiry = new Date(org.subscription_expiry);
+            const graceDate = new Date(expiry);
+            graceDate.setDate(graceDate.getDate() + (org.grace_period_days || 0));
+            graceDate.setHours(23, 59, 59, 999);
+            if (new Date() > graceDate) {
+                isOrgExpired = true;
+            }
+        }
+
+        const orgStatus = isOrgExpired ? 'inactive' : org.status;
+
+        if (orgStatus !== 'active' && req.user.user_type !== 'admin') {
+            return res.status(403).json({ message: `Action Denied: Your organization account is inactive or expired. Please renew your subscription to restore access.` });
         }
     }
     next();
