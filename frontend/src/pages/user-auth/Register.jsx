@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
@@ -24,7 +24,9 @@ import {
     Sun,
     Moon,
     Activity,
-    Shield
+    Shield,
+    Globe,
+    ChevronDown
 } from "lucide-react";
 import api from "../../services/api";
 import LoadingScreen from "../../components/LoadingScreen";
@@ -87,6 +89,9 @@ const Register = () => {
         org_code: "",
         address: "",
         industry: "Technology & Software",
+        country: "",
+        state: "",
+        city: "",
         
         // Step 2: Primary Contact
         contact_name: "",
@@ -104,6 +109,122 @@ const Register = () => {
         admin_password: "",
         confirm_password: ""
     });
+
+    // Geo location data
+    const [geoCountries, setGeoCountries] = useState([]);
+    const [geoStates, setGeoStates] = useState([]);
+    const [geoCities, setGeoCities] = useState([]);
+    const [geoLoading, setGeoLoading] = useState({ countries: false, states: false, cities: false });
+
+    // Fetch countries on mount
+    useEffect(() => {
+        const fetchCountries = async () => {
+            setGeoLoading(prev => ({ ...prev, countries: true }));
+            try {
+                const res = await api.get("/geo/countries");
+                if (res.data?.ok) {
+                    setGeoCountries(res.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to load countries:", err);
+            } finally {
+                setGeoLoading(prev => ({ ...prev, countries: false }));
+            }
+        };
+        fetchCountries();
+    }, []);
+
+    // Fetch states when country changes
+    useEffect(() => {
+        if (!formData.country) {
+            setGeoStates([]);
+            setGeoCities([]);
+            return;
+        }
+        const fetchStates = async () => {
+            setGeoLoading(prev => ({ ...prev, states: true }));
+            setGeoStates([]);
+            setGeoCities([]);
+            setFormData(prev => ({ ...prev, state: "", city: "" }));
+            try {
+                const res = await api.get(`/geo/states/${formData.country}`);
+                if (res.data?.ok) {
+                    setGeoStates(res.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to load states:", err);
+            } finally {
+                setGeoLoading(prev => ({ ...prev, states: false }));
+            }
+        };
+        fetchStates();
+    }, [formData.country]);
+
+    // Fetch cities when state changes
+    useEffect(() => {
+        if (!formData.country || !formData.state) {
+            setGeoCities([]);
+            return;
+        }
+        const fetchCities = async () => {
+            setGeoLoading(prev => ({ ...prev, cities: true }));
+            setGeoCities([]);
+            setFormData(prev => ({ ...prev, city: "" }));
+            try {
+                const res = await api.get(`/geo/cities/${formData.country}/${formData.state}`);
+                if (res.data?.ok) {
+                    setGeoCities(res.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to load cities:", err);
+            } finally {
+                setGeoLoading(prev => ({ ...prev, cities: false }));
+            }
+        };
+        fetchCities();
+    }, [formData.country, formData.state]);
+
+    // Auto-sync phone code when country changes
+    useEffect(() => {
+        if (!formData.country || geoCountries.length === 0) return;
+        const selectedCountry = geoCountries.find(c => c.iso2 === formData.country);
+        if (selectedCountry?.phone_code) {
+            let dialCode = selectedCountry.phone_code.trim();
+            if (!dialCode.startsWith('+')) dialCode = `+${dialCode}`;
+            
+            const syncPrefix = (currentPhone) => {
+                let localNumber = currentPhone;
+                const sortedPrefixes = [...geoCountries]
+                    .filter(c => c.phone_code)
+                    .map(c => {
+                        let dc = c.phone_code.trim();
+                        if (!dc.startsWith('+')) dc = `+${dc}`;
+                        return dc;
+                    })
+                    .sort((a, b) => b.length - a.length);
+
+                for (const prefix of sortedPrefixes) {
+                    if (currentPhone.startsWith(prefix)) {
+                        localNumber = currentPhone.slice(prefix.length);
+                        break;
+                    }
+                }
+                
+                if (localNumber.startsWith('+')) {
+                    localNumber = localNumber.slice(1);
+                }
+                
+                const cleanLocal = localNumber.replace(/^\+/, '');
+                return `${dialCode}${cleanLocal}`;
+            };
+
+            setFormData(prev => ({
+                ...prev,
+                contact_phone: syncPrefix(prev.contact_phone || ""),
+                admin_phone: prev.admin_phone ? syncPrefix(prev.admin_phone) : dialCode
+            }));
+        }
+    }, [formData.country, geoCountries]);
 
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -176,6 +297,18 @@ const Register = () => {
             const cleanCode = formData.org_code.trim().toUpperCase();
             if (cleanCode.length < 3 || cleanCode.length > 10 || !/^[A-Z0-9]+$/.test(cleanCode)) {
                 toast.error("Organization code must be 3-10 alphanumeric characters with no spaces.");
+                return;
+            }
+            if (!formData.country) {
+                toast.error("Please select a country.");
+                return;
+            }
+            if (!formData.state) {
+                toast.error("Please select a state.");
+                return;
+            }
+            if (!formData.city) {
+                toast.error("Please select a city.");
                 return;
             }
         }
@@ -294,7 +427,10 @@ const Register = () => {
                 industry: formData.industry,
                 gst_number: formData.gst_number || null,
                 pan_number: formData.pan_number || null,
-                max_users: Number(formData.max_users)
+                max_users: Number(formData.max_users),
+                country: formData.country || null,
+                state: formData.state || null,
+                city: formData.city || null
             };
 
             const response = await api.post("/auth/onboard", payload);
@@ -539,9 +675,83 @@ const Register = () => {
                                                 </div>
                                             </div>
 
+                                            {/* Country / State / City Cascading Selectors */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div className="space-y-2">
+                                                    <label className="block text-xs font-normal text-slate-500 dark:text-slate-400 px-1">
+                                                        Country
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <Globe className="absolute left-5 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors pointer-events-none" />
+                                                        <select
+                                                            name="country"
+                                                            value={formData.country}
+                                                            onChange={handleTextChange}
+                                                            className="w-full bg-slate-50 dark:bg-[#0d1117] border border-slate-200 dark:border-[#30363d] rounded-lg py-4 pl-14 pr-5 text-slate-900 dark:text-white font-medium outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm appearance-none"
+                                                        >
+                                                            <option value="">Select Country</option>
+                                                            {geoCountries.map(c => (
+                                                                <option key={c.iso2} value={c.iso2}>{c.emoji} {c.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        {geoLoading.countries && (
+                                                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 animate-spin" />
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="block text-xs font-normal text-slate-500 dark:text-slate-400 px-1">
+                                                        State / Province
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors pointer-events-none" />
+                                                        <select
+                                                            name="state"
+                                                            value={formData.state}
+                                                            onChange={handleTextChange}
+                                                            disabled={!formData.country}
+                                                            className="w-full bg-slate-50 dark:bg-[#0d1117] border border-slate-200 dark:border-[#30363d] rounded-lg py-4 pl-14 pr-5 text-slate-900 dark:text-white font-medium outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <option value="">{formData.country ? (geoLoading.states ? 'Loading...' : 'Select State') : 'Select country first'}</option>
+                                                            {geoStates.map(s => (
+                                                                <option key={s.state_code} value={s.state_code}>{s.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        {geoLoading.states && (
+                                                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 animate-spin" />
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="block text-xs font-normal text-slate-500 dark:text-slate-400 px-1">
+                                                        City
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <Building2 className="absolute left-5 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors pointer-events-none" />
+                                                        <select
+                                                            name="city"
+                                                            value={formData.city}
+                                                            onChange={handleTextChange}
+                                                            disabled={!formData.state}
+                                                            className="w-full bg-slate-50 dark:bg-[#0d1117] border border-slate-200 dark:border-[#30363d] rounded-lg py-4 pl-14 pr-5 text-slate-900 dark:text-white font-medium outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <option value="">{formData.state ? (geoLoading.cities ? 'Loading...' : 'Select City') : 'Select state first'}</option>
+                                                            {geoCities.map(c => (
+                                                                <option key={c.id} value={c.name}>{c.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        {geoLoading.cities && (
+                                                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 size-4 text-slate-400 animate-spin" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             <div className="space-y-2">
                                                 <label className="block text-xs font-normal text-slate-500 dark:text-slate-400 px-1">
-                                                    Firm Address
+                                                    Street Address
                                                 </label>
                                                 <div className="relative group">
                                                     <MapPin className="absolute left-5 top-4 size-5 text-slate-400 group-focus-within:text-indigo-600 dark:group-focus-within:text-indigo-400 transition-colors" />
@@ -551,7 +761,7 @@ const Register = () => {
                                                         onChange={handleTextChange}
                                                         rows={2}
                                                         className="w-full bg-slate-50 dark:bg-[#0d1117] border border-slate-200 dark:border-[#30363d] rounded-lg py-4 pl-14 pr-5 text-slate-900 dark:text-white font-medium outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm resize-none"
-                                                        placeholder="Corporate Office / HQ Address"
+                                                        placeholder="Street address, building, floor"
                                                     />
                                                 </div>
                                             </div>
@@ -606,6 +816,8 @@ const Register = () => {
                                                         value={formData.contact_phone}
                                                         onChange={(val) => setFormData(prev => ({ ...prev, contact_phone: val }))}
                                                         variant="register-desktop"
+                                                        externalCountries={geoCountries.length > 0 ? geoCountries : null}
+                                                        disableDropdown={true}
                                                     />
                                                 </div>
                                             </div>
@@ -746,6 +958,8 @@ const Register = () => {
                                                                 onChange={(val) => setFormData(prev => ({ ...prev, admin_phone: val }))}
                                                                 variant="register-desktop"
                                                                 placeholder="Admin Phone"
+                                                                externalCountries={geoCountries.length > 0 ? geoCountries : null}
+                                                                disableDropdown={true}
                                                             />
                                                         </div>
                                                     </div>

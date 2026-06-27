@@ -141,7 +141,8 @@ export const onboardOrganization = catchAsync(async (req, res, next) => {
     const {
         org_name, org_code, contact_name, contact_email, contact_phone,
         admin_name, admin_email, admin_phone, admin_password,
-        gst_number, pan_number, max_users
+        gst_number, pan_number, max_users,
+        country, state, city
     } = req.body;
 
     if (!org_name || !org_code) {
@@ -155,6 +156,16 @@ export const onboardOrganization = catchAsync(async (req, res, next) => {
 
     if (!contact_name || !contact_email || !contact_phone) {
         throw new AppError("Primary contact details (name, email, phone) are required.", 400);
+    }
+
+    if (!country || typeof country !== 'string' || country.trim().length !== 2) {
+        throw new AppError("A valid 2-character country code is required.", 400);
+    }
+    if (!state || typeof state !== 'string' || state.trim().length === 0) {
+        throw new AppError("State code is required.", 400);
+    }
+    if (!city || typeof city !== 'string' || city.trim().length === 0) {
+        throw new AppError("City name is required.", 400);
     }
 
     const finalAdminEmail = admin_email || contact_email;
@@ -202,7 +213,10 @@ export const onboardOrganization = catchAsync(async (req, res, next) => {
             max_users: max_users || 50,
             last_user_number: 1,
             gst_number: gst_number || null,
-            pan_number: pan_number || null
+            pan_number: pan_number || null,
+            country: country || null,
+            state: state || null,
+            city: city || null
         });
 
         const hashedPassword = await bcrypt.hash(finalAdminPassword, 10);

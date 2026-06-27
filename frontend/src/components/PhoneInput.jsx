@@ -9,9 +9,51 @@ const PhoneInput = ({
     disabled = false,
     variant = "admin-desktop", // "admin-desktop" | "admin-mobile" | "register-desktop" | "register-mobile"
     placeholder,
-    className = ""
+    className = "",
+    externalCountries = null, // Optional: [{name, iso2, phone_code, emoji}, ...] from locations API
+    disableDropdown = false // lock the country/flag dial code dropdown
 }) => {
-    const { country: currentCountry, localNumber } = parsePhoneNumber(value);
+    // Build the active country list — use external if provided, else fall back to hardcoded
+    const activeCountries = React.useMemo(() => {
+        if (externalCountries && externalCountries.length > 0) {
+            return externalCountries
+                .filter(c => c.phone_code && c.phone_code.trim())
+                .map(c => {
+                    // Normalize phone_code — ensure it starts with +
+                    let dialCode = c.phone_code.trim();
+                    if (!dialCode.startsWith('+')) dialCode = `+${dialCode}`;
+                    return {
+                        name: c.name,
+                        code: c.iso2,
+                        dial_code: dialCode,
+                        flag: c.emoji || '🌐',
+                        pattern: /^\d{4,15}$/,
+                        length: 15,
+                        placeholder: 'Enter phone number'
+                    };
+                });
+        }
+        return COUNTRIES;
+    }, [externalCountries]);
+
+    // Parse phone number using the active country list
+    const parseWithActiveList = (phoneStr) => {
+        if (!phoneStr) return { country: activeCountries[0], localNumber: "" };
+        const cleaned = phoneStr.trim();
+        const sorted = [...activeCountries].filter(c => c.dial_code !== "+").sort((a, b) => b.dial_code.length - a.dial_code.length);
+        for (const country of sorted) {
+            if (cleaned.startsWith(country.dial_code)) {
+                return { country, localNumber: cleaned.slice(country.dial_code.length) };
+            }
+        }
+        if (cleaned.startsWith("+")) {
+            const generic = activeCountries.find(c => c.code === "OTHER");
+            return { country: generic || activeCountries[0], localNumber: cleaned.slice(1) };
+        }
+        return { country: activeCountries[0], localNumber: cleaned };
+    };
+
+    const { country: currentCountry, localNumber } = parseWithActiveList(value);
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
@@ -20,7 +62,7 @@ const PhoneInput = ({
 
     const toggleDropdown = (e) => {
         e.preventDefault();
-        if (disabled) return;
+        if (disabled || disableDropdown) return;
         if (!isOpen && triggerRef.current) {
             const rect = triggerRef.current.getBoundingClientRect();
             setPosition({
@@ -69,7 +111,7 @@ const PhoneInput = ({
         onChange(combined);
     };
 
-    const filteredCountries = COUNTRIES.filter(c =>
+    const filteredCountries = activeCountries.filter(c =>
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.dial_code.includes(search)
     );
@@ -103,13 +145,13 @@ const PhoneInput = ({
                 <button
                     ref={triggerRef}
                     onClick={toggleDropdown}
-                    disabled={disabled}
-                    className={triggerClass}
+                    disabled={disabled || disableDropdown}
+                    className={`${triggerClass} ${disableDropdown ? 'cursor-default pointer-events-none' : ''}`}
                     type="button"
                 >
                     <span className="text-base select-none">{currentCountry.flag}</span>
                     <span className="text-xs font-mono">{currentCountry.dial_code}</span>
-                    <ChevronDown size={14} className="opacity-55 shrink-0" />
+                    {!disableDropdown && <ChevronDown size={14} className="opacity-55 shrink-0" />}
                 </button>
 
                 <input
