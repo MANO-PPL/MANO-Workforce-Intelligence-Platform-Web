@@ -16,13 +16,21 @@ import { useNotification } from '../context/NotificationContext';
 import NotificationSidebar from './NotificationSidebar';
 import Sidebar from './Sidebar';
 import InternalChatbotWidget from './InternalChatbotWidget';
+import TourTriggerButton from './tour/TourTriggerButton.jsx';
+import { useTour } from '../context/TourContext';
 
-const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) => {
+const DashboardLayout = ({ children, title = "Dashboard", noPadding = false, tourPageKey, tourSteps }) => {
     const { unreadCount } = useNotification();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const { logout, user, avatarTimestamp } = useAuth();
+
+    const { startGlobalTour, hasSeenPage, wasSkippedThisSession, tourEnabled, isActive } = useTour();
+    const GLOBAL_TOUR_KEY = 'global_site_tour';
+
+
+
 
     // Initialize theme from localStorage or system preference
     const [theme, setTheme] = useState(() => {
@@ -66,10 +74,13 @@ const DashboardLayout = ({ children, title = "Dashboard", noPadding = false }) =
                             <Menu size={20} />
                         </button>
                         <h1 className="text-xl font-semibold text-slate-800 dark:text-github-dark-text hidden sm:block">{title}</h1>
+                        {tourPageKey && tourSteps && (
+                            <TourTriggerButton pageKey={tourPageKey} steps={tourSteps} />
+                        )}
                         <img src="/mano-logo.svg" alt="MANO" className="w-8 h-8 sm:hidden" />
                     </div>
 
-                    <div className="flex items-center gap-4 sm:gap-6">
+                    <div className="flex items-center gap-4 sm:gap-6" data-tour-id="header-right-tools">
 
                         {/* Chat & Collab */}
                         {['admin', 'hr', 'employee'].includes(user?.user_type) && (

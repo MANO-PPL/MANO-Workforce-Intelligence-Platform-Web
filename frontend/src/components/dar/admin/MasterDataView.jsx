@@ -546,7 +546,7 @@ const MasterDataView = ({ departments, shifts, allUsers }) => {
     }, [timeMode, dateRange.start, dateRange.end]);
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden relative">
+        <div data-tour-id="dar-admin-master-data" className="flex flex-col h-full bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden relative">
 
             {/* Toolbar */}
             <div className="p-4 border-b border-slate-100 dark:border-github-dark-border flex flex-wrap gap-4 items-center justify-between bg-white dark:bg-dark-card z-20">

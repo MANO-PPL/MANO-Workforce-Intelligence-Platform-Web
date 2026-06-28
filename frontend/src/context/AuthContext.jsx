@@ -3,6 +3,7 @@ import api, { setAccessToken, clearApiCache } from "../services/api";
 
 const AuthContext = createContext({
   user: null,
+  setUser: () => {},
   login: async () => {},
   superAdminLogin: async () => {},
   logout: async () => {},
@@ -10,6 +11,20 @@ const AuthContext = createContext({
   fetchUser: async () => {},
   avatarTimestamp: Date.now()
 });
+
+// Helper: ensure pages_tour_seen is always a plain object, not a JSON string
+const normalizeUser = (userData) => {
+  if (!userData) return userData;
+  let pagesSeen = userData.pages_tour_seen || {};
+  if (typeof pagesSeen === 'string') {
+    try { pagesSeen = JSON.parse(pagesSeen); } catch { pagesSeen = {}; }
+  }
+  return {
+    ...userData,
+    user_type: userData.user_type?.toLowerCase(),
+    pages_tour_seen: pagesSeen,
+  };
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -21,13 +36,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await api.get("/auth/me");
       if (res.data) {
-        // Normalize user_type to lowercase to ensure consistency with frontend role checks
-        const normalizedUser = {
-          ...res.data,
-          user_type: res.data.user_type?.toLowerCase()
-        };
+        const normalizedUser = normalizeUser(res.data);
         setUser(normalizedUser);
-        setAvatarTimestamp(Date.now()); // Update timestamp for cache-busting
+        setAvatarTimestamp(Date.now());
       } else {
         setUser(null);
       }
@@ -48,12 +59,8 @@ export const AuthProvider = ({ children }) => {
           // Now fetch user details
           const userRes = await api.get("/auth/me");
           if (userRes.data) {
-            const normalizedUser = {
-              ...userRes.data,
-              user_type: userRes.data.user_type?.toLowerCase()
-            };
-            setUser(normalizedUser);
-            setAvatarTimestamp(Date.now()); // Update timestamp for cache-busting
+            setUser(normalizeUser(userRes.data));
+            setAvatarTimestamp(Date.now());
           }
         }
       } catch (error) {
@@ -88,13 +95,10 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (res.data.user) {
-      const normalizedUser = {
-        ...res.data.user,
-        user_type: res.data.user.user_type?.toLowerCase()
-      };
+      const normalizedUser = normalizeUser(res.data.user);
       setUser(normalizedUser);
-      setAvatarTimestamp(Date.now()); // Update timestamp for cache-busting
-      res.data.user = normalizedUser; // Update response for Login.jsx
+      setAvatarTimestamp(Date.now());
+      res.data.user = normalizedUser;
     } else {
       await fetchUser();
     }
@@ -108,7 +112,7 @@ export const AuthProvider = ({ children }) => {
     const res = await api.post("/auth/super-admin/login", loginData);
     if (res.data.accessToken) setAccessToken(res.data.accessToken);
     if (res.data.user) {
-      const normalizedUser = { ...res.data.user, user_type: res.data.user.user_type?.toLowerCase() };
+      const normalizedUser = normalizeUser(res.data.user);
       setUser(normalizedUser);
       setAvatarTimestamp(Date.now());
       res.data.user = normalizedUser;
@@ -162,7 +166,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, superAdminLogin, logout, authChecked, fetchUser, avatarTimestamp }}>
+    <AuthContext.Provider value={{ user, setUser, login, superAdminLogin, logout, authChecked, fetchUser, avatarTimestamp }}>
       {children}
     </AuthContext.Provider>
   );

@@ -11,8 +11,10 @@ import RequestManager from '../../components/dar/admin/RequestManager';
 import MasterDataView from '../../components/dar/admin/MasterDataView';
 import AdminConfigurations from '../../components/dar/admin/AdminConfigurations';
 
-const DARAdmin = ({ embedded = false }) => {
-    const [activeTab, setActiveTab] = useState('insights'); // 'insights' | 'requests' | 'data'
+const DARAdmin = ({ embedded = false, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
+    const [localActiveTab, localSetActiveTab] = useState('insights'); // 'insights' | 'requests' | 'data'
+    const activeTab = propActiveTab !== undefined ? propActiveTab : localActiveTab;
+    const setActiveTab = propSetActiveTab !== undefined ? propSetActiveTab : localSetActiveTab;
     const [isConfigOpen, setIsConfigOpen] = useState(false);
 
     // --- SHARED DATA STATE ---
@@ -83,7 +85,7 @@ const DARAdmin = ({ embedded = false }) => {
             )}
 
             {/* Navigation Tabs (Pill Style) */}
-            <div className="flex w-fit items-center gap-3 mb-6 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl shrink-0">
+            <div data-tour-id="dar-admin-tabs" className="flex w-fit items-center gap-3 mb-6 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl shrink-0">
                 <button
                     onClick={() => setActiveTab('insights')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeTab === 'insights'
@@ -122,25 +124,31 @@ const DARAdmin = ({ embedded = false }) => {
 
                 {/* --- MASTER DATA TAB (TIMELINE VIEW) --- */}
                 {activeTab === 'data' && (
-                    <MasterDataView
-                        departments={departments}
-                        shifts={shifts}
-                        allUsers={allUsers}
-                    />
+                    <div data-tour-id="dar-admin-master-data-tab-content" className="h-full">
+                        <MasterDataView
+                            departments={departments}
+                            shifts={shifts}
+                            allUsers={allUsers}
+                        />
+                    </div>
                 )}
 
                 {/* --- REQUESTS TAB --- */}
                 {activeTab === 'requests' && (
-                    <RequestManager departments={departments} />
+                    <div data-tour-id="dar-admin-requests-tab-content" className="h-full">
+                        <RequestManager departments={departments} />
+                    </div>
                 )}
 
                 {/* --- INSIGHTS DASHBOARD --- */}
                 {activeTab === 'insights' && ( // DashboardInsights expects departments and allUsers
-                    <DashboardInsights
-                        departments={departments}
-                        allUsers={allUsers}
-                        onOpenConfig={() => setIsConfigOpen(true)}
-                    />
+                    <div data-tour-id="dar-admin-insights-tab-content" className="h-full">
+                        <DashboardInsights
+                            departments={departments}
+                            allUsers={allUsers}
+                            onOpenConfig={() => setIsConfigOpen(true)}
+                        />
+                    </div>
                 )}
 
             </div>

@@ -29,8 +29,28 @@ import {
   Sun, Moon, Layers, ChevronDown, Edit2, Save, X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTour } from '../../context/TourContext';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+
+const PAGE_KEY = 'admin_geofencing';
+const TOUR_STEPS = [
+    {
+        targetId: 'geo-map',
+        title: 'Geofence Map',
+        description: 'Visualize all your office locations and their allowed punch-in radiuses on the live map.',
+    },
+    {
+        targetId: 'geo-sidebar-locations',
+        title: 'Locations List',
+        description: 'Create and edit geofenced locations, adjust coordinates, and set the allowed punch-in radius. Note: A radius that is too small (e.g., < 50m) can block clock-ins due to indoor GPS drift/fluctuation, causing false attendance failures. Conversely, a radius that is too large (e.g., > 200m) compromises geofence security by allowing employees to clock in from nearby roads or cafes. A balanced range of 80m–150m is recommended.',
+    },
+    {
+        targetId: 'geo-sidebar-users',
+        title: 'Assign Staff',
+        description: 'Select a location to see which employees are allowed to clock in from there, and manage their assignments.',
+    },
+];
 
 const createMarkerIcon = (color) => {
   return L.divIcon({
@@ -52,6 +72,7 @@ const GeoFencing = () => {
 
   // --- STATE ---
   const { avatarTimestamp } = useAuth();
+  const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [loadingLocations, setLoadingLocations] = useState(false);
@@ -413,6 +434,7 @@ const GeoFencing = () => {
     loadUsers();
   }, []);
 
+
   const handleRadiusChange = (newRadius) => {
     setRadiusDraft(newRadius);
 
@@ -566,11 +588,11 @@ const GeoFencing = () => {
   }
 
   return (
-    <DashboardLayout title="Geo-Fencing" noPadding={true}>
+    <DashboardLayout title="Geo-Fencing" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={TOUR_STEPS}>
       <div className="flex h-[calc(100vh-64px)] w-full overflow-hidden p-3 gap-3 bg-slate-50 dark:bg-dark-bg">
 
         {/* Left Panel: Locations List as a Card */}
-        <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm flex flex-col overflow-hidden">
+        <div data-tour-id="geo-sidebar-locations" className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm flex flex-col overflow-hidden">
 
           {/* Header / Search */}
           <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/50 space-y-3">
@@ -655,8 +677,8 @@ const GeoFencing = () => {
           </div>
         </div>
 
-        {/* Center: Real Map View as a Card */}
-        <div className="flex-1 relative bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm overflow-hidden">
+        {/* Center Panel: Map Area */}
+        <div data-tour-id="geo-map" className="flex-1 relative bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm overflow-hidden">
           {(selectedLocation || showCreateModal || locations.length > 0) && (
             <MapContainer
               center={
@@ -1064,7 +1086,7 @@ const GeoFencing = () => {
         </div>
 
         {/* Right Panel: Employee Assignment as a Card */}
-        <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm flex flex-col overflow-hidden">
+        <div data-tour-id="geo-sidebar-users" className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-sm flex flex-col overflow-hidden">
           <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50/50 dark:bg-github-dark-subtle/50">
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-slate-800 dark:text-github-dark-text flex items-center gap-2">

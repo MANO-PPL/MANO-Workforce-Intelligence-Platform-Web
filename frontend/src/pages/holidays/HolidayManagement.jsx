@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+import { useTour } from '../../context/TourContext';
 import { holidayService } from '../../services/holidayService';
 import { toast } from 'react-toastify';
 import {
@@ -24,8 +25,11 @@ import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import DatePicker from '../../components/DatePicker';
 
+const PAGE_KEY = 'emp_holidays';
+
 const HolidayManagement = () => {
     const navigate = useNavigate();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
 
 
     const { user } = useAuth();
@@ -38,6 +42,77 @@ const HolidayManagement = () => {
         const params = new URLSearchParams(window.location.search);
         return params.get('tab') || 'holidays';
     });
+
+    // Memoize role-aware tour steps with actions to switch tabs automatically
+    const tourSteps = React.useMemo(() => {
+        const isAdmin = ['admin', 'hr'].includes(user?.user_type);
+        if (isAdmin) {
+            return [
+                {
+                    targetId: 'holidays-tab-holidays',
+                    title: 'Holidays List',
+                    description: 'View the organization\'s public holidays. These are automatically factored into your attendance and pay.',
+                    action: () => setActiveTab('holidays'),
+                },
+                {
+                    targetId: 'holiday-admin-add',
+                    title: 'Holiday Creation & Import',
+                    description: 'As an administrator, you can add individual public holidays or bulk import an entire calendar year to keep scheduling accurate.',
+                    action: () => setActiveTab('holidays'),
+                },
+                {
+                    targetId: 'holidays-tab-leaves',
+                    title: 'Leave Approval Center',
+                    description: 'Switch to this tab to view and manage leave applications submitted by employees across the entire organization.',
+                    action: () => setActiveTab('leave_application'),
+                },
+                {
+                    targetId: 'leave-admin-list',
+                    title: 'Leave Requests Queue',
+                    description: 'This queue displays all pending, approved, and rejected employee leave requests. Search by employee name or filter by request status to find specific cases.',
+                    action: () => setActiveTab('leave_application'),
+                },
+                {
+                    targetId: 'leave-admin-details',
+                    title: 'Review Details & Attachments',
+                    description: 'Examine the leave type, exact start/end dates, duration, and employee reason. You can also expand the attachments section to inspect medical certificates or other supporting documents.',
+                    action: () => setActiveTab('leave_application'),
+                },
+                {
+                    targetId: 'leave-admin-actions',
+                    title: 'Decision Panel',
+                    description: 'Approve or reject the request. If rejecting, you must provide feedback remarks so the employee understands the decision.',
+                    action: () => setActiveTab('leave_application'),
+                },
+                {
+                    targetId: 'holidays-calendar-view',
+                    title: 'Calendar Overview',
+                    description: 'The high-level calendar highlights company holidays in purple and the selected employee\'s leave dates in blue/amber to help you check for overlap.',
+                    action: () => setActiveTab('leave_application'),
+                },
+            ];
+        } else {
+            return [
+                {
+                    targetId: 'holidays-tab-holidays',
+                    title: 'Holidays List',
+                    description: 'View the organization\'s public holidays. These are automatically factored into your attendance and pay.',
+                    action: () => setActiveTab('holidays'),
+                },
+                {
+                    targetId: 'holidays-tab-leaves',
+                    title: 'Leave Application',
+                    description: 'Switch to this tab to submit new leave requests or track the approval status of your past requests.',
+                    action: () => setActiveTab('leave_application'),
+                },
+                {
+                    targetId: 'holidays-calendar-view',
+                    title: 'Calendar View',
+                    description: 'This mini-calendar highlights holidays in purple and your leaves in blue/amber. It gives you a quick snapshot of the month.',
+                },
+            ];
+        }
+    }, [user?.user_type, setActiveTab]);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -52,6 +127,8 @@ const HolidayManagement = () => {
             detail: { tab: activeTab }
         }));
     }, [activeTab]);
+
+
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isAddTypeOpen, setIsAddTypeOpen] = useState(false);
@@ -309,13 +386,14 @@ const HolidayManagement = () => {
     };
 
     return (
-        <DashboardLayout title="Holiday Management" noPadding={true}>
+        <DashboardLayout title="Holiday Management" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={tourSteps}>
             <div className="h-[calc(100vh-64px)] p-4 space-y-4 overflow-hidden flex flex-col">
 
                 {/* Tabs */}
                 <div className="flex w-fit items-center gap-3 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl shrink-0">
                     <button
                         onClick={() => setActiveTab('holidays')}
+                        data-tour-id="holidays-tab-holidays"
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeTab === 'holidays'
                             ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
@@ -326,6 +404,7 @@ const HolidayManagement = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('leave_application')}
+                        data-tour-id="holidays-tab-leaves"
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeTab === 'leave_application'
                             ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
@@ -369,6 +448,7 @@ const HolidayManagement = () => {
                                                         <span className="hidden sm:inline">Import</span>
                                                     </button>
                                                     <button
+                                                        data-tour-id="holiday-admin-add"
                                                         onClick={() => setIsAddModalOpen(true)}
                                                         className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors"
                                                     >
@@ -415,7 +495,7 @@ const HolidayManagement = () => {
                     </div>
 
                     {/* Calendar Sidebar */}
-                    <div className="w-full xl:w-[350px] shrink-0 overflow-hidden animate-in fade-in slide-in-from-right-10 duration-500">
+                    <div data-tour-id="holidays-calendar-view" className="w-full xl:w-[350px] shrink-0 overflow-hidden animate-in fade-in slide-in-from-right-10 duration-500">
                             <HolidayCalendarView
                                 holidays={holidays}
                                 leaves={activeTab === 'leave_application' ? leaves : []}

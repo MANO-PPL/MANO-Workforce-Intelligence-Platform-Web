@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
-    Search, Filter, Plus, FileText, CheckCircle2, AlertTriangle, 
-    ShieldAlert, Clock, RefreshCw, Upload, Eye, Trash2, CheckCircle, 
-    XCircle, AlertCircle, Sparkles, Building, Briefcase, User, Users, Info, 
-    Check, ChevronDown, ChevronUp, UserCheck, UserX, ArrowRight, 
+    Search, Filter, Plus, FileText, CheckCircle2, AlertTriangle,
+    ShieldAlert, Clock, RefreshCw, Upload, Eye, Trash2, CheckCircle,
+    XCircle, AlertCircle, Sparkles, Building, Briefcase, User, Users, Info,
+    Check, ChevronDown, ChevronUp, UserCheck, UserX, ArrowRight,
     ShieldCheck, Download, Trash, ClipboardCheck, Calendar, MapPin, X, File, Award,
     Sliders, Edit2, RotateCcw
 } from 'lucide-react';
@@ -18,8 +18,28 @@ import { getColumnPreferences, updateColumnPreferences } from '../../services/us
 import EmployeeFormContent from '../../components/employees/EmployeeFormContent';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import { PerformanceHub, AiPerformanceAnalyzer } from '../performance/PerformanceViews';
+import { useTour } from '../../context/TourContext';
 
 // Loaded dynamically from configurations database
+
+const PAGE_KEY = 'admin_employees';
+const TOUR_STEPS = [
+    {
+        targetId: 'emp-unified-filters',
+        title: 'Search & Filters',
+        description: 'Find any employee instantly by name, department, designation, or active/inactive status — useful before scrolling through a large directory.',
+    },
+    {
+        targetId: 'emp-unified-add-btn',
+        title: 'Add Employee',
+        description: 'Creates a new employee profile and automatically starts their onboarding checklist (documents, offer, contract, laptop, email, training, manager assignment).',
+    },
+    {
+        targetId: 'emp-unified-table-row',
+        title: 'Employee Profile',
+        description: "Click any row to open that employee's full 360° profile — documents, onboarding progress, geofence assignments, and performance reviews all live there.",
+    },
+];
 
 const MOCK_BACKUP_EMPLOYEES = [
     { id: 101, user_code: 'EMP-101', name: 'Sathish Kumar', email: 'sathish@mano.co.in', phone: '9876543210', department: 'Engineering', designation: 'Tech Lead', status: 'Active', joiningDate: '2024-05-10', profile_image_url: '' },
@@ -32,13 +52,14 @@ const MOCK_BACKUP_EMPLOYEES = [
 const EmployeeUnifiedMaster = () => {
     const navigate = useNavigate();
     const { avatarTimestamp, user: currentUser } = useAuth();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
 
     // UI & Data States
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [deptFilter, setDeptFilter] = useState('All');
-    
+
     // Filters States
     const [statusFilter, setStatusFilter] = useState('Active'); // Active | Inactive | Deleted (Trash)
     const [onboardingFilter, setOnboardingFilter] = useState('All'); // All | Completed | InProgress
@@ -100,13 +121,15 @@ const EmployeeUnifiedMaster = () => {
                 if (localSaved) {
                     try {
                         setVisibleColumns(JSON.parse(localSaved));
-                    } catch (e) {}
+                    } catch (e) { }
                 }
             }
         };
 
         loadPreferences();
     }, [currentUser?.user_id]);
+
+
 
     const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
 
@@ -131,7 +154,7 @@ const EmployeeUnifiedMaster = () => {
         title: '',
         message: '',
         type: 'info',
-        onConfirm: () => {},
+        onConfirm: () => { },
         confirmText: 'Confirm'
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -275,7 +298,7 @@ const EmployeeUnifiedMaster = () => {
     const handleDeleteCycleFromManager = async (id) => {
         const updated = cycles.filter(c => c.id !== id);
         setCycles(updated);
-        
+
         // Select next available or empty
         if (updated.length > 0) {
             setSelectedCyclesManagerId(updated[0].id);
@@ -568,7 +591,7 @@ const EmployeeUnifiedMaster = () => {
         const template = documentTemplates.find(t => t.id === templateId);
         if (!template) return;
         const categoryId = categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_+|_+$)/g, '');
-        
+
         let uniqueId = categoryId;
         let counter = 1;
         while (template.categories.some(cat => cat.id === uniqueId)) {
@@ -634,7 +657,7 @@ const EmployeeUnifiedMaster = () => {
         if (!newCategoryName || !newCategoryName.trim()) return;
         const template = documentTemplates.find(t => t.id === templateId);
         if (!template) return;
-        
+
         const flatItems = [];
         template.categories.forEach(cat => {
             const currentCatName = (cat.id === categoryId) ? newCategoryName.trim() : cat.name;
@@ -987,7 +1010,7 @@ const EmployeeUnifiedMaster = () => {
         setVisibleColumns(updatedPrefs);
         const key = currentUser?.user_id ? `mano_unified_employee_columns_${currentUser.user_id}` : 'mano_unified_employee_columns';
         localStorage.setItem(key, JSON.stringify(updatedPrefs));
-        
+
         if (currentUser?.user_id) {
             try {
                 await updateColumnPreferences(updatedPrefs);
@@ -1024,7 +1047,7 @@ const EmployeeUnifiedMaster = () => {
     const getEmployeeProfile = (empId, empName, checklistTemplateId = null, documentTemplateId = null) => {
         const localKey = `mano_empmaster_profile_${empId}`;
         const stored = localStorage.getItem(localKey);
-        
+
         // Seed variations based on empId to give a realistic dashboard view out-of-the-box
         const variant = Number(empId) % 3;
         let defaultProfile = {};
@@ -1244,7 +1267,7 @@ const EmployeeUnifiedMaster = () => {
     const saveEmployeeProfile = (empId, updatedProfile) => {
         const localKey = `mano_empmaster_profile_${empId}`;
         localStorage.setItem(localKey, JSON.stringify(updatedProfile));
-        
+
         if (selectedEmployee && selectedEmployee.id === empId) {
             setSelectedEmployee(prev => ({
                 ...prev,
@@ -1255,10 +1278,10 @@ const EmployeeUnifiedMaster = () => {
 
     const getOnboardingProgress = (profileOrChecklist, templateId) => {
         if (!profileOrChecklist) return 0;
-        
+
         let checklist = {};
         let exclusions = [];
-        
+
         if (profileOrChecklist.onboarding_checklist) {
             checklist = profileOrChecklist.onboarding_checklist;
             exclusions = profileOrChecklist.checklist_exclusions || [];
@@ -1270,10 +1293,10 @@ const EmployeeUnifiedMaster = () => {
         const activeId = templateId || (currentTemplates[0]?.id);
         const template = currentTemplates.find(t => t.id === activeId) || currentTemplates[0];
         if (!template || !template.items || template.items.length === 0) return 0;
-        
+
         const activeItems = template.items.filter(item => !exclusions.includes(item.key));
         if (activeItems.length === 0) return 0;
-        
+
         const total = activeItems.length;
         const checked = activeItems.filter(item => checklist[item.key]).length;
         return Math.round((checked / total) * 100);
@@ -1318,9 +1341,9 @@ const EmployeeUnifiedMaster = () => {
                 const freshEmp = updatedList.find(e => e.id === selectedIdToRefresh);
                 if (freshEmp) {
                     const profile = getEmployeeProfile(
-                        freshEmp.id, 
-                        freshEmp.name, 
-                        freshEmp.checklist_template_id, 
+                        freshEmp.id,
+                        freshEmp.name,
+                        freshEmp.checklist_template_id,
                         freshEmp.document_template_id
                     );
                     setSelectedEmployee({
@@ -1361,20 +1384,20 @@ const EmployeeUnifiedMaster = () => {
     // Filter logic
     const filteredEmployees = employees.filter(emp => {
         // Fuzzy search filter
-        const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              emp.user_code.toLowerCase().includes(searchTerm.toLowerCase());
-                              
+        const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            emp.user_code.toLowerCase().includes(searchTerm.toLowerCase());
+
         // Department dropdown filter
         const matchesDept = deptFilter === 'All' || emp.department === deptFilter;
-        
+
         // Card 4 (Active/Inactive/Trash) filter
         const matchesStatus = emp.status === statusFilter;
-        
+
         // Cards 2 & 3 Onboarding progress filter
         const progress = emp.onboarding_progress || 0;
         let matchesOnboarding = true;
-        
+
         if (onboardingFilter === 'Completed') {
             matchesOnboarding = progress === 100;
         } else if (onboardingFilter === 'InProgress') {
@@ -1471,7 +1494,7 @@ const EmployeeUnifiedMaster = () => {
         e.stopPropagation();
         const newStatus = !currentStatus;
         const action = newStatus ? "activate" : "deactivate";
-        
+
         setConfirmModal({
             isOpen: true,
             title: `${action.charAt(0).toUpperCase() + action.slice(1)} Employee`,
@@ -1580,17 +1603,17 @@ const EmployeeUnifiedMaster = () => {
             toast.info("Please select at least one document to download.");
             return;
         }
-        
+
         const toastId = toast.loading("Generating ZIP archive...");
-        
+
         try {
             const JSZip = await loadJSZip();
             const zip = new JSZip();
-            
+
             for (const docId of selectedDocIdsForZip) {
                 const doc = onboardingData.uploaded_documents.find(d => d.id === docId);
                 if (!doc) continue;
-                
+
                 try {
                     const data = await onboardingService.getDocumentContent(docId);
                     zip.file(doc.file_name, data);
@@ -1599,9 +1622,9 @@ const EmployeeUnifiedMaster = () => {
                     throw new Error(`Failed to fetch file ${doc.file_name}`);
                 }
             }
-            
+
             const content = await zip.generateAsync({ type: 'blob' });
-            
+
             const link = document.createElement('a');
             link.href = URL.createObjectURL(content);
             link.download = `${selectedEmployee.name.replace(/\s+/g, '_')}_onboarding_documents.zip`;
@@ -1609,7 +1632,7 @@ const EmployeeUnifiedMaster = () => {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-            
+
             toast.update(toastId, { render: "ZIP file downloaded successfully!", type: "success", isLoading: false, autoClose: 3000 });
             setSelectedDocIdsForZip([]);
             setBulkSelectMode(false);
@@ -1641,7 +1664,7 @@ const EmployeeUnifiedMaster = () => {
             const activeDocTemplateId = selectedEmployee.profile.document_template_id || (documentTemplates[0]?.id || '');
             const activeDocTemplate = documentTemplates.find(t => t.id === activeDocTemplateId) || documentTemplates[0];
             const categories = activeDocTemplate?.categories || [];
-            
+
             const docExclusions = selectedEmployee.profile.document_exclusions || [];
 
             categories.forEach(category => {
@@ -1773,7 +1796,7 @@ const EmployeeUnifiedMaster = () => {
             let score = 100;
             score -= (missing.length * 10);
             score -= (expired.length * 15);
-            
+
             discrepancies.forEach(d => {
                 if (!d.isOverridden) {
                     score -= 15;
@@ -1815,7 +1838,7 @@ const EmployeeUnifiedMaster = () => {
 
         const currentResults = selectedEmployee.profile.ai_verification_results || {};
         const discrepancies = currentResults.discrepancies || [];
-        
+
         const updatedDiscrepancies = discrepancies.map(d => {
             if (d.id === id) {
                 return {
@@ -1833,7 +1856,7 @@ const EmployeeUnifiedMaster = () => {
         let score = 100;
         score -= ((currentResults.missing_documents || []).length * 10);
         score -= ((currentResults.expired_documents || []).length * 15);
-        
+
         updatedDiscrepancies.forEach(d => {
             if (!d.isOverridden) {
                 score -= 15;
@@ -1866,7 +1889,7 @@ const EmployeeUnifiedMaster = () => {
     const handleRevokeOverride = (id) => {
         const currentResults = selectedEmployee.profile.ai_verification_results || {};
         const discrepancies = currentResults.discrepancies || [];
-        
+
         const updatedDiscrepancies = discrepancies.map(d => {
             if (d.id === id) {
                 return {
@@ -1884,7 +1907,7 @@ const EmployeeUnifiedMaster = () => {
         let score = 100;
         score -= ((currentResults.missing_documents || []).length * 10);
         score -= ((currentResults.expired_documents || []).length * 15);
-        
+
         updatedDiscrepancies.forEach(d => {
             if (!d.isOverridden) {
                 score -= 15;
@@ -1920,20 +1943,19 @@ const EmployeeUnifiedMaster = () => {
     };
 
     return (
-        <DashboardLayout title="Employee Master Directory (Unified)" noPadding={true}>
-            <div className="h-[calc(100vh-64px)] p-4 flex flex-col overflow-hidden space-y-4">
-                
+        <DashboardLayout title="Employee Master Directory (Unified)" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={TOUR_STEPS}>
+            <div className="h-[calc(100vh-64px)] p-4 space-y-4 overflow-hidden flex flex-col">
+
                 {/* 4 Top Metric & Status Filtering Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
-                    
+
                     {/* Card 1: Total Employees (Resets Onboarding Quick filters) */}
-                    <div 
+                    <div
                         onClick={() => setOnboardingFilter('All')}
-                        className={`border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 select-none ${
-                            onboardingFilter === 'All'
+                        className={`border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 select-none ${onboardingFilter === 'All'
                                 ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
                                 : 'bg-white dark:bg-github-dark-subtle border-slate-200 dark:border-github-dark-border hover:shadow-sm'
-                        }`}
+                            }`}
                     >
                         <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-lg">
                             <Users size={20} />
@@ -1945,13 +1967,12 @@ const EmployeeUnifiedMaster = () => {
                     </div>
 
                     {/* Card 2: Onboarding Completed Filter Card */}
-                    <div 
+                    <div
                         onClick={() => setOnboardingFilter(onboardingFilter === 'Completed' ? 'All' : 'Completed')}
-                        className={`border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 select-none ${
-                            onboardingFilter === 'Completed'
+                        className={`border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 select-none ${onboardingFilter === 'Completed'
                                 ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500 shadow-md ring-2 ring-emerald-500/20'
                                 : 'bg-white dark:bg-github-dark-subtle border-slate-200 dark:border-github-dark-border hover:shadow-sm'
-                        }`}
+                            }`}
                     >
                         <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg">
                             <CheckCircle2 size={20} />
@@ -1968,13 +1989,12 @@ const EmployeeUnifiedMaster = () => {
                     </div>
 
                     {/* Card 3: Onboarding In-Progress Filter Card */}
-                    <div 
+                    <div
                         onClick={() => setOnboardingFilter(onboardingFilter === 'InProgress' ? 'All' : 'InProgress')}
-                        className={`border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 select-none ${
-                            onboardingFilter === 'InProgress'
+                        className={`border rounded-xl p-4 flex items-center gap-4 cursor-pointer transition-all duration-200 select-none ${onboardingFilter === 'InProgress'
                                 ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-500 shadow-md ring-2 ring-amber-500/20'
                                 : 'bg-white dark:bg-github-dark-subtle border-slate-200 dark:border-github-dark-border hover:shadow-sm'
-                        }`}
+                            }`}
                     >
                         <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-lg">
                             <Clock size={20} />
@@ -1996,7 +2016,7 @@ const EmployeeUnifiedMaster = () => {
                         <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 dark:text-github-dark-muted mb-2 block">
                             Employee Status Filter
                         </span>
-                        
+
                         {/* Segmented controls mirroring recruitment tab bar */}
                         <div className="flex gap-3 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl">
                             {[
@@ -2009,11 +2029,10 @@ const EmployeeUnifiedMaster = () => {
                                     <button
                                         key={tab.id}
                                         onClick={() => setStatusFilter(tab.id)}
-                                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
-                                            isSelected
+                                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${isSelected
                                                 ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
                                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         <tab.icon size={14} className={`${isSelected ? 'text-[#0969da] dark:text-[#f0f6fc]' : 'text-slate-455'} -mt-[1px]`} />
                                         <span>{tab.label}</span>
@@ -2028,9 +2047,9 @@ const EmployeeUnifiedMaster = () => {
                 </div>
 
                 {/* Operations & Customizer Row */}
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border p-4 rounded-xl shadow-sm shrink-0">
+                <div data-tour-id="emp-unified-filters" className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border p-4 rounded-xl shadow-sm shrink-0">
                     <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-                        
+
                         {/* Search Input */}
                         <div className="relative w-full sm:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -2061,11 +2080,10 @@ const EmployeeUnifiedMaster = () => {
                         <div className="relative w-full sm:w-auto">
                             <button
                                 onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}
-                                className={`flex items-center justify-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-semibold w-full sm:w-auto transition-all ${
-                                    showColumnCustomizer 
-                                        ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-400 text-indigo-600 dark:text-indigo-400' 
+                                className={`flex items-center justify-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-semibold w-full sm:w-auto transition-all ${showColumnCustomizer
+                                        ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-400 text-indigo-600 dark:text-indigo-400'
                                         : 'bg-slate-50 dark:bg-github-dark-subtle/50 border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-github-dark-text hover:bg-slate-100'
-                                }`}
+                                    }`}
                             >
                                 <Sliders size={14} />
                                 <span>Customize Columns</span>
@@ -2078,14 +2096,14 @@ const EmployeeUnifiedMaster = () => {
                                     <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-xl shadow-xl p-4 z-30 animate-in fade-in slide-in-from-top-2 duration-150">
                                         <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100 dark:border-github-dark-border">
                                             <span className="font-bold text-xs text-slate-700 dark:text-github-dark-text">Toggle Columns</span>
-                                            <button 
+                                            <button
                                                 onClick={resetColumnsToDefault}
                                                 className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
                                             >
                                                 Reset Default
                                             </button>
                                         </div>
-                                        
+
                                         <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                                             <span className="block text-[9px] uppercase font-black tracking-widest text-slate-400 mb-1">Default columns</span>
                                             {[
@@ -2098,9 +2116,9 @@ const EmployeeUnifiedMaster = () => {
                                                 { key: 'actions', label: 'Row Actions' }
                                             ].map(col => (
                                                 <label key={col.key} className="flex items-center gap-2 cursor-pointer py-0.5 text-xs text-slate-600 dark:text-github-dark-text">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={visibleColumns[col.key]} 
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={visibleColumns[col.key]}
                                                         onChange={() => toggleColumn(col.key)}
                                                         className="rounded text-indigo-600 focus:ring-indigo-500/20 w-3.5 h-3.5"
                                                     />
@@ -2117,9 +2135,9 @@ const EmployeeUnifiedMaster = () => {
                                                 { key: 'address', label: 'Home Address' }
                                             ].map(col => (
                                                 <label key={col.key} className="flex items-center gap-2 cursor-pointer py-0.5 text-xs text-slate-600 dark:text-github-dark-muted">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={visibleColumns[col.key]} 
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={visibleColumns[col.key]}
                                                         onChange={() => toggleColumn(col.key)}
                                                         className="rounded text-indigo-600 focus:ring-indigo-500/20 w-3.5 h-3.5"
                                                     />
@@ -2135,22 +2153,23 @@ const EmployeeUnifiedMaster = () => {
 
                     {/* Operational Buttons */}
                     <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-                        <button 
+                        <button
                             onClick={() => setShowTemplatesModal(true)}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-github-dark-text bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
                         >
                             <Sliders size={14} className="text-indigo-600 dark:text-indigo-400" />
                             <span>Manage Templates</span>
                         </button>
-                        <Link 
-                            to="/employees/bulk" 
+                        <Link
+                            to="/employees/bulk"
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-github-dark-text bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
                         >
                             <Upload size={14} />
                             <span>Bulk Upload</span>
                         </Link>
-                        <Link 
-                            to="/employees/add" 
+                        <Link
+                            to="/employees/add"
+                            data-tour-id="emp-unified-add-btn"
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-sm shadow-indigo-200 dark:shadow-none transition-all active:scale-95"
                         >
                             <Plus size={14} />
@@ -2187,14 +2206,15 @@ const EmployeeUnifiedMaster = () => {
                                         </td>
                                     </tr>
                                 ) : filteredEmployees.length > 0 ? (
-                                    filteredEmployees.map((emp) => {
+                                    filteredEmployees.map((emp, index) => {
                                         const profile = getEmployeeProfile(emp.id, emp.name);
                                         const progress = emp.onboarding_progress || 0;
-                                        
+
                                         return (
                                             <tr
                                                 key={emp.id}
                                                 onClick={() => handleSelectEmployee(emp)}
+                                                data-tour-id={index === 0 ? "emp-unified-table-row" : undefined}
                                                 className="group hover:bg-indigo-50/35 dark:hover:bg-[#161b22]/30 cursor-pointer border-l-2 border-transparent hover:border-indigo-500 transition-all duration-200"
                                             >
                                                 {/* 1. Employee ID */}
@@ -2299,14 +2319,13 @@ const EmployeeUnifiedMaster = () => {
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-2 min-w-[120px]">
                                                             <div className="flex-1 bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                                <div 
-                                                                    className={`h-full rounded-full transition-all duration-300 ${
-                                                                        progress === 100 
-                                                                            ? 'bg-emerald-500' 
-                                                                            : progress > 50 
-                                                                                ? 'bg-indigo-500' 
+                                                                <div
+                                                                    className={`h-full rounded-full transition-all duration-300 ${progress === 100
+                                                                            ? 'bg-emerald-500'
+                                                                            : progress > 50
+                                                                                ? 'bg-indigo-500'
                                                                                 : 'bg-amber-500'
-                                                                    }`} 
+                                                                        }`}
                                                                     style={{ width: `${progress}%` }}
                                                                 />
                                                             </div>
@@ -2318,7 +2337,10 @@ const EmployeeUnifiedMaster = () => {
                                                 {/* 12. Actions */}
                                                 {visibleColumns.actions && (
                                                     <td className="px-6 py-4">
-                                                        <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                                        <div
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="flex items-center justify-center gap-1"
+                                                        >
                                                             {emp.status === 'Deleted' ? (
                                                                 <>
                                                                     <button
@@ -2342,17 +2364,16 @@ const EmployeeUnifiedMaster = () => {
                                                                         onClick={(e) => handleToggleStatus(e, emp.id, emp.is_active)}
                                                                         title={emp.is_active ? "Deactivate" : "Activate"}
                                                                         disabled={emp.designation === 'admin'}
-                                                                        className={`p-1.5 rounded-lg transition-colors ${
-                                                                            emp.designation === 'admin'
+                                                                        className={`p-1.5 rounded-lg transition-colors ${emp.designation === 'admin'
                                                                                 ? 'opacity-40 cursor-not-allowed text-slate-400'
-                                                                                : emp.is_active 
-                                                                                    ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20' 
+                                                                                : emp.is_active
+                                                                                    ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/20'
                                                                                     : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/20'
-                                                                        }`}
+                                                                            }`}
                                                                     >
                                                                         {emp.is_active ? <UserX size={15} /> : <UserCheck size={15} />}
                                                                     </button>
-                                                                    
+
                                                                     <button
                                                                         onClick={(e) => {
                                                                             handleSelectEmployee(emp);
@@ -2363,16 +2384,15 @@ const EmployeeUnifiedMaster = () => {
                                                                     >
                                                                         <Edit2 size={15} />
                                                                     </button>
-                                                                    
+
                                                                     <button
                                                                         onClick={(e) => handleDelete(e, emp.id)}
                                                                         title="Move to Trash"
                                                                         disabled={emp.designation === 'admin'}
-                                                                        className={`p-1.5 rounded-lg transition-colors ${
-                                                                            emp.designation === 'admin'
+                                                                        className={`p-1.5 rounded-lg transition-colors ${emp.designation === 'admin'
                                                                                 ? 'opacity-40 cursor-not-allowed text-slate-400'
                                                                                 : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20'
-                                                                        }`}
+                                                                            }`}
                                                                     >
                                                                         <Trash2 size={15} />
                                                                     </button>
@@ -2422,7 +2442,7 @@ const EmployeeUnifiedMaster = () => {
                             transition={{ type: 'spring', damping: 25, stiffness: 220 }}
                             className="fixed right-0 top-0 h-full w-full max-w-[950px] z-50 bg-white dark:bg-dark-card border-l border-slate-200 dark:border-github-dark-border shadow-2xl flex flex-col overflow-hidden"
                         >
-                            
+
                             {/* Drawer Header */}
                             <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/30">
                                 <div className="flex items-center gap-3">
@@ -2438,7 +2458,7 @@ const EmployeeUnifiedMaster = () => {
                                         </p>
                                     </div>
                                 </div>
-                                
+
                                 <div className="flex items-center gap-2">
                                     {drawerTab === 'profile' && !editMode && (
                                         <button
@@ -2449,8 +2469,8 @@ const EmployeeUnifiedMaster = () => {
                                             <span>Edit Profile</span>
                                         </button>
                                     )}
-                                    
-                                    <button 
+
+                                    <button
                                         onClick={() => setSelectedEmployee(null)}
                                         className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                     >
@@ -2474,11 +2494,10 @@ const EmployeeUnifiedMaster = () => {
                                     <button
                                         key={tab.id}
                                         onClick={() => { setDrawerTab(tab.id); setEditMode(false); }}
-                                        className={`flex items-center gap-1.5 px-4 py-3 border-b-2 font-semibold transition-all shrink-0 ${
-                                            drawerTab === tab.id
+                                        className={`flex items-center gap-1.5 px-4 py-3 border-b-2 font-semibold transition-all shrink-0 ${drawerTab === tab.id
                                                 ? 'border-[#0969da] text-[#0969da] dark:border-github-dark-accent dark:text-[#f0f6fc]'
                                                 : 'border-transparent text-slate-500 hover:text-slate-850 dark:text-github-dark-muted dark:hover:text-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         {tab.icon}
                                         {tab.label}
@@ -2488,7 +2507,7 @@ const EmployeeUnifiedMaster = () => {
 
                             {/* Drawer Body Container */}
                             <div className="flex-1 overflow-y-auto p-5 custom-scrollbar text-xs">
-                                
+
                                 {/* 1. Profile Information Tab */}
                                 {drawerTab === 'profile' && (
                                     <div className="space-y-6">
@@ -2518,12 +2537,11 @@ const EmployeeUnifiedMaster = () => {
                                                             {selectedEmployee.name}
                                                         </h4>
                                                         <p className="text-xs text-slate-500 dark:text-github-dark-muted">{selectedEmployee.email}</p>
-                                                        
-                                                        <span className={`mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                                                            selectedEmployee.status === 'Active' 
-                                                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400' 
+
+                                                        <span className={`mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${selectedEmployee.status === 'Active'
+                                                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
                                                                 : 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400'
-                                                        }`}>
+                                                            }`}>
                                                             {selectedEmployee.status}
                                                         </span>
                                                     </div>
@@ -2571,7 +2589,7 @@ const EmployeeUnifiedMaster = () => {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div className="pt-2 border-t border-slate-100 dark:border-github-dark-border">
                                                         <span className="block text-[9px] uppercase font-black text-slate-400 tracking-wider mb-1">Office Work Location</span>
                                                         <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{selectedEmployee.profile.work_location}</span>
@@ -2620,7 +2638,7 @@ const EmployeeUnifiedMaster = () => {
                                     const rawItems = onboardingData.checklist_items || [];
                                     const exclusions = selectedEmployee.profile.checklist_exclusions || [];
                                     const items = rawItems.filter(item => !exclusions.includes(item.task_key));
-                                    
+
                                     const totalTasks = items.length;
                                     const completedTasks = onboardingData.checklist_progress.filter(
                                         p => p.is_completed && rawItems.some(item => item.task_key === p.task_key && !exclusions.includes(item.task_key))
@@ -2654,7 +2672,7 @@ const EmployeeUnifiedMaster = () => {
                                             {exclusions.length > 0 && (
                                                 <div className="flex justify-between items-center bg-amber-500/10 border border-amber-500/20 px-3.5 py-2 rounded-xl text-[10px] text-amber-600 dark:text-amber-400">
                                                     <span>{exclusions.length} task(s) excluded for this employee.</span>
-                                                    <button 
+                                                    <button
                                                         onClick={handleRestoreChecklistExclusions}
                                                         className="font-bold underline uppercase hover:text-amber-700"
                                                     >
@@ -2673,8 +2691,8 @@ const EmployeeUnifiedMaster = () => {
                                                         const progressLog = onboardingData.checklist_progress.find(p => p.task_key === item.task_key);
                                                         const isDone = !!progressLog?.is_completed;
                                                         return (
-                                                            <div 
-                                                                key={item.task_key} 
+                                                            <div
+                                                                key={item.task_key}
                                                                 onClick={() => handleChecklistToggle(item.task_key)}
                                                                 className="flex items-center justify-between p-3 bg-slate-50 dark:bg-github-dark-subtle/10 border border-slate-100 dark:border-github-dark-border rounded-xl cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/20 transition-all select-none group/row"
                                                             >
@@ -2707,7 +2725,7 @@ const EmployeeUnifiedMaster = () => {
                                 {drawerTab === 'documents' && (() => {
                                     const activeDocTemplateId = onboardingData.document_template_id || (documentTemplates[0]?.id || '');
                                     const exclusions = selectedEmployee.profile.document_exclusions || [];
-                                    
+
                                     // Construct categories map from flat required documents list
                                     const categoriesMap = {};
                                     (onboardingData.required_documents || []).forEach(reqDoc => {
@@ -2746,11 +2764,10 @@ const EmployeeUnifiedMaster = () => {
                                                                 setBulkSelectMode(!bulkSelectMode);
                                                                 setSelectedDocIdsForZip([]);
                                                             }}
-                                                            className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
-                                                                bulkSelectMode 
-                                                                    ? "bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/20 dark:border-indigo-900" 
+                                                            className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${bulkSelectMode
+                                                                    ? "bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/20 dark:border-indigo-900"
                                                                     : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 dark:bg-github-dark-subtle dark:border-github-dark-border dark:text-slate-350"
-                                                            }`}
+                                                                }`}
                                                         >
                                                             <span>{bulkSelectMode ? "Exit Select" : "Select & Download"}</span>
                                                         </button>
@@ -2758,7 +2775,7 @@ const EmployeeUnifiedMaster = () => {
                                                     {exclusions.length > 0 && (
                                                         <div className="text-right flex items-center gap-2 border-l border-slate-200 dark:border-github-dark-border pl-2.5">
                                                             <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">{exclusions.length} excluded</span>
-                                                            <button 
+                                                            <button
                                                                 onClick={handleRestoreDocExclusions}
                                                                 className="text-[9px] font-bold underline uppercase text-amber-600 dark:text-amber-400 hover:text-amber-700"
                                                             >
@@ -2772,7 +2789,7 @@ const EmployeeUnifiedMaster = () => {
                                             {bulkSelectMode && (
                                                 <div className="bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-950/30 p-3.5 rounded-xl flex justify-between items-center gap-3">
                                                     <div className="flex items-center gap-3">
-                                                        <input 
+                                                        <input
                                                             type="checkbox"
                                                             checked={selectedDocIdsForZip.length === onboardingData.uploaded_documents.length && onboardingData.uploaded_documents.length > 0}
                                                             onChange={(e) => {
@@ -2818,12 +2835,12 @@ const EmployeeUnifiedMaster = () => {
                                                                         activeItems.map((item) => {
                                                                             const doc = onboardingData.uploaded_documents.find(d => d.doc_key === item.key);
                                                                             const isUploaded = !!doc;
-                                                                            
+
                                                                             return (
                                                                                 <div key={item.key} className="flex justify-between items-center p-3 bg-white dark:bg-[#161b22]/30 border border-slate-200/60 dark:border-github-dark-border rounded-lg shadow-sm group/docrow">
                                                                                     <div className="flex items-center gap-2.5 overflow-hidden">
                                                                                         {bulkSelectMode && isUploaded ? (
-                                                                                            <input 
+                                                                                            <input
                                                                                                 type="checkbox"
                                                                                                 checked={selectedDocIdsForZip.includes(doc.id)}
                                                                                                 onChange={(e) => {
@@ -2858,14 +2875,13 @@ const EmployeeUnifiedMaster = () => {
                                                                                     <div className="flex items-center gap-1.5 shrink-0">
                                                                                         {isUploaded ? (
                                                                                             <>
-                                                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
-                                                                                                    doc.verified_status === 'Verified' ? 'bg-emerald-50 text-emerald-650 dark:bg-emerald-950/20' : 
-                                                                                                    doc.verified_status === 'Rejected' ? 'bg-red-50 text-red-650 dark:bg-red-950/20' :
-                                                                                                    'bg-amber-50 text-amber-650 dark:bg-amber-950/20'
-                                                                                                }`}>
+                                                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${doc.verified_status === 'Verified' ? 'bg-emerald-50 text-emerald-650 dark:bg-emerald-950/20' :
+                                                                                                        doc.verified_status === 'Rejected' ? 'bg-red-50 text-red-650 dark:bg-red-950/20' :
+                                                                                                            'bg-amber-50 text-amber-650 dark:bg-amber-950/20'
+                                                                                                    }`}>
                                                                                                     {doc.verified_status}
                                                                                                 </span>
-                                                                                                <button 
+                                                                                                <button
                                                                                                     onClick={() => handleViewDocument(doc.id)}
                                                                                                     className="p-1 hover:bg-slate-105 text-slate-400 hover:text-indigo-500 rounded"
                                                                                                     title="Download/View file"
@@ -2873,7 +2889,7 @@ const EmployeeUnifiedMaster = () => {
                                                                                                     <Eye size={13} />
                                                                                                 </button>
                                                                                                 {isAdminOrHr && doc.verified_status !== 'Verified' && (
-                                                                                                    <button 
+                                                                                                    <button
                                                                                                         onClick={() => handleVerifyDocument(doc.id, 'Verified')}
                                                                                                         className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded transition-colors"
                                                                                                         title="Verify/Approve Document"
@@ -2882,7 +2898,7 @@ const EmployeeUnifiedMaster = () => {
                                                                                                     </button>
                                                                                                 )}
                                                                                                 {isAdminOrHr && doc.verified_status !== 'Rejected' && (
-                                                                                                    <button 
+                                                                                                    <button
                                                                                                         onClick={() => {
                                                                                                             const reason = prompt("Enter rejection reason:");
                                                                                                             if (reason !== null) {
@@ -2895,7 +2911,7 @@ const EmployeeUnifiedMaster = () => {
                                                                                                         <X size={13} />
                                                                                                     </button>
                                                                                                 )}
-                                                                                                <button 
+                                                                                                <button
                                                                                                     onClick={() => handleDeleteDocument(doc.id, item.name)}
                                                                                                     className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-red-500 rounded"
                                                                                                     title="Delete uploaded file"
@@ -2904,7 +2920,7 @@ const EmployeeUnifiedMaster = () => {
                                                                                                 </button>
                                                                                             </>
                                                                                         ) : (
-                                                                                            <button 
+                                                                                            <button
                                                                                                 onClick={() => handleDirectDocumentUpload(item.key, item.name)}
                                                                                                 className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline px-2 py-1 bg-slate-50 dark:bg-github-dark-subtle/50 rounded border border-slate-200 dark:border-github-dark-border"
                                                                                             >
@@ -2912,9 +2928,9 @@ const EmployeeUnifiedMaster = () => {
                                                                                                 <span>Upload</span>
                                                                                             </button>
                                                                                         )}
-                                                                                        
+
                                                                                         {/* Exclude file field button */}
-                                                                                        <button 
+                                                                                        <button
                                                                                             onClick={() => handleExcludeDocItem(item.key)}
                                                                                             className="opacity-0 group-hover/docrow:opacity-100 p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-red-555 rounded"
                                                                                             title="Exclude document field for this employee"
@@ -2977,7 +2993,7 @@ const EmployeeUnifiedMaster = () => {
                                                         </p>
                                                     </div>
                                                     <div className="mt-4 flex items-center gap-3">
-                                                        <button 
+                                                        <button
                                                             onClick={runAiVerification}
                                                             disabled={isVerifying}
                                                             className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
@@ -3056,7 +3072,7 @@ const EmployeeUnifiedMaster = () => {
                                                         <h5 className="font-bold text-xs text-slate-750 dark:text-github-dark-text">OCR Extracted Metadata</h5>
                                                         <p className="text-[10px] text-slate-400 mt-0.5">Explore key-value data extracted by AI models from the uploaded files.</p>
                                                     </div>
-                                                    
+
                                                     {/* Tabs Selector */}
                                                     {ocrKeys.length > 0 && (
                                                         <div className="flex gap-1 bg-slate-100 dark:bg-github-dark-subtle p-0.5 rounded-lg border border-slate-200 dark:border-github-dark-border/40">
@@ -3067,11 +3083,10 @@ const EmployeeUnifiedMaster = () => {
                                                                     <button
                                                                         key={key}
                                                                         onClick={() => setActiveOcrDoc(key)}
-                                                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${
-                                                                            isActive
+                                                                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${isActive
                                                                                 ? 'bg-white dark:bg-[#161b22] text-indigo-650 dark:text-indigo-400 shadow-sm border border-slate-200/50 dark:border-github-dark-border/50'
                                                                                 : 'text-slate-450 hover:text-slate-700 dark:hover:text-github-dark-text'
-                                                                        }`}
+                                                                            }`}
                                                                     >
                                                                         {label}
                                                                     </button>
@@ -3083,7 +3098,7 @@ const EmployeeUnifiedMaster = () => {
 
                                                 {ocrKeys.length > 0 ? (
                                                     <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-github-dark-border">
-                                                        
+
                                                         {/* Left Panel: OCR Values */}
                                                         <div className="p-4 space-y-3">
                                                             <span className="block text-[9px] uppercase font-black tracking-wider text-slate-400">Extracted Fields</span>
@@ -3121,72 +3136,72 @@ const EmployeeUnifiedMaster = () => {
                                                         {/* Right Panel: Security Verification Badges */}
                                                         <div className="p-4 space-y-4">
                                                             <span className="block text-[9px] uppercase font-black tracking-wider text-slate-400">Document Authenticity & Security Checks</span>
-                                                            
+
                                                             {(() => {
                                                                 const checks = securityChecks[currentDocKey] || {};
-                                                                
+
                                                                 const hologramPassed = checks.hologram === 'Passed';
                                                                 const blurPassed = checks.blur !== undefined && checks.blur < 0.15;
                                                                 const metadataPassed = checks.metadata === 'Passed';
                                                                 const editingPassed = checks.editing === 'Passed';
 
-                                                                return (                                                                    <div className="grid grid-cols-2 gap-3">
-                                                                        
-                                                                        {/* 1. Hologram Test */}
-                                                                        <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
-                                                                            <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Hologram Verification</span>
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                {checks.hologram === 'N/A' ? (
-                                                                                    <span className="px-2 py-0.5 bg-slate-100 dark:bg-github-dark-subtle text-slate-400 text-[10px] font-bold rounded-full">N/A</span>
-                                                                                ) : hologramPassed ? (
-                                                                                    <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1"><CheckCircle2 size={10} /> Passed</span>
-                                                                                ) : (
-                                                                                    <span className="px-2 py-0.5 bg-rose-500/10 dark:bg-rose-950/20 text-rose-500 text-[10px] font-bold rounded-full flex items-center gap-1"><XCircle size={10} /> Failed</span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
- 
-                                                                        {/* 2. Blur / Legibility */}
-                                                                        <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
-                                                                            <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Blur legibility test</span>
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                {blurPassed ? (
-                                                                                    <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1">
-                                                                                        <CheckCircle2 size={10} /> Legible ({checks.blur})
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span className="px-2 py-0.5 bg-rose-500/10 dark:bg-rose-950/20 text-rose-500 text-[10px] font-bold rounded-full flex items-center gap-1">
-                                                                                        <XCircle size={10} /> Blur Alert ({checks.blur})
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
- 
-                                                                        {/* 3. EXIF Metadata Check */}
-                                                                        <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
-                                                                            <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Metadata Alteration</span>
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                {metadataPassed ? (
-                                                                                    <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1"><CheckCircle2 size={10} /> No Edits</span>
-                                                                                ) : (
-                                                                                    <span className="px-2 py-0.5 bg-amber-500/10 dark:bg-amber-950/20 text-amber-550 text-[10px] font-bold rounded-full flex items-center gap-1"><AlertTriangle size={10} /> Edited EXIF</span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
- 
-                                                                        {/* 4. Photoshop manipulation */}
-                                                                        <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
-                                                                            <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Manipulation / Photoshop</span>
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                {editingPassed ? (
-                                                                                    <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1"><CheckCircle2 size={10} /> Authentic</span>
-                                                                                ) : (
-                                                                                    <span className="px-2 py-0.5 bg-rose-500/10 dark:bg-rose-950/20 text-rose-550 text-[10px] font-bold rounded-full flex items-center gap-1"><XCircle size={10} /> Tampering</span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
+                                                                return (<div className="grid grid-cols-2 gap-3">
 
+                                                                    {/* 1. Hologram Test */}
+                                                                    <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
+                                                                        <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Hologram Verification</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            {checks.hologram === 'N/A' ? (
+                                                                                <span className="px-2 py-0.5 bg-slate-100 dark:bg-github-dark-subtle text-slate-400 text-[10px] font-bold rounded-full">N/A</span>
+                                                                            ) : hologramPassed ? (
+                                                                                <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1"><CheckCircle2 size={10} /> Passed</span>
+                                                                            ) : (
+                                                                                <span className="px-2 py-0.5 bg-rose-500/10 dark:bg-rose-950/20 text-rose-500 text-[10px] font-bold rounded-full flex items-center gap-1"><XCircle size={10} /> Failed</span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
+
+                                                                    {/* 2. Blur / Legibility */}
+                                                                    <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
+                                                                        <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Blur legibility test</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            {blurPassed ? (
+                                                                                <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1">
+                                                                                    <CheckCircle2 size={10} /> Legible ({checks.blur})
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="px-2 py-0.5 bg-rose-500/10 dark:bg-rose-950/20 text-rose-500 text-[10px] font-bold rounded-full flex items-center gap-1">
+                                                                                    <XCircle size={10} /> Blur Alert ({checks.blur})
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 3. EXIF Metadata Check */}
+                                                                    <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
+                                                                        <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Metadata Alteration</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            {metadataPassed ? (
+                                                                                <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1"><CheckCircle2 size={10} /> No Edits</span>
+                                                                            ) : (
+                                                                                <span className="px-2 py-0.5 bg-amber-500/10 dark:bg-amber-950/20 text-amber-550 text-[10px] font-bold rounded-full flex items-center gap-1"><AlertTriangle size={10} /> Edited EXIF</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 4. Photoshop manipulation */}
+                                                                    <div className="p-3 border border-slate-200/40 dark:border-github-dark-border rounded-xl flex flex-col justify-between gap-2 bg-slate-50/50 dark:bg-[#161b22]/10 hover:shadow-sm transition-all">
+                                                                        <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">Manipulation / Photoshop</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            {editingPassed ? (
+                                                                                <span className="px-2 py-0.5 bg-emerald-500/10 dark:bg-emerald-950/20 text-emerald-500 text-[10px] font-bold rounded-full flex items-center gap-1"><CheckCircle2 size={10} /> Authentic</span>
+                                                                            ) : (
+                                                                                <span className="px-2 py-0.5 bg-rose-500/10 dark:bg-rose-950/20 text-rose-550 text-[10px] font-bold rounded-full flex items-center gap-1"><XCircle size={10} /> Tampering</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                </div>
                                                                 );
                                                             })()}
                                                         </div>
@@ -3211,7 +3226,7 @@ const EmployeeUnifiedMaster = () => {
                                                         {discrepancies.map(d => (
                                                             <div key={d.id} className="p-4 space-y-3 hover:bg-slate-50/30 dark:hover:bg-github-dark-subtle/5 transition-all">
                                                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                                                                    
+
                                                                     {/* Compare Fields info */}
                                                                     <div className="flex items-start md:items-center gap-3">
                                                                         <span className="px-2.5 py-1 bg-rose-105 dark:bg-rose-950/30 text-rose-600 dark:text-rose-455 rounded text-[10px] font-black uppercase">
@@ -3237,7 +3252,7 @@ const EmployeeUnifiedMaster = () => {
                                                                                 <ShieldAlert size={12} /> Unresolved Discrepancy
                                                                             </span>
                                                                         )}
-                                                                        
+
                                                                         {d.isOverridden ? (
                                                                             <button
                                                                                 onClick={() => handleRevokeOverride(d.id)}
@@ -3325,8 +3340,8 @@ const EmployeeUnifiedMaster = () => {
                                         <div className="space-y-4">
                                             <div className="flex items-center gap-2 bg-slate-50 dark:bg-github-dark-subtle/25 p-3 rounded-lg border border-slate-200 dark:border-github-dark-border mb-4">
                                                 <span className="font-bold text-slate-700 dark:text-github-dark-text">Select Performance Cycle</span>
-                                                <select 
-                                                    value={activeCycleId} 
+                                                <select
+                                                    value={activeCycleId}
                                                     onChange={(e) => setSelectedCycleId(e.target.value)}
                                                     className="px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded text-xs focus:outline-none cursor-pointer font-semibold"
                                                 >
@@ -3351,8 +3366,8 @@ const EmployeeUnifiedMaster = () => {
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center bg-slate-50 dark:bg-github-dark-subtle/25 p-3 rounded-lg border border-slate-200 dark:border-github-dark-border mb-4">
                                             <span className="font-bold text-slate-700 dark:text-github-dark-text">Select Performance Cycle</span>
-                                            <select 
-                                                value={selectedCycleId} 
+                                            <select
+                                                value={selectedCycleId}
                                                 onChange={(e) => setSelectedCycleId(e.target.value)}
                                                 className="px-2.5 py-1.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-github-dark-border rounded text-xs focus:outline-none"
                                             >
@@ -3366,7 +3381,7 @@ const EmployeeUnifiedMaster = () => {
                                 )}
 
                             </div>
-                            
+
                             {/* Drawer Footer Actions */}
                             <div className="p-4 border-t border-slate-100 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/20 flex gap-3 text-xs">
                                 <button
@@ -3393,30 +3408,30 @@ const EmployeeUnifiedMaster = () => {
                         <form onSubmit={handleDocumentUploadSave} className="p-4 space-y-4 text-xs">
                             <div>
                                 <label className="block text-slate-450 font-semibold mb-1">File Name</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     value={uploadForm.fileName}
                                     onChange={(e) => setUploadForm({ ...uploadForm, fileName: e.target.value })}
-                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-github-dark-subtle/40 border border-slate-250 dark:border-github-dark-border rounded focus:outline-none focus:border-indigo-500" 
-                                    required 
+                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-github-dark-subtle/40 border border-slate-250 dark:border-github-dark-border rounded focus:outline-none focus:border-indigo-500"
+                                    required
                                 />
                             </div>
                             <div>
                                 <label className="block text-slate-450 font-semibold mb-1">Name Printed On Document</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     value={uploadForm.nameOnDoc}
                                     onChange={(e) => setUploadForm({ ...uploadForm, nameOnDoc: e.target.value })}
-                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-github-dark-subtle/40 border border-slate-250 dark:border-github-dark-border rounded focus:outline-none" 
+                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-github-dark-subtle/40 border border-slate-250 dark:border-github-dark-border rounded focus:outline-none"
                                 />
                             </div>
                             <div>
                                 <label className="block text-slate-450 font-semibold mb-1">Expiry Date (Optional)</label>
-                                <input 
-                                    type="date" 
+                                <input
+                                    type="date"
                                     value={uploadForm.expiryDate}
                                     onChange={(e) => setUploadForm({ ...uploadForm, expiryDate: e.target.value })}
-                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-github-dark-subtle/40 border border-slate-250 dark:border-github-dark-border rounded focus:outline-none" 
+                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-github-dark-subtle/40 border border-slate-250 dark:border-github-dark-border rounded focus:outline-none"
                                 />
                             </div>
 
@@ -3424,8 +3439,8 @@ const EmployeeUnifiedMaster = () => {
                             <div className="pt-2 border-t border-slate-100 dark:border-github-dark-border space-y-2 bg-indigo-50/20 dark:bg-indigo-950/10 p-3 rounded-lg">
                                 <span className="block font-bold text-[9px] uppercase tracking-wider text-indigo-500">AI auditor simulations</span>
                                 <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-600 dark:text-github-dark-muted">
-                                    <input 
-                                        type="checkbox" 
+                                    <input
+                                        type="checkbox"
                                         checked={uploadForm.isExpiredSim}
                                         onChange={(e) => setUploadForm({ ...uploadForm, isExpiredSim: e.target.checked })}
                                         className="rounded text-indigo-600 focus:ring-0 w-3.5 h-3.5"
@@ -3433,8 +3448,8 @@ const EmployeeUnifiedMaster = () => {
                                     <span>Simulate Expired Document Warning</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-600 dark:text-github-dark-muted">
-                                    <input 
-                                        type="checkbox" 
+                                    <input
+                                        type="checkbox"
                                         checked={uploadForm.isMismatchSim}
                                         onChange={(e) => setUploadForm({ ...uploadForm, isMismatchSim: e.target.checked })}
                                         className="rounded text-indigo-600 focus:ring-0 w-3.5 h-3.5"
@@ -3444,15 +3459,15 @@ const EmployeeUnifiedMaster = () => {
                             </div>
 
                             <div className="flex gap-3 pt-2">
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     onClick={() => setUploadModal(prev => ({ ...prev, isOpen: false }))}
                                     className="flex-1 px-4 py-2.5 font-bold uppercase tracking-wider text-slate-500 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 rounded-lg text-center"
                                 >
                                     Cancel
                                 </button>
-                                <button 
-                                    type="submit" 
+                                <button
+                                    type="submit"
                                     className="flex-1 px-4 py-2.5 font-bold uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg text-center"
                                 >
                                     Confirm Upload
@@ -3476,8 +3491,8 @@ const EmployeeUnifiedMaster = () => {
                                 </h4>
                                 <p className="text-slate-500 dark:text-github-dark-muted text-[10px] mt-0.5">Configure onboarding and document lists assigned dynamically to employees.</p>
                             </div>
-                            <button 
-                                onClick={() => setShowTemplatesModal(false)} 
+                            <button
+                                onClick={() => setShowTemplatesModal(false)}
                                 className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                             >
                                 <X size={20} />
@@ -3488,33 +3503,30 @@ const EmployeeUnifiedMaster = () => {
                         <div className="flex border-b border-slate-100 dark:border-github-dark-border text-xs bg-slate-50 dark:bg-github-dark-subtle/20 px-4">
                             <button
                                 onClick={() => setTemplatesModalTab('checklist')}
-                                className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold transition-all ${
-                                    templatesModalTab === 'checklist'
+                                className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold transition-all ${templatesModalTab === 'checklist'
                                         ? 'border-indigo-600 text-indigo-650 dark:border-indigo-400 dark:text-[#f0f6fc]'
                                         : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-github-dark-muted dark:hover:text-slate-200'
-                                }`}
+                                    }`}
                             >
                                 <CheckCircle2 size={14} />
                                 <span>Onboarding Checklist Templates</span>
                             </button>
                             <button
                                 onClick={() => setTemplatesModalTab('document')}
-                                className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold transition-all ${
-                                    templatesModalTab === 'document'
+                                className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold transition-all ${templatesModalTab === 'document'
                                         ? 'border-indigo-600 text-indigo-650 dark:border-indigo-400 dark:text-[#f0f6fc]'
                                         : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-github-dark-muted dark:hover:text-slate-200'
-                                }`}
+                                    }`}
                             >
                                 <FileText size={14} />
                                 <span>Required Documents Templates</span>
                             </button>
                             <button
                                 onClick={() => setTemplatesModalTab('appraisal_cycles')}
-                                className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold transition-all ${
-                                    templatesModalTab === 'appraisal_cycles'
+                                className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold transition-all ${templatesModalTab === 'appraisal_cycles'
                                         ? 'border-indigo-600 text-indigo-650 dark:border-indigo-400 dark:text-[#f0f6fc]'
                                         : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-github-dark-muted dark:hover:text-slate-200'
-                                }`}
+                                    }`}
                             >
                                 <Award size={14} />
                                 <span>Performance Appraisal Cycles</span>
@@ -3523,7 +3535,7 @@ const EmployeeUnifiedMaster = () => {
 
                         {/* Main Layout: Split Screen */}
                         <div className="flex-1 flex overflow-hidden text-xs">
-                            
+
                             {/* Left Pane: Templates List Sidebar */}
                             <div className="w-1/3 border-r border-slate-200 dark:border-github-dark-border bg-slate-50/50 dark:bg-[#161b22]/10 p-4 flex flex-col justify-between overflow-y-auto">
                                 <div className="space-y-2">
@@ -3533,11 +3545,10 @@ const EmployeeUnifiedMaster = () => {
                                             <button
                                                 key={t.id}
                                                 onClick={() => setSelectedChecklistTemplateId(t.id)}
-                                                className={`w-full text-left p-3 rounded-xl border font-bold transition-all flex items-center justify-between ${
-                                                    selectedChecklistTemplateId === t.id
+                                                className={`w-full text-left p-3 rounded-xl border font-bold transition-all flex items-center justify-between ${selectedChecklistTemplateId === t.id
                                                         ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-500 text-indigo-650 dark:text-indigo-400'
                                                         : 'bg-white dark:bg-github-dark-subtle/35 border-slate-200 dark:border-github-dark-border text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/20'
-                                                }`}
+                                                    }`}
                                             >
                                                 <span>{t.name}</span>
                                                 <ArrowRight size={14} className={selectedChecklistTemplateId === t.id ? "opacity-100 text-indigo-600" : "opacity-0"} />
@@ -3548,11 +3559,10 @@ const EmployeeUnifiedMaster = () => {
                                             <button
                                                 key={t.id}
                                                 onClick={() => setSelectedDocTemplateId(t.id)}
-                                                className={`w-full text-left p-3 rounded-xl border font-bold transition-all flex items-center justify-between ${
-                                                    selectedDocTemplateId === t.id
+                                                className={`w-full text-left p-3 rounded-xl border font-bold transition-all flex items-center justify-between ${selectedDocTemplateId === t.id
                                                         ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-500 text-indigo-650 dark:text-indigo-400'
                                                         : 'bg-white dark:bg-github-dark-subtle/35 border-slate-200 dark:border-github-dark-border text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/20'
-                                                }`}
+                                                    }`}
                                             >
                                                 <span>{t.name}</span>
                                                 <ArrowRight size={14} className={selectedDocTemplateId === t.id ? "opacity-100 text-indigo-600" : "opacity-0"} />
@@ -3563,26 +3573,24 @@ const EmployeeUnifiedMaster = () => {
                                             <button
                                                 key={c.id}
                                                 onClick={() => setSelectedCyclesManagerId(c.id)}
-                                                className={`w-full text-left p-3 rounded-xl border font-bold transition-all flex flex-col gap-1 ${
-                                                    selectedCyclesManagerId === c.id
+                                                className={`w-full text-left p-3 rounded-xl border font-bold transition-all flex flex-col gap-1 ${selectedCyclesManagerId === c.id
                                                         ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-500 text-indigo-650 dark:text-indigo-400'
                                                         : 'bg-white dark:bg-github-dark-subtle/35 border-slate-200 dark:border-github-dark-border text-slate-700 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800/20'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
                                                     <span>{c.name}</span>
                                                     <ArrowRight size={14} className={selectedCyclesManagerId === c.id ? "opacity-100 text-indigo-600" : "opacity-0"} />
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-1">
-                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase ${
-                                                        c.status === 'Active'
+                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase ${c.status === 'Active'
                                                             ? 'bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400'
                                                             : c.status === 'Evaluating'
-                                                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400'
-                                                            : c.status === 'Upcoming'
-                                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-400'
-                                                            : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400'
-                                                    }`}>
+                                                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400'
+                                                                : c.status === 'Upcoming'
+                                                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-400'
+                                                                    : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400'
+                                                        }`}>
                                                         {c.status}
                                                     </span>
                                                     <span className="text-[9px] text-slate-400 font-normal">{c.type}</span>
@@ -3594,28 +3602,28 @@ const EmployeeUnifiedMaster = () => {
 
                                 <button
                                     onClick={
-                                        templatesModalTab === 'checklist' 
-                                            ? handleAddChecklistTemplate 
-                                            : templatesModalTab === 'document' 
-                                            ? handleAddDocTemplate 
-                                            : handleCreateNewCycleInManager
+                                        templatesModalTab === 'checklist'
+                                            ? handleAddChecklistTemplate
+                                            : templatesModalTab === 'document'
+                                                ? handleAddDocTemplate
+                                                : handleCreateNewCycleInManager
                                     }
                                     className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-sm mt-4 shrink-0"
                                 >
                                     <Plus size={14} />
                                     <span>
-                                        {templatesModalTab === 'checklist' 
-                                            ? 'Create New Template' 
-                                            : templatesModalTab === 'document' 
-                                            ? 'Create New Template' 
-                                            : 'Create New Cycle'}
+                                        {templatesModalTab === 'checklist'
+                                            ? 'Create New Template'
+                                            : templatesModalTab === 'document'
+                                                ? 'Create New Template'
+                                                : 'Create New Cycle'}
                                     </span>
                                 </button>
                             </div>
 
                             {/* Right Pane: Template Details Editor */}
                             <div className="flex-1 p-5 overflow-y-auto flex flex-col justify-between">
-                                
+
                                 {templatesModalTab === 'checklist' ? (() => {
                                     const template = checklistTemplates.find(t => t.id === selectedChecklistTemplateId) || checklistTemplates[0];
                                     if (!template) return <div className="text-slate-400 italic p-6">No template selected</div>;
@@ -3872,139 +3880,139 @@ const EmployeeUnifiedMaster = () => {
                                         </div>
                                     );
                                 })() : (() => {
-                                     const cycle = cycles.find(c => c.id === selectedCyclesManagerId) || cycles[0];
-                                     if (!cycle) return <div className="text-slate-400 italic p-6">No cycle selected</div>;
-                                     return (
-                                         <div className="space-y-6 flex-1 flex flex-col justify-between">
-                                             <div className="space-y-5">
-                                                 {/* Cycle Name */}
-                                                 <div>
-                                                     <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Cycle Name</label>
-                                                     <input
-                                                         type="text"
-                                                         value={tempCycleId === cycle.id ? tempCycleName : (cycle.name || '')}
-                                                         onChange={(e) => {
-                                                             setTempCycleId(cycle.id);
-                                                             setTempCycleName(e.target.value);
-                                                         }}
-                                                         onBlur={() => {
-                                                             if (tempCycleId === cycle.id && tempCycleName.trim() !== '' && tempCycleName !== cycle.name) {
-                                                                 handleUpdateCycleField(cycle.id, 'name', tempCycleName.trim());
-                                                             }
-                                                             setTempCycleId('');
-                                                             setTempCycleName('');
-                                                         }}
-                                                         className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                     />
-                                                 </div>
+                                    const cycle = cycles.find(c => c.id === selectedCyclesManagerId) || cycles[0];
+                                    if (!cycle) return <div className="text-slate-400 italic p-6">No cycle selected</div>;
+                                    return (
+                                        <div className="space-y-6 flex-1 flex flex-col justify-between">
+                                            <div className="space-y-5">
+                                                {/* Cycle Name */}
+                                                <div>
+                                                    <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Cycle Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={tempCycleId === cycle.id ? tempCycleName : (cycle.name || '')}
+                                                        onChange={(e) => {
+                                                            setTempCycleId(cycle.id);
+                                                            setTempCycleName(e.target.value);
+                                                        }}
+                                                        onBlur={() => {
+                                                            if (tempCycleId === cycle.id && tempCycleName.trim() !== '' && tempCycleName !== cycle.name) {
+                                                                handleUpdateCycleField(cycle.id, 'name', tempCycleName.trim());
+                                                            }
+                                                            setTempCycleId('');
+                                                            setTempCycleName('');
+                                                        }}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                    />
+                                                </div>
 
-                                                 {/* Cycle Type & Status */}
-                                                 <div className="grid grid-cols-2 gap-4">
-                                                     <div>
-                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Cycle Type</label>
-                                                         <select
-                                                             value={cycle.type}
-                                                             onChange={(e) => handleUpdateCycleField(cycle.id, 'type', e.target.value)}
-                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
-                                                         >
-                                                             <option value="Quarterly">Quarterly</option>
-                                                             <option value="Half Yearly">Half Yearly</option>
-                                                             <option value="Yearly">Yearly</option>
-                                                             <option value="Custom">Custom</option>
-                                                         </select>
-                                                     </div>
-                                                     <div>
-                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Status</label>
-                                                         <select
-                                                             value={cycle.status}
-                                                             onChange={(e) => handleUpdateCycleField(cycle.id, 'status', e.target.value)}
-                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
-                                                         >
-                                                             <option value="Active">Active</option>
-                                                             <option value="Evaluating">Evaluating</option>
-                                                             <option value="Upcoming">Upcoming</option>
-                                                             <option value="Closed">Closed</option>
-                                                         </select>
-                                                     </div>
-                                                 </div>
+                                                {/* Cycle Type & Status */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Cycle Type</label>
+                                                        <select
+                                                            value={cycle.type}
+                                                            onChange={(e) => handleUpdateCycleField(cycle.id, 'type', e.target.value)}
+                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
+                                                        >
+                                                            <option value="Quarterly">Quarterly</option>
+                                                            <option value="Half Yearly">Half Yearly</option>
+                                                            <option value="Yearly">Yearly</option>
+                                                            <option value="Custom">Custom</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Status</label>
+                                                        <select
+                                                            value={cycle.status}
+                                                            onChange={(e) => handleUpdateCycleField(cycle.id, 'status', e.target.value)}
+                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
+                                                        >
+                                                            <option value="Active">Active</option>
+                                                            <option value="Evaluating">Evaluating</option>
+                                                            <option value="Upcoming">Upcoming</option>
+                                                            <option value="Closed">Closed</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
 
-                                                 {/* Target Employee Type */}
-                                                 <div>
-                                                     <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Target Employee Group</label>
-                                                     <select
-                                                         value={cycle.targetEmployeeType}
-                                                         onChange={(e) => handleUpdateCycleField(cycle.id, 'targetEmployeeType', e.target.value)}
-                                                         className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
-                                                     >
-                                                         <option value="All">All Staff (General)</option>
-                                                         <option value="Intern">Interns Only</option>
-                                                         <option value="Full-time">Permanent / Full-Time</option>
-                                                         <option value="Management">Management / Leads</option>
-                                                     </select>
-                                                     <p className="text-[10px] text-slate-455 dark:text-github-dark-muted mt-1">
-                                                         This cycle will only filter/appear for employees matching this employment type.
-                                                     </p>
-                                                 </div>
+                                                {/* Target Employee Type */}
+                                                <div>
+                                                    <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Target Employee Group</label>
+                                                    <select
+                                                        value={cycle.targetEmployeeType}
+                                                        onChange={(e) => handleUpdateCycleField(cycle.id, 'targetEmployeeType', e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 focus:outline-none"
+                                                    >
+                                                        <option value="All">All Staff (General)</option>
+                                                        <option value="Intern">Interns Only</option>
+                                                        <option value="Full-time">Permanent / Full-Time</option>
+                                                        <option value="Management">Management / Leads</option>
+                                                    </select>
+                                                    <p className="text-[10px] text-slate-455 dark:text-github-dark-muted mt-1">
+                                                        This cycle will only filter/appear for employees matching this employment type.
+                                                    </p>
+                                                </div>
 
-                                                 {/* Start & End Dates */}
-                                                 <div className="grid grid-cols-2 gap-4">
-                                                     <div>
-                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Start Date</label>
-                                                         <input
-                                                             type="date"
-                                                             value={tempStartDateId === cycle.id ? tempStartDate : (cycle.startDate || '')}
-                                                             onChange={(e) => {
-                                                                 setTempStartDateId(cycle.id);
-                                                                 setTempStartDate(e.target.value);
-                                                             }}
-                                                             onBlur={() => {
-                                                                 if (tempStartDateId === cycle.id && tempStartDate !== cycle.startDate) {
-                                                                     handleUpdateCycleField(cycle.id, 'startDate', tempStartDate);
-                                                                 }
-                                                                 setTempStartDateId('');
-                                                                 setTempStartDate('');
-                                                             }}
-                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
-                                                         />
-                                                     </div>
-                                                     <div>
-                                                         <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">End Date</label>
-                                                         <input
-                                                             type="date"
-                                                             value={tempEndDateId === cycle.id ? tempEndDate : (cycle.endDate || '')}
-                                                             onChange={(e) => {
-                                                                 setTempEndDateId(cycle.id);
-                                                                 setTempEndDate(e.target.value);
-                                                             }}
-                                                             onBlur={() => {
-                                                                 if (tempEndDateId === cycle.id && tempEndDate !== cycle.endDate) {
-                                                                     handleUpdateCycleField(cycle.id, 'endDate', tempEndDate);
-                                                                 }
-                                                                 setTempEndDateId('');
-                                                                 setTempEndDate('');
-                                                             }}
-                                                             className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
-                                                         />
-                                                     </div>
-                                                 </div>
-                                             </div>
+                                                {/* Start & End Dates */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">Start Date</label>
+                                                        <input
+                                                            type="date"
+                                                            value={tempStartDateId === cycle.id ? tempStartDate : (cycle.startDate || '')}
+                                                            onChange={(e) => {
+                                                                setTempStartDateId(cycle.id);
+                                                                setTempStartDate(e.target.value);
+                                                            }}
+                                                            onBlur={() => {
+                                                                if (tempStartDateId === cycle.id && tempStartDate !== cycle.startDate) {
+                                                                    handleUpdateCycleField(cycle.id, 'startDate', tempStartDate);
+                                                                }
+                                                                setTempStartDateId('');
+                                                                setTempStartDate('');
+                                                            }}
+                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] uppercase font-black text-slate-400 dark:text-github-dark-muted mb-1.5">End Date</label>
+                                                        <input
+                                                            type="date"
+                                                            value={tempEndDateId === cycle.id ? tempEndDate : (cycle.endDate || '')}
+                                                            onChange={(e) => {
+                                                                setTempEndDateId(cycle.id);
+                                                                setTempEndDate(e.target.value);
+                                                            }}
+                                                            onBlur={() => {
+                                                                if (tempEndDateId === cycle.id && tempEndDate !== cycle.endDate) {
+                                                                    handleUpdateCycleField(cycle.id, 'endDate', tempEndDate);
+                                                                }
+                                                                setTempEndDateId('');
+                                                                setTempEndDate('');
+                                                            }}
+                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                             {/* Delete Cycle button */}
-                                             <div className="pt-5 border-t border-slate-100 dark:border-github-dark-border flex justify-end">
-                                                 <button
-                                                     onClick={() => {
-                                                         if (confirm(`Are you sure you want to delete cycle "${cycle.name}"?`)) {
-                                                             handleDeleteCycleFromManager(cycle.id);
-                                                         }
-                                                     }}
-                                                     className="px-4 py-2 text-red-500 hover:text-red-600 border border-red-200 dark:border-red-950/40 hover:bg-red-50 dark:hover:bg-red-950/10 font-bold rounded-xl flex items-center gap-1.5 transition-all"
-                                                 >
-                                                     <Trash2 size={13} />
-                                                     <span>Delete Cycle</span>
-                                                 </button>
-                                             </div>
-                                         </div>
-                                     );
+                                            {/* Delete Cycle button */}
+                                            <div className="pt-5 border-t border-slate-100 dark:border-github-dark-border flex justify-end">
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm(`Are you sure you want to delete cycle "${cycle.name}"?`)) {
+                                                            handleDeleteCycleFromManager(cycle.id);
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 text-red-500 hover:text-red-600 border border-red-200 dark:border-red-950/40 hover:bg-red-50 dark:hover:bg-red-950/10 font-bold rounded-xl flex items-center gap-1.5 transition-all"
+                                                >
+                                                    <Trash2 size={13} />
+                                                    <span>Delete Cycle</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
                                 })()}
 
                             </div>

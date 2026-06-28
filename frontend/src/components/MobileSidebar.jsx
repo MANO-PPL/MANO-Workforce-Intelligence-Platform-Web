@@ -17,12 +17,15 @@ import {
     ShieldAlert,
     MessageSquare,
     Code,
-    X
+    X,
+    HelpCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTour } from '../context/TourContext';
 
 const MobileSidebar = ({ isOpen, onClose }) => {
     const location = useLocation();
+    const { startGlobalTour, tourEnabled } = useTour();
     const { user, logout } = useAuth();
     const userType = user?.user_type || 'employee';
 
@@ -99,28 +102,41 @@ const MobileSidebar = ({ isOpen, onClose }) => {
                     <div className="flex items-center gap-3 font-black text-xl text-[#0969da] dark:text-github-dark-accent tracking-tighter">
                         <img src="/mano-logo.svg" alt="MANO" className="w-8 h-8 object-contain" />
                         <span className="leading-none">MANO</span>
+                        {tourEnabled && (
+                            <button
+                                onClick={() => {
+                                    onClose();
+                                    startGlobalTour(true);
+                                }}
+                                title="Start site walkthrough tour"
+                                className="p-1 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/25 transition-colors ml-1 cursor-pointer"
+                                aria-label="Start site walkthrough tour"
+                            >
+                                <HelpCircle size={16} strokeWidth={2.5} />
+                            </button>
+                        )}
                     </div>
                 </div>
 
                 {/* Nav — matches desktop exactly */}
-                <nav className="flex-1 pt-1.5 pb-4 px-3 space-y-1.5 overflow-y-auto" style={{paddingBottom: 'env(safe-area-inset-bottom, 16px)'}}>
-                    {menuItems.map((item) => (
-                        <Link
-                            key={item.to}
-                            to={item.to}
-                            onClick={onClose}
-                            className={linkClass(item.to)}
-                        >
-                            <span className={iconClass(item.to)}>{item.icon}</span>
-                            {item.text}
-                        </Link>
-                    ))}
-
-
+                <nav className="flex-1 pt-1.5 pb-4 px-3 space-y-1.5 overflow-y-auto no-scrollbar" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
+                    <div data-tour-id="sidebar-links" className="space-y-1.5">
+                        {menuItems.map((item) => (
+                            <Link
+                                key={item.to}
+                                to={item.to}
+                                onClick={onClose}
+                                className={linkClass(item.to)}
+                            >
+                                <span className={iconClass(item.to)}>{item.icon}</span>
+                                {item.text}
+                            </Link>
+                        ))}
+                    </div>
                 </nav>
 
                 {/* Footer — matches desktop exactly */}
-                <div className="p-4 border-t border-slate-100 dark:border-github-dark-border space-y-2 shrink-0" style={{paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)'}}>
+                <div className="p-4 border-t border-slate-100 dark:border-github-dark-border space-y-2 shrink-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}>
                     <div className="text-[10px] text-center text-slate-400 dark:text-slate-600 font-mono pt-2">
                         v1.0.0
                     </div>

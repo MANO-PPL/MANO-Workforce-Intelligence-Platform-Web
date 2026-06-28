@@ -60,6 +60,8 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     AreaChart, Area
 } from 'recharts';
+import { useTour } from '../../context/TourContext';
+
 
 
 // --- MAP HELPER COMPONENTS ---
@@ -583,8 +585,12 @@ const processAttendanceData = (staff, resolvedTz) => {
     return mergedData;
 };
 
+const PAGE_KEY = 'admin_attendance_monitoring';
+
 const AttendanceMonitoring = () => {
     const navigate = useNavigate();
+    const { avatarTimestamp } = useAuth();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
 
     // Get initial values from localStorage to support persistent views/filters
     const initialView = localStorage.getItem('live_attendance_active_view') || 'cards';
@@ -598,11 +604,53 @@ const AttendanceMonitoring = () => {
 
     const [orgTimezone, setOrgTimezone] = useState(() => cachedResponse?.timezone || 'UTC');
 
-    const { avatarTimestamp } = useAuth();
     const [activeTab, setActiveTab] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         return params.get('tab') || 'live';
     });
+
+    const tourSteps = React.useMemo(() => [
+        {
+            targetId: 'attendance-tabs',
+            title: 'Attendance Modules',
+            description: 'Switch between the Live Attendance dashboard and the Correction Requests queue.',
+            action: () => {
+                setActiveTab('live');
+            }
+        },
+        {
+            targetId: 'attendance-live-stats',
+            title: 'Live Metrics & Filters',
+            description: 'Track real-time employee counts for different attendance states. Click any metric card to filter the employee list below to only those matching that state.',
+            action: () => {
+                setActiveTab('live');
+            }
+        },
+        {
+            targetId: 'attendance-controls',
+            title: 'Data Controls & Views',
+            description: 'Search for specific employees, filter by department, select dates, or switch between Overview cards, Analytics charts, and high-density Timeline views.',
+            action: () => {
+                setActiveTab('live');
+            }
+        },
+        {
+            targetId: 'attendance-employee-card',
+            title: 'Employee Card & Status Badges',
+            description: 'Each card displays an employee\'s active session details. The color-coded status badges indicate their shift status: "Present" (on-time check-in), "Late" (checked in past the grace period), "Absent" (no check-in yet), "On Leave" (approved time off), and a pulsing "Active" badge showing they are currently logged in.',
+            action: () => {
+                setActiveTab('live');
+            }
+        },
+        {
+            targetId: 'attendance-requests-queue',
+            title: 'Correction Requests Queue',
+            description: 'This is the Correction Requests queue. As an administrator, you can review, approve, or reject attendance adjustment requests submitted by employees. You can view the request details, employee comments, and adjust or confirm their sessions directly from this interface.',
+            action: () => {
+                setActiveTab('requests');
+            }
+        }
+    ], [setActiveTab]);
     const [activeView, setActiveView] = useState(initialView); // 'cards' | 'graph' | 'table' | 'map'
     const [activeTheme, setActiveTheme] = useState('voyager');
     const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
@@ -837,6 +885,14 @@ const AttendanceMonitoring = () => {
         }
     }, [activeTab, selectedDate]);
 
+    useEffect(() => {
+        if (activeTab === 'requests') {
+            fetchCorrectionRequests();
+        }
+    }, [activeTab]);
+
+
+
     const fetchCorrectionRequests = async () => {
         setRequestsLoading(true);
         try {
@@ -894,8 +950,43 @@ const AttendanceMonitoring = () => {
         }
     };
 
+    const handleUpdateStatus = async (acr_id, status) => {
+        try {
+            const overrides = {};
+            if (status === 'approved' && overrideMode) {
+                const valid = overrideSessions.filter(s => s.time_in && s.time_out);
+                if (valid.length === 0) {
+                    toast.error("At least one valid session required for manual correction");
+                    return;
+                }
+                overrides.sessions = valid;
+            }
 
+            await attendanceService.updateCorrectionStatus(acr_id, status, reviewComment, overrides);
+            toast.success(`Request ${status} successfully`);
+            fetchCorrectionRequests();
+            fetchData(true, true); // Refetch live dashboard data silently
+            if (selectedRequestData && selectedRequestData.acr_id === acr_id) {
+                fetchRequestDetail(acr_id);
+            }
+        } catch (error) {
+            toast.error(error.message);
+        }
+    };
 
+    const handleAcknowledgeRequest = async (acrId, status, rejectReason = '') => {
+        try {
+            await attendanceService.updateCorrectionStatus(acrId, status, rejectReason);
+            toast.success(`Request ${status} successfully`);
+            fetchCorrectionRequests();
+            fetchData(true, true); // Refetch live dashboard data silently
+            if (selectedRequestData && selectedRequestData.acr_id === acrId) {
+                fetchRequestDetail(acrId);
+            }
+        } catch (error) {
+            toast.error(error.message);
+        }
+    };
 
     // Stats Cards Data
     const statCards = [
@@ -987,31 +1078,6 @@ const AttendanceMonitoring = () => {
     const filteredRequests = correctionRequests.filter(req =>
         req.user_name?.toLowerCase().includes(correctionSearchTerm.toLowerCase())
     );
-
-    const handleUpdateStatus = async (acr_id, status) => {
-        try {
-            const overrides = {};
-            if (status === 'approved' && overrideMode) {
-                const valid = overrideSessions.filter(s => s.time_in && s.time_out);
-                if (valid.length === 0) {
-                    toast.error("At least one valid session required for manual correction");
-                    return;
-                }
-                overrides.sessions = valid;
-            }
-
-            await attendanceService.updateCorrectionStatus(acr_id, status, reviewComment, overrides);
-            toast.success(`Request ${status} successfully`);
-            fetchCorrectionRequests();
-            fetchData(true, true); // Refetch live dashboard data silently
-            if (selectedRequestData && selectedRequestData.acr_id === acr_id) {
-                fetchRequestDetail(acr_id);
-            }
-        } catch (error) {
-            toast.error(error.message);
-        }
-    };
-
 
     const getStatusData = () => {
         // Create disjoint sets that sum to total headcount for a valid Pie Chart
@@ -1227,10 +1293,10 @@ const AttendanceMonitoring = () => {
                 }
                 `}
             </style>
-            <DashboardLayout title="Live Attendance" noPadding={true}>
+            <DashboardLayout title="Live Attendance" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={tourSteps}>
                 <div className={`${(activeTab === 'requests' || (activeTab === 'live' && activeView === 'map')) ? 'h-[calc(100vh-64px)] overflow-hidden' : ''} p-4 flex flex-col space-y-4`}>
                     {/* Tabs */}
-                    <div className="flex w-fit items-center gap-3 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl shrink-0">
+                    <div data-tour-id="attendance-tabs" className="flex w-fit items-center gap-3 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl shrink-0">
                         <button
                             onClick={() => setActiveTab('live')}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeTab === 'live' ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-202'}`}
@@ -1257,7 +1323,7 @@ const AttendanceMonitoring = () => {
                     {activeTab === 'live' ? (
                         <>
                             {/* Stats Cards */}
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            <div data-tour-id="attendance-live-stats" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                                 {statCards.map((stat, index) => {
                                     const isSelected = statusFilter === stat.id;
                                     return (
@@ -1291,7 +1357,7 @@ const AttendanceMonitoring = () => {
                             <div className="flex-1 min-h-0 transition-colors duration-300 flex flex-col space-y-4">
 
                                 {/* Premium Control Center */}
-                                <div className="p-6 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border space-y-6 shrink-0">
+                                <div data-tour-id="attendance-controls" className="p-6 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border space-y-6 shrink-0">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                         <div className="flex flex-col">
                                             <div className="flex items-center gap-3">
@@ -1486,7 +1552,7 @@ const AttendanceMonitoring = () => {
 
                                 <div className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar ${activeView === 'map' ? 'flex flex-col' : ''}`}>
                                     {activeView === 'table' ? (
-                                        <div className="bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-500 min-h-[450px]">
+                                        <div data-tour-id="attendance-live-monitor" className="bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-500 min-h-[450px]">
                                             <div className="overflow-x-auto custom-scrollbar">
                                                 <div className="min-w-[2000px]">
                                                     {/* Timeline Header */}
@@ -1678,6 +1744,7 @@ const AttendanceMonitoring = () => {
                                                             )}
                                                             <div
                                                                 onClick={() => setSelectedLiveUser(item)}
+                                                                data-tour-id={index === 0 ? "attendance-employee-card" : undefined}
                                                                 className={`bg-white dark:bg-dark-card rounded-lg border border-slate-200 dark:border-github-dark-border/60 hover:shadow-md transition-all duration-300 overflow-hidden group flex flex-col cursor-pointer ${item.status === 'Absent' ? 'opacity-70 grayscale-[0.3]' : ''}`}
                                                             >
                                                                 {/* Card Header */}
@@ -2134,7 +2201,7 @@ const AttendanceMonitoring = () => {
                         </>
                     ) : (
                     // Approvals Tab Content
-                    <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6">
+                    <div data-tour-id="attendance-requests-queue" className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6">
 
                         <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-lg shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col h-full shrink-0">
                             {/* Header and Search */}

@@ -58,7 +58,7 @@ export async function deleteProfilePicture(user_id) {
  * Get the current user's profile info.
  */
 export async function getMyProfile(user_id) {
-    return await attendanceDB('users as u')
+    const row = await attendanceDB('users as u')
         .leftJoin('designations as d', 'u.desg_id', 'd.desg_id')
         .leftJoin('departments as dep', 'u.dept_id', 'dep.dept_id')
         .select(
@@ -68,9 +68,75 @@ export async function getMyProfile(user_id) {
             'u.phone_no',
             'u.user_type',
             'u.profile_image_url',
+            'u.tour_dismissed',
+            'u.pages_tour_seen',
             'd.desg_name',
             'dep.dept_name'
         )
         .where('u.user_id', user_id)
         .first();
+
+    if (!row) return null;
+
+    // Parse pages_tour_seen from JSON string to object
+    let pagesTourSeen = {};
+    if (row.pages_tour_seen) {
+        try {
+            pagesTourSeen = typeof row.pages_tour_seen === 'string'
+                ? JSON.parse(row.pages_tour_seen)
+                : row.pages_tour_seen;
+        } catch (e) {
+            pagesTourSeen = {};
+        }
+    }
+
+    return { ...row, pages_tour_seen: pagesTourSeen };
+}
+
+/**
+ * Update user preferences (tour_dismissed, pages_tour_seen).
+ */
+export async function updatePreferences(user_id, updates) {
+    const allowedUpdates = {};
+
+    if (updates.tour_dismissed !== undefined) {
+        allowedUpdates.tour_dismissed = updates.tour_dismissed;
+    }
+
+    // Support partial page-seen updates: { pages_tour_seen: { dashboard: true } }
+    // Pass an empty object {} to fully reset all seen states.
+    if (updates.pages_tour_seen !== undefined) {
+        if (Object.keys(updates.pages_tour_seen).length === 0) {
+            // Explicit reset — wipe all seen states
+            allowedUpdates.pages_tour_seen = JSON.stringify({});
+        } else {
+            // Fetch existing value and merge
+            const existing = await attendanceDB('users')
+                .where({ user_id })
+                .select('pages_tour_seen')
+                .first();
+
+            let current = {};
+            if (existing?.pages_tour_seen) {
+                try {
+                    current = typeof existing.pages_tour_seen === 'string'
+                        ? JSON.parse(existing.pages_tour_seen)
+                        : existing.pages_tour_seen;
+                } catch (e) {
+                    current = {};
+                }
+            }
+
+            const merged = { ...current, ...updates.pages_tour_seen };
+            allowedUpdates.pages_tour_seen = JSON.stringify(merged);
+        }
+    }
+
+    if (Object.keys(allowedUpdates).length > 0) {
+        allowedUpdates.updated_at = attendanceDB.fn.now();
+        await attendanceDB('users')
+            .where({ user_id })
+            .update(allowedUpdates);
+    }
+    return true;
 }

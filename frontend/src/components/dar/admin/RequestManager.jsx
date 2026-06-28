@@ -81,7 +81,7 @@ const RequestManager = ({ departments = [] }) => {
     return (
         <div className="flex h-full gap-6 pb-6">
             {/* Left: List */}
-            <div className="w-1/3 min-w-[350px] bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+            <div data-tour-id="dar-review-feed" className="w-1/3 min-w-[350px] bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
                 <div className="p-4 border-b border-slate-100 dark:border-github-dark-border space-y-3 bg-white dark:bg-dark-card z-10">
                     <div className="flex items-center justify-between">
                         <h3 className="font-bold text-slate-800 dark:text-github-dark-text">Requests</h3>
@@ -146,7 +146,7 @@ const RequestManager = ({ departments = [] }) => {
             </div>
 
             {/* Right: Details */}
-            <div className="flex-1 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col relative">
+            <div data-tour-id="dar-admin-requests-actions" className="flex-1 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col relative">
                 {selectedRequest ? (
                     <RequestReviewModal
                         isOpen={true}

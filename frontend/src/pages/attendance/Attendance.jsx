@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
+import { useTour } from '../../context/TourContext';
 import Webcam from 'react-webcam';
 import {
     ArrowRight,
@@ -58,6 +59,9 @@ import CustomCalendar from '../../components/CustomCalendar';
 import DatePicker from '../../components/DatePicker';
 import MonthPicker from '../../components/MonthPicker';
 import { getStatusStyle, ATTENDANCE_STATUS } from '../../utils/attendanceStatus';
+
+// ─── Per-Page Tour Steps ───────────────────────────────────────────────────
+const PAGE_KEY = 'emp_attendance';
 
 const getAlignmentClass = (colHeader) => {
     if (!colHeader) return 'center';
@@ -243,6 +247,7 @@ const ThemedSelect = ({ label, value, options, onChange }) => {
 
 const Attendance = () => {
     const { user } = useAuth();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
     const [currentTime, setCurrentTime] = useState(new Date());
     const [location, setLocation] = useState({ lat: null, lng: null, address: 'Fetching location...', error: null });
     const [isLoadingLoc, setIsLoadingLoc] = useState(false);
@@ -376,6 +381,8 @@ const Attendance = () => {
     const [analyticsSessions, setAnalyticsSessions] = useState([]);
     const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+
+
     // Fetch Holidays and Shift Policy
     useEffect(() => {
         attendanceService.getHolidays()
@@ -399,6 +406,97 @@ const Attendance = () => {
         return params.get('subTab') || 'history';
     });
     const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
+
+    // ─── Tour Steps with Tab Navigation Hooks ─────────────────────────────
+    const tourSteps = React.useMemo(() => [
+        {
+            targetId: 'att-tab-mark',
+            title: 'Mark Attendance Tab',
+            description: 'This tab is your clock-in/out screen. Use it every day to record your work session — it captures your GPS location and a webcam selfie.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('mark_attendance');
+            }
+        },
+        {
+            targetId: 'att-session-actions',
+            title: 'Time In & Time Out',
+            description: 'Use these buttons to start and end your work sessions. Click Time In to begin your workday (capturing your webcam selfie and GPS location), and click Time Out when you finish your shift to close the session.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('mark_attendance');
+            }
+        },
+        {
+            targetId: 'att-correction-btn',
+            title: 'Request Correction',
+            description: 'If you ever forget to clock in/out, or need to adjust your times, use this button to submit an adjustment request for a specific date.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('mark_attendance');
+            }
+        },
+        {
+            targetId: 'att-correction-drawer',
+            title: 'Correction Drawer',
+            description: 'When you click request correction, this sidebar opens. Use this sidebar to adjust your attendance. Select the date, choose a correction method (Manual Entry or Full Day Reset), enter your corrected times under Session Details, provide a clear explanation for the request, and click Submit Request to send it to your administrator for approval.',
+            action: () => {
+                setActiveTab('mark_attendance');
+                setIsCorrectionDrawerOpen(true);
+            }
+        },
+        {
+            targetId: 'att-tab-my-attendance',
+            title: 'My Attendance Tab',
+            description: 'Switch to this tab to view your daily history, analytics, correction request logs, and self-service reports.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('my_attendance');
+                setSubTab('history');
+            }
+        },
+        {
+            targetId: 'att-history-sub-tab',
+            title: 'Attendance History',
+            description: 'This section displays your complete daily log history for the month. You can view check-in/out times, captured selfie verifications, and GPS location pins.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('my_attendance');
+                setSubTab('history');
+            }
+        },
+        {
+            targetId: 'att-analytics-sub-tab',
+            title: 'Analytics & Insights',
+            description: 'This section visualizes your attendance data. View your monthly active hours, check-in consistency, average late arrivals, and weekly activity metrics.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('my_attendance');
+                setSubTab('analytics');
+            }
+        },
+        {
+            targetId: 'att-correction-sub-tab',
+            title: 'Correction Requests',
+            description: 'Track the real-time status of all your submitted attendance correction requests. View whether they are Pending, Approved, or Rejected, along with administrator remarks.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('my_attendance');
+                setSubTab('correction');
+            }
+        },
+        {
+            targetId: 'att-reports-sub-tab',
+            title: 'Reports & Exports',
+            description: 'Under the Reports tab, you can export your official monthly attendance records. Select your preferred file format (Excel, CSV, or PDF) and click the Download Report button to export your records.',
+            action: () => {
+                setIsCorrectionDrawerOpen(false);
+                setActiveTab('my_attendance');
+                setSubTab('reports');
+            }
+        },
+    ], []);
+
 
     // Reports Self-Service States
     const [reportsSelectedMonth, setReportsSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -1476,7 +1574,7 @@ const Attendance = () => {
     }, [myShift, holidays]);
 
     return (
-        <DashboardLayout title="Attendance">
+        <DashboardLayout title="Attendance" tourPageKey={PAGE_KEY} tourSteps={tourSteps}>
             <div className="pb-10 overflow-x-hidden" style={{ zoom: 0.8 }}>
                 {/* Premium Header / Greeting */}
                 <div className="pt-6 pb-10 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 dark:from-indigo-900/40 dark:via-indigo-950/40 dark:to-black rounded-2xl shadow-xl relative overflow-hidden">
@@ -1553,6 +1651,7 @@ const Attendance = () => {
                         
                         <button
                             onClick={() => setActiveTab('mark_attendance')}
+                            data-tour-id="att-tab-mark"
                             className={`flex-1 py-4 text-sm font-normal rounded-xl transition-all duration-500 flex items-center justify-center gap-3 z-10 ${
                                 activeTab === 'mark_attendance'
                                     ? 'bg-white text-indigo-600 shadow-[0_4px_15px_rgba(0,0,0,0.1)] transform scale-[1.01]'
@@ -1564,6 +1663,7 @@ const Attendance = () => {
                         </button>
                         <button
                             onClick={() => setActiveTab('my_attendance')}
+                            data-tour-id="att-tab-my-attendance"
                             className={`flex-1 py-4 text-sm font-normal rounded-xl transition-all duration-500 flex items-center justify-center gap-3 z-10 ${
                                 activeTab === 'my_attendance'
                                     ? 'bg-white text-indigo-600 shadow-[0_4px_15px_rgba(0,0,0,0.1)] transform scale-[1.01]'
@@ -1587,11 +1687,12 @@ const Attendance = () => {
                             {(() => {
                                 const hasActiveSession = globalActiveSession;
                                 return (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div data-tour-id="att-session-actions" className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         {/* Time In Card */}
                                         <button
                                             onClick={() => openCamera('IN')}
                                             disabled={hasActiveSession}
+                                            data-tour-id="att-checkin-btn"
                                             className={`group relative p-5 rounded-xl flex items-center justify-between transition-all duration-500 overflow-hidden border-2 ${
                                                 hasActiveSession
                                                     ? 'bg-slate-50/50 dark:bg-slate-900/20 border-slate-100 dark:border-white/5 opacity-40 grayscale-[0.5]'
@@ -1770,6 +1871,7 @@ const Attendance = () => {
                                         setCorrDate(selectedDate);
                                         setIsCorrectionDrawerOpen(true);
                                     }} 
+                                    data-tour-id="att-correction-btn"
                                     className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-[10px] tracking-widest bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-xl hover:shadow-lg transition-all active:scale-95 border border-indigo-100/50 dark:border-indigo-500/20"
                                 >
                                     <Plus size={14} strokeWidth={3} /> Request Correction
@@ -1933,6 +2035,7 @@ const Attendance = () => {
                         <div className="border-b border-slate-200 dark:border-github-dark-border flex gap-6">
                             <button
                                 onClick={() => setSubTab('history')}
+                                data-tour-id="att-history-sub-tab"
                                 className={`pb-3 text-sm font-normal transition-all relative ${subTab === 'history'
                                     ? 'text-indigo-600 dark:text-indigo-400'
                                     : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
@@ -1948,6 +2051,7 @@ const Attendance = () => {
                             </button>
                             <button
                                 onClick={() => setSubTab('analytics')}
+                                data-tour-id="att-analytics-sub-tab"
                                 className={`pb-3 text-sm font-normal transition-all relative ${subTab === 'analytics'
                                     ? 'text-indigo-600 dark:text-indigo-400'
                                     : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
@@ -1963,6 +2067,7 @@ const Attendance = () => {
                             </button>
                             <button
                                 onClick={() => setSubTab('correction')}
+                                data-tour-id="att-correction-sub-tab"
                                 className={`pb-3 text-sm font-normal transition-all relative ${subTab === 'correction'
                                     ? 'text-indigo-600 dark:text-indigo-400'
                                     : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
@@ -1978,6 +2083,7 @@ const Attendance = () => {
                             </button>
                             <button
                                 onClick={() => setSubTab('reports')}
+                                data-tour-id="att-reports-sub-tab"
                                 className={`pb-3 text-sm font-normal transition-all relative ${subTab === 'reports'
                                     ? 'text-indigo-600 dark:text-indigo-400'
                                     : 'text-slate-500 hover:text-slate-700 dark:text-github-dark-muted'
@@ -2401,7 +2507,11 @@ const Attendance = () => {
                                 {/* Split Panel */}
                                 <div className="flex flex-col lg:flex-row gap-6 items-start">
                                     {/* LEFT — Request List */}
-                                    <div className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col lg:sticky lg:top-6" style={{ height: '650px' }}>
+                                    <div 
+                                        data-tour-id="att-correction-list"
+                                        className="w-full lg:w-1/3 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col lg:sticky lg:top-6" 
+                                        style={{ height: '650px' }}
+                                    >
                                         <div className="p-4 border-b border-slate-200 dark:border-github-dark-border flex justify-between items-center">
                                             <h3 className="text-sm font-bold text-slate-800 dark:text-github-dark-text uppercase tracking-wider">My Requests</h3>
                                             <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800">
@@ -2941,7 +3051,7 @@ const Attendance = () => {
                                         </div>
 
                                         {/* Format Tabs & Action Buttons */}
-                                        <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto justify-end">
+                                        <div data-tour-id="att-reports-download-actions" className="flex flex-wrap items-center gap-4 w-full sm:w-auto justify-end">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted">Format:</span>
                                                 <div className="h-8 flex items-center p-1 bg-slate-100 dark:bg-[#161b22] rounded-md border border-slate-200 dark:border-[#30363d]">
@@ -3372,6 +3482,7 @@ const Attendance = () => {
                                 animate={{ x: 0, opacity: 1 }}
                                 exit={{ x: '100%', opacity: 0.5 }}
                                 transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                                data-tour-id="att-correction-drawer"
                                 className="fixed top-0 right-0 h-full w-full max-w-xl bg-white dark:bg-github-dark-subtle z-[120] shadow-2xl border-l border-slate-100 dark:border-github-dark-border flex flex-col"
                             >
                                 <div className="p-8 border-b border-slate-100 dark:border-github-dark-border flex items-center justify-between bg-gradient-to-r from-indigo-50/50 to-transparent dark:from-github-dark-bg/30">
@@ -3397,7 +3508,7 @@ const Attendance = () => {
                                         {/* Date Section */}
                                         <div className="space-y-3">
                                             <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Adjustment Date</label>
-                                            <div className="relative z-[130]">
+                                            <div data-tour-id="att-correction-date" className="relative z-[130]">
                                                 <DatePicker
                                                     value={corrDate}
                                                     onChange={(val) => setCorrDate(val)}
@@ -3408,17 +3519,19 @@ const Attendance = () => {
  
                                         {/* Type & Method Grid */}
                                         <div className="grid grid-cols-1 gap-6">
-                                            <ThemedSelect 
-                                                label="Correction Type"
-                                                value={corrType}
-                                                onChange={(val) => setCorrType(val)}
-                                                options={[
-                                                    { label: 'Normal Correction', value: 'Correction' },
-                                                    { label: 'Missed Punch', value: 'Missed Punch' },
-                                                    { label: 'Overtime Request', value: 'Overtime' },
-                                                    { label: 'Other Adjustment', value: 'Other' }
-                                                ]}
-                                            />
+                                            <div data-tour-id="att-correction-type">
+                                                <ThemedSelect 
+                                                    label="Correction Type"
+                                                    value={corrType}
+                                                    onChange={(val) => setCorrType(val)}
+                                                    options={[
+                                                        { label: 'Normal Correction', value: 'Correction' },
+                                                        { label: 'Missed Punch', value: 'Missed Punch' },
+                                                        { label: 'Overtime Request', value: 'Overtime' },
+                                                        { label: 'Other Adjustment', value: 'Other' }
+                                                    ]}
+                                                />
+                                            </div>
                                             {corrType === 'Other' && (
                                                 <motion.input
                                                     initial={{ opacity: 0, y: -10 }}
@@ -3434,7 +3547,7 @@ const Attendance = () => {
  
                                             <div className="space-y-3">
                                                 <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Correction Method</label>
-                                                <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-github-dark-bg rounded-2xl border border-slate-200 dark:border-github-dark-border">
+                                                <div data-tour-id="att-correction-method" className="grid grid-cols-2 gap-2 p-1.5 bg-slate-50 dark:bg-github-dark-bg rounded-2xl border border-slate-200 dark:border-github-dark-border">
                                                     <button
                                                         type="button"
                                                         onClick={() => setCorrMethod('add_session')}
@@ -3454,7 +3567,7 @@ const Attendance = () => {
                                         </div>
  
                                         {/* Dynamic Session Inputs */}
-                                        <div className="space-y-4">
+                                        <div data-tour-id="att-correction-sessions" className="space-y-4">
                                             <div className="flex items-center justify-between px-1">
                                                 <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em]">Session Details</label>
                                                 {corrMethod === 'add_session' && (
@@ -3559,6 +3672,7 @@ const Attendance = () => {
                                         <div className="space-y-3">
                                             <label className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted tracking-[0.2em] px-1">Reason for Adjustment</label>
                                             <textarea
+                                                data-tour-id="att-correction-reason"
                                                 value={corrReason}
                                                 onChange={(e) => setCorrReason(e.target.value)}
                                                 placeholder="Please provide context for this correction..."
@@ -3573,6 +3687,7 @@ const Attendance = () => {
                                     <button 
                                         type="submit" 
                                         form="correction-form"
+                                        data-tour-id="att-correction-submit-btn"
                                         className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black tracking-[0.15em] rounded-[1.25rem] shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 transition-all active:scale-[0.98] flex items-center justify-center gap-3 group"
                                     >
                                         <FileClock size={20} className="group-hover:scale-110 transition-transform" />

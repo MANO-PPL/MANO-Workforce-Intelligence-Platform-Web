@@ -642,6 +642,7 @@ export default function InternalChatbotWidget() {
                 <button
                     type="button"
                     onClick={() => setIsOpen(true)}
+                    data-tour-id="copilot-toggle-btn"
                     style={{
                         position: 'fixed',
                         right: '24px',

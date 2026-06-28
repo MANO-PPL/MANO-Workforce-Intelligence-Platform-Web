@@ -8,9 +8,11 @@ import ResponsiveRoute from "./components/ResponsiveRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { SocketProvider } from "./context/SocketContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { TourProvider } from "./context/TourContext";
 import ProtectedRoute from "./context/protection";
 import PublicRoute from "./context/publicRoute";
 import Unauthorized from "./pages/Unauthorized";
+import TourOverlay from "./components/tour/TourOverlay.jsx";
 import TestRoute from "./context/TestRoute";
 import Login from "./pages/user-auth/Login";
 import ForgotPassword from "./pages/user-auth/ForgotPassword";
@@ -281,6 +283,8 @@ function App() {
           <ScaleManager />
         <ToastContainer enableMultiContainer containerId="defaultContainer" position="bottom-center" autoClose={3000} limit={1} hideProgressBar={true} pauseOnHover={false} pauseOnFocusLoss={false} closeOnClick={true} />
         <ToastContainer enableMultiContainer containerId="macOSNotifications" position="top-right" autoClose={3000} limit={3} hideProgressBar={true} closeButton={false} newestOnTop={true} transition={Slide} />
+        <TourProvider>
+        <TourOverlay />
         <Routes>
 
           {/* Website Landing (shown first when not logged in) */}
@@ -351,6 +355,7 @@ function App() {
           </Route>
 
         </Routes>
+        </TourProvider>
       </NotificationProvider>
     </SocketProvider>
   </AuthProvider>

@@ -2,8 +2,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Edit, Download, Trash2, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, Briefcase, Shield, Camera, Loader2, X, RefreshCw, Edit, Download, Trash2, Sparkles, Eye, EyeOff, Map } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTour } from '../../context/TourContext';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
@@ -11,9 +12,10 @@ import { AnimatePresence } from 'framer-motion';
 
 const Profile = () => {
     const navigate = useNavigate();
+    const { skipTour } = useTour();
 
 
-    const { user: authUser, fetchUser } = useAuth();
+    const { user: authUser, fetchUser, setUser } = useAuth();
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);
     const fileInputRef = useRef(null);
@@ -33,6 +35,9 @@ const Profile = () => {
         const saved = localStorage.getItem('mano_chatbot_visible');
         return saved === null ? true : saved === 'true';
     });
+    // Initialize directly from authUser (already fetched from /auth/me which now includes tour_dismissed)
+    // so the toggle reflects the DB value on first render — no flash, no stale state.
+    const [tourDismissed, setTourDismissed] = useState(() => !!(authUser?.tour_dismissed));
 
     const toggleChatbot = () => {
         setChatbotVisible(prev => {
@@ -49,6 +54,7 @@ const Profile = () => {
                 const res = await api.get('/profile/me');
                 if (res.data.ok) {
                     setProfileData(res.data.user);
+                    setTourDismissed(res.data.user.tour_dismissed || false);
                 }
             } catch (error) {
                 console.error('Error fetching profile:', error);
@@ -58,6 +64,41 @@ const Profile = () => {
         };
         getProfile();
     }, []);
+
+    const toggleTourDismissed = async () => {
+        const newStatus = !tourDismissed;
+        setTourDismissed(newStatus); // Optimistic local state update
+        // Immediately update AuthContext so TourContext's tourEnabled reacts right away
+        setUser(prev => prev ? { ...prev, tour_dismissed: newStatus } : prev);
+        // If disabling tours, also stop any currently active tour
+        if (newStatus) {
+            skipTour();
+        } else {
+            // Enabling tours: reset all pages_tour_seen so auto-tours fire fresh on every page
+            setUser(prev => prev ? { ...prev, pages_tour_seen: {} } : prev);
+        }
+        try {
+            if (newStatus) {
+                // Disabling: just save tour_dismissed = true
+                await api.patch('/profile/preferences', { tour_dismissed: true });
+            } else {
+                // Enabling: save tour_dismissed = false AND reset pages_tour_seen
+                await api.patch('/profile/preferences', {
+                    tour_dismissed: false,
+                    pages_tour_seen: {},
+                });
+            }
+            toast.success(newStatus ? 'App walkthrough disabled.' : 'App walkthrough enabled. Tours will start on your next page visit.');
+            // Re-fetch to sync with backend
+            await fetchUser();
+        } catch (error) {
+            console.error('Failed to update tour preferences', error);
+            toast.error('Failed to update preferences.');
+            // Revert both local state and context on failure
+            setTourDismissed(!newStatus);
+            setUser(prev => prev ? { ...prev, tour_dismissed: !newStatus } : prev);
+        }
+    };
 
     // Add cache-busting timestamp to avatar URL to force reload on update
     const getAvatarUrl = () => {
@@ -318,6 +359,37 @@ const Profile = () => {
                                 }`}
                             />
                         </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-6 pt-4 border-t border-slate-100 dark:border-github-dark-border">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-indigo-600 dark:text-indigo-400 shrink-0">
+                                <Map size={22} />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-slate-800 dark:text-github-dark-text text-sm">Auto-start Page Tours</p>
+                                <p className="text-xs text-slate-500 dark:text-github-dark-muted mt-0.5 max-w-sm leading-relaxed">
+                                    {!tourDismissed ? 'Enabled' : 'Disabled'}. When enabled, interactive walkthroughs will start automatically the first time you visit a page. You can still trigger them manually anytime using the Help icon.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                            <button
+                                onClick={toggleTourDismissed}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
+                                    !tourDismissed
+                                        ? 'bg-indigo-600'
+                                        : 'bg-slate-200 dark:bg-github-dark-border'
+                                }`}
+                                aria-label="Toggle App Walkthrough"
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                                        !tourDismissed ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                />
+                            </button>
+                        </div>
                     </div>
                 </div>
 

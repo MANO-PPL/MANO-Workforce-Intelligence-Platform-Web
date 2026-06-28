@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
 import MinimalSelect from '../../components/MinimalSelect';
 import { useAuth } from '../../context/AuthContext';
+import { useTour } from '../../context/TourContext';
 import {
     Users,
     TrendingUp,
@@ -34,9 +35,34 @@ import { adminService, adminCacheData } from '../../services/adminService';
 import { attendanceService, attendanceCacheData } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
 
+const PAGE_KEY = 'admin_dashboard';
+const TOUR_STEPS = [
+    {
+        targetId: 'admin-dashboard-stats-grid',
+        title: 'Daily Attendance Metrics',
+        description: 'These cards give you an instant overview of today\'s attendance: Present counts (checked-in vs total active), scheduled Absences, Late arrivals (past the grace period), and active or planned Leaves.',
+    },
+    {
+        targetId: 'admin-dashboard-quick-actions',
+        title: 'Quick Actions',
+        description: 'Fast access to your most common administrative tasks—adding employees, generating reports, and managing shifts.',
+    },
+    {
+        targetId: 'admin-dashboard-metrics',
+        title: 'Attendance Trends',
+        description: 'Visualizes historical attendance data over weekly or monthly ranges, making it easy to track long-term attendance rates.',
+    },
+    {
+        targetId: 'admin-dashboard-live',
+        title: 'Live Activity Feed',
+        description: 'Watch the pulse of your workforce in real-time as employees clock in and out across different locations.',
+    },
+];
+
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const { avatarTimestamp, user } = useAuth();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
 
     const targetDate = new Date().toISOString().split('T')[0];
     const defaultCacheKey = 'weekly_null_null';
@@ -165,6 +191,9 @@ const AdminDashboard = () => {
         }
     }, [activeRange, viewMode, selectedMonth, selectedYear, user]);
 
+    // Auto-start tour on first visit
+
+
     const fetchDashboardData = async (range, month = null, year = null, forceRefresh = false) => {
         const cacheKey = `${range}_${month || 'null'}_${year || 'null'}`;
 
@@ -238,7 +267,7 @@ const AdminDashboard = () => {
 
 
     return (
-        <DashboardLayout title="Dashboard">
+        <DashboardLayout title="Dashboard" tourPageKey={PAGE_KEY} tourSteps={TOUR_STEPS}>
             <div className="space-y-6 sm:space-y-8 animate-fade-in-up">
                 {/* Premium Greetings Card */}
                 <div className="pt-8 pb-8 px-8 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 dark:from-indigo-900/40 dark:via-indigo-950/40 dark:to-black rounded-2xl shadow-xl relative overflow-hidden">
@@ -324,7 +353,7 @@ const AdminDashboard = () => {
                 {['admin', 'hr'].includes(useAuth().user?.user_type) ? (
                     <>
                         {/* Quick Stats Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                        <div data-tour-id="admin-dashboard-stats-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                             <StatCard
                                 title="Present Today"
                                 value={stats.presentToday}
@@ -334,6 +363,7 @@ const AdminDashboard = () => {
                                 trendUp={trends.present?.startsWith('+')}
                                 loading={isLoading}
                                 period={viewMode === 'calendar' ? `${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'short' })} ${selectedYear}` : activeRange}
+                                tourId="dashboard-metric-present"
                             />
                             <StatCard
                                 title="Absent"
@@ -344,6 +374,7 @@ const AdminDashboard = () => {
                                 trendUp={trends.absent?.startsWith('-')}
                                 loading={isLoading}
                                 period={viewMode === 'calendar' ? `${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'short' })} ${selectedYear}` : activeRange}
+                                tourId="dashboard-metric-absent"
                             />
                             <StatCard
                                 title="Late Check-ins"
@@ -354,6 +385,7 @@ const AdminDashboard = () => {
                                 trendUp={trends.late?.startsWith('-')}
                                 loading={isLoading}
                                 period={viewMode === 'calendar' ? `${new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'short' })} ${selectedYear}` : activeRange}
+                                tourId="dashboard-metric-late"
                             />
                             <StatCard
                                 title="On Leave"
@@ -362,11 +394,12 @@ const AdminDashboard = () => {
                                 icon={<Calendar className="text-indigo-500" size={24} />}
                                 period="Monthly"
                                 loading={isLoading}
+                                tourId="dashboard-metric-leave"
                             />
                         </div>
 
                         {/* Quick Links - Only for Admin and HR */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div data-tour-id="admin-dashboard-quick-actions" className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="md:col-span-3">
                                 <h3 className="text-sm font-medium text-slate-500 dark:text-github-dark-muted uppercase tracking-wider mb-3">Quick Actions</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -380,7 +413,7 @@ const AdminDashboard = () => {
                         {/* Content Grid - Structured for parallel heights */}
                         <div className="space-y-8">
                             {/* 1. Overall Attendance Trends (Full Width) */}
-                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-6 transition-colors duration-300">
+                            <div data-tour-id="admin-dashboard-metrics" className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-6 transition-colors duration-300">
                                 <div className="flex items-center justify-between mb-6 gap-2">
                                         <div className="flex-shrink-0">
                                             <h3 className="font-semibold text-base sm:text-lg text-slate-800 dark:text-github-dark-text truncate max-w-[150px] sm:max-w-none">Overall Trends</h3>
@@ -544,7 +577,7 @@ const AdminDashboard = () => {
                             </div>
 
                             {/* Live Activity Feed (Now parallel with charts) */}
-                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-6 transition-colors duration-300 flex flex-col h-[480px]">
+                            <div data-tour-id="admin-dashboard-live" className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-6 transition-colors duration-300 flex flex-col h-[480px]">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="font-black text-sm uppercase tracking-[0.2em] text-slate-800 dark:text-github-dark-text">Active Feed</h3>
                                     <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-widest">
@@ -617,8 +650,8 @@ const AdminDashboard = () => {
     );
 };
 
-const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading }) => (
-    <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+const StatCard = ({ title, value, total, icon, trend, trendUp, period, loading, tourId }) => (
+    <div data-tour-id={tourId} className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
         {loading ? (
             <div className="animate-pulse space-y-4">
                 <div className="flex justify-between items-start">

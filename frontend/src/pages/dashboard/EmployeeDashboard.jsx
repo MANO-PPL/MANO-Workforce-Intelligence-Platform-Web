@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import employeeService from '../../services/employeeService';
 import { parsePolicy } from '../../utils/weekOffPolicy';
+import { useTour } from '../../context/TourContext';
 import {
     Calendar,
     Clock,
@@ -21,9 +22,13 @@ import {
 import { attendanceService, attendanceCacheData } from '../../services/attendanceService';
 import { toast } from 'react-toastify';
 
+// ─── Per-Page Tour Steps ───────────────────────────────────────────────────
+const PAGE_KEY = 'emp_dashboard';
+
 const EmployeeDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
 
     const todayDate = new Date();
     const monthKey = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}`;
@@ -92,9 +97,42 @@ const EmployeeDashboard = () => {
         }
     })();
 
+    // Memoize tour steps to dynamically omit the missed punch warning if there isn't one
+    const tourSteps = React.useMemo(() => {
+        const steps = [
+            {
+                targetId: 'emp-dashboard-attendance-btn',
+                title: 'My Attendance',
+                description: 'Click here to go to the clock-in screen. Use this every day at the start and end of your workday to record your session.',
+            },
+            {
+                targetId: 'emp-dashboard-holiday-btn',
+                title: 'Holiday List',
+                description: 'View all upcoming public holidays your organization has scheduled. No action needed — these are automatic days off.',
+            },
+            {
+                targetId: 'emp-dashboard-apply-leave-btn',
+                title: 'Apply Leave',
+                description: 'Submit a time-off request here. Your manager is notified immediately after submission and will approve or reject it.',
+            },
+        ];
+
+        if (missedPunchWarning) {
+            steps.push({
+                targetId: 'emp-dashboard-missed-punch',
+                title: 'Missed Time Out Warning',
+                description: 'This amber banner means you forgot to clock out on a past day. Click Fix Now to submit a correction before it is marked as absent.',
+            });
+        }
+
+        return steps;
+    }, [missedPunchWarning]);
+
     useEffect(() => {
         fetchDashboardData();
     }, []);
+
+
 
     const fetchDashboardData = async () => {
         try {
@@ -224,7 +262,11 @@ const EmployeeDashboard = () => {
     };
 
     return (
-        <DashboardLayout title="Employee Dashboard">
+        <DashboardLayout
+            title="Employee Dashboard"
+            tourPageKey={PAGE_KEY}
+            tourSteps={tourSteps}
+        >
             <div className="space-y-8 animate-fade-in-up">
                 {/* Welcome Section */}
                 <div className="pt-8 pb-8 px-8 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 dark:from-indigo-900/40 dark:via-indigo-950/40 dark:to-black rounded-2xl shadow-xl relative overflow-hidden">
@@ -259,6 +301,7 @@ const EmployeeDashboard = () => {
                         <div className="flex flex-wrap gap-4 mt-2">
                             <button
                                 onClick={() => navigate('/attendance')}
+                                data-tour-id="emp-dashboard-attendance-btn"
                                 className="px-6 py-2.5 bg-white text-indigo-600 font-bold rounded-xl shadow-md hover:bg-indigo-50 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center gap-2 border border-transparent"
                             >
                                 <Clock size={18} className="text-indigo-600" />
@@ -266,6 +309,7 @@ const EmployeeDashboard = () => {
                             </button>
                             <button
                                 onClick={() => navigate('/holidays')}
+                                data-tour-id="emp-dashboard-holiday-btn"
                                 className="px-6 py-2.5 bg-indigo-555/40 border border-indigo-300/30 text-white font-semibold rounded-xl hover:bg-indigo-500/60 transition-all flex items-center gap-2 backdrop-blur-sm"
                             >
                                 <Calendar size={18} />
@@ -273,6 +317,7 @@ const EmployeeDashboard = () => {
                             </button>
                             <button
                                 onClick={() => navigate('/apply-leave')}
+                                data-tour-id="emp-dashboard-apply-leave-btn"
                                 className="px-6 py-2.5 bg-indigo-555/40 border border-indigo-300/30 text-white font-semibold rounded-xl hover:bg-indigo-500/60 transition-all flex items-center gap-2 backdrop-blur-sm"
                             >
                                 <Coffee size={18} />
@@ -383,7 +428,7 @@ const EmployeeDashboard = () => {
 
                 {/* Missed Time Out Banner */}
                 {missedPunchWarning && (
-                    <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-2xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between animate-fade-in shadow-sm">
+                    <div data-tour-id="emp-dashboard-missed-punch" className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-2xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between animate-fade-in shadow-sm">
                         <div className="flex items-start gap-3">
                             <div className="p-3 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-500 rounded-xl mt-0.5 shrink-0">
                                 <AlertCircle size={20} />

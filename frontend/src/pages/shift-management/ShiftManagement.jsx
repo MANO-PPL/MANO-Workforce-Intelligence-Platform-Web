@@ -9,11 +9,38 @@ import {
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { useTour } from '../../context/TourContext';
 import { buildPolicy, parsePolicy } from '../../utils/weekOffPolicy';
+
+const PAGE_KEY = 'admin_shifts';
+const TOUR_STEPS = [
+    {
+        targetId: 'shift-mgmt-list',
+        title: 'Shift Master Directory',
+        description: 'View, search, and select from your organization\'s configured work shifts. You can see active shifts, assigned employees, and durational summaries at a glance.',
+    },
+    {
+        targetId: 'shift-mgmt-add',
+        title: 'Create a Shift',
+        description: 'Click this button to define a new shift logic block, setting custom start and end times, overtime thresholds, and grace periods.',
+    },
+    {
+        targetId: 'shift-detail-pane',
+        title: 'Shift Details & Policies',
+        description: 'This panel displays the comprehensive settings for the selected shift. Here you can review active work timings, grace buffers, lock/correction deadlines, weekly off-policies, and identity or location verification rules.',
+    },
+    {
+        targetId: 'shift-mgmt-users',
+        title: 'Employee Assignments',
+        description: 'View and manage employee shift assignments. You can search for specific staff members and bulk-assign them to this shift or override schedules individually.',
+    },
+];
+
 
 const ShiftManagement = () => {
     const location = useLocation();
     const { avatarTimestamp } = useAuth();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
 
     // ── SHIFT STATE ─────────────────────────────────────────────────────────
     const [shifts, setShifts] = useState([]);
@@ -95,6 +122,8 @@ const ShiftManagement = () => {
         loadShifts();
         loadUsers();
     }, [loadShifts, loadUsers]);
+
+
 
     // Auto-calc OT threshold
     useEffect(() => {
@@ -273,15 +302,16 @@ const ShiftManagement = () => {
     };
 
     return (
-        <DashboardLayout title="Shift Management" noPadding={true}>
+        <DashboardLayout title="Shift Management" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={TOUR_STEPS}>
             <div className="flex h-[calc(100vh-64px)] p-3 gap-3 animate-in fade-in duration-300">
 
                 {/* LEFT: Shift List */}
-                <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+                <div data-tour-id="shift-mgmt-list" className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
                     <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/50 space-y-3">
                         <div className="flex justify-between items-center">
                             <h3 className="font-semibold text-slate-800 dark:text-github-dark-text">Shifts</h3>
                             <button
+                                data-tour-id="shift-mgmt-add"
                                 onClick={() => { setEditingShift(null); setShowShiftForm(true); }}
                                 className="p-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
                                 title="Create new shift"
@@ -315,12 +345,13 @@ const ShiftManagement = () => {
                                 >+ Create first shift</button>
                             </div>
                         )}
-                        {filteredShifts.map(shift => {
+                        {filteredShifts.map((shift, idx) => {
                             const selectedUser = selectedUserId ? users.find(u => u.user_id === selectedUserId) : null;
                             const isUserAssignedShift = selectedUser && selectedUser.shift_id === shift.id;
                             return (
                                 <div
                                     key={shift.id}
+                                    data-tour-id={idx === 0 ? "shift-management-card" : undefined}
                                     onClick={() => { setSelectedShift(shift); setShowShiftForm(false); }}
                                     className={`p-3 rounded-lg border transition-all cursor-pointer group ${selectedShift?.id === shift.id
                                         ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-900/50 shadow-sm'
@@ -630,7 +661,7 @@ const ShiftManagement = () => {
                         </>
                     ) : (
                         /* ── Shift Detail View ── */
-                        <>
+                        <div data-tour-id="shift-detail-pane" className="flex flex-col h-full overflow-hidden">
                             <div className="p-5 border-b border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
@@ -662,7 +693,10 @@ const ShiftManagement = () => {
                                             { label: 'Corr. Window', value: `${selectedShift.correctionDeadline || 2}d`, icon: <FileClock size={14} className="text-rose-500" />, bg: 'rose' },
                                             { label: 'Duration', value: calculateDuration(selectedShift.start, selectedShift.end), icon: <Clock size={14} className="text-teal-500" />, bg: 'teal' },
                                         ].map(card => (
-                                            <div key={card.label} className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border/50 rounded-xl p-4">
+                                            <div
+                                                key={card.label}
+                                                className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border/50 rounded-xl p-4"
+                                            >
                                                 <div className="flex items-center gap-1.5 mb-1">{card.icon}<p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">{card.label}</p></div>
                                                 <p className="text-base font-bold text-slate-800 dark:text-github-dark-text font-mono">{card.value}</p>
                                             </div>
@@ -678,51 +712,36 @@ const ShiftManagement = () => {
                                             
                                             return (
                                                 <div className="w-full">
-                                                    <div className="flex items-center gap-1.5 mb-3"><Calendar size={14} className="text-blue-500" /><p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Working Days</p></div>
-                                                    <div className="flex flex-wrap gap-1.5 mb-4">
-                                                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
-                                                            const isWork = activeDays.includes(day);
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <Calendar size={15} className="text-indigo-500" />
+                                                        <h4 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Weekly Schedule & Holidays</h4>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2 mb-4">
+                                                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => {
+                                                            const isWork = activeDays.includes(d);
+                                                            const isHalf = parsedRules.halfDayRules.some(r => r.day === d);
                                                             return (
-                                                                <span key={day} className={`text-[10px] px-2 py-0.5 rounded ${isWork ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 line-through'}`}>
-                                                                    {day}
-                                                                </span>
-                                                            )
+                                                                <div key={d} className={`px-3 py-2 rounded-xl border flex flex-col items-center min-w-[56px] transition-all ${
+                                                                    isWork 
+                                                                        ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-400' 
+                                                                        : 'bg-slate-50 dark:bg-slate-800/30 border-slate-150 dark:border-slate-800 text-slate-400 dark:text-slate-600'
+                                                                }`}>
+                                                                    <span className="text-xs font-bold">{d}</span>
+                                                                    <span className="text-[8px] font-black uppercase tracking-widest mt-1">
+                                                                        {isHalf ? 'Half' : isWork ? 'Work' : 'Off'}
+                                                                    </span>
+                                                                </div>
+                                                            );
                                                         })}
                                                     </div>
 
-                                                    {(parsedRules.weekOffRules.length > 0 || parsedRules.halfDayRules.length > 0) && (
-                                                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700/50 space-y-3">
-                                                            {parsedRules.weekOffRules.length > 0 && (
-                                                                <div>
-                                                                    <p className="text-[10px] font-bold text-amber-600 dark:text-amber-500 mb-1.5 flex items-center gap-1"><AlertTriangle size={10} /> ALTERNATE FULL DAYS OFF</p>
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        {parsedRules.weekOffRules.map((rule, idx) => (
-                                                                            <span key={idx} className="text-[10px] px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-900/50">
-                                                                                {rule.day} ({rule.weeks.map(w => `${w}${w === 1 ? 'st' : w === 2 ? 'nd' : w === 3 ? 'rd' : 'th'}`).join(', ')})
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            {parsedRules.halfDayRules.length > 0 && (
-                                                                <div>
-                                                                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-500 mb-1.5 flex items-center gap-1"><Clock size={10} /> HALF DAYS</p>
-                                                                    <div className="flex flex-col gap-2">
-                                                                        {parsedRules.halfDayRules.map((rule, idx) => (
-                                                                            <div key={idx} className="flex items-center gap-2">
-                                                                                <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-900/50">
-                                                                                    {rule.day} ({rule.weeks.map(w => `${w}${w === 1 ? 'st' : w === 2 ? 'nd' : w === 3 ? 'rd' : 'th'}`).join(', ')})
-                                                                                </span>
-                                                                                {rule.timing && rule.timing.start_time && (
-                                                                                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                                                                                        {rule.timing.start_time.substring(0,5)} → {rule.timing.end_time.substring(0,5)}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                    {/* Alternate Weekoffs Info */}
+                                                    {parsedRules.weekOffRules.length > 0 && (
+                                                        <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-xl p-3 flex gap-2 items-center">
+                                                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                                            <p className="text-xs text-slate-600 dark:text-github-dark-muted font-medium">
+                                                                Custom Week Offs: {parsedRules.weekOffRules.map(r => `${r.weeks.map(w => w === 1 ? '1st' : w === 2 ? '2nd' : w === 3 ? '3rd' : '4th').join('/')} ${r.day}s`).join(', ')}
+                                                            </p>
                                                         </div>
                                                     )}
                                                 </div>
@@ -730,14 +749,14 @@ const ShiftManagement = () => {
                                         })()}
                                     </div>
 
-                                    {/* Policy Rules */}
-                                    <div className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-xl p-5 space-y-3">
-                                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                            <Settings size={15} className="text-slate-400" /> Attendance Policies
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Check-In Requirements</p>
+                                    {/* Policies Display */}
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div data-tour-id="shift-detail-policies" className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-xl p-5 space-y-3">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <MapPin size={16} className="text-indigo-500" />
+                                                <h4 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Punch In Rules</h4>
+                                            </div>
+                                            <div className="space-y-2">
                                                 {[
                                                     { label: 'GPS Required', val: selectedShift.policy_rules?.entry_requirements?.geofence },
                                                     { label: 'Selfie Required', val: selectedShift.policy_rules?.entry_requirements?.selfie },
@@ -750,8 +769,14 @@ const ShiftManagement = () => {
                                                     </div>
                                                 ))}
                                             </div>
-                                            <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Check-Out Requirements</p>
+                                        </div>
+
+                                        <div className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-xl p-5 space-y-3">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <MapPin size={16} className="text-indigo-500" />
+                                                <h4 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Punch Out Rules</h4>
+                                            </div>
+                                            <div className="space-y-2">
                                                 {[
                                                     { label: 'GPS Required', val: selectedShift.policy_rules?.exit_requirements?.geofence },
                                                     { label: 'Selfie Required', val: selectedShift.policy_rules?.exit_requirements?.selfie },
@@ -765,25 +790,26 @@ const ShiftManagement = () => {
                                                 ))}
                                             </div>
                                         </div>
-                                        {selectedShift.overtime && (
-                                            <div className="pt-3 border-t border-slate-200 dark:border-github-dark-border/50 flex items-center gap-2">
-                                                <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600"><Zap size={13} /></div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">Overtime enabled after {selectedShift.otThreshold}h</span>
-                                                    {selectedShift.otBuffer > 0 && (
-                                                        <span className="text-[10px] text-slate-500">Buffer grace period: {selectedShift.otBuffer}h ({selectedShift.otBuffer * 60}m)</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
+                                    
+                                    {selectedShift.overtime && (
+                                        <div className="p-4 border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl flex items-center gap-3">
+                                            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-indigo-600 dark:text-indigo-400"><Zap size={16} /></div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm text-slate-700 dark:text-slate-300 font-bold">Overtime enabled after {selectedShift.otThreshold}h</span>
+                                                {selectedShift.otBuffer > 0 && (
+                                                    <span className="text-[10px] text-slate-500">Buffer grace period: {selectedShift.otBuffer}h ({selectedShift.otBuffer * 60}m)</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </>
+                        </div>
                         )}
                     </div>
 
                 {/* RIGHT: User Assignment */}
-                <div className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
+                <div data-tour-id="shift-mgmt-users" className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
                     <div className="p-4 border-b border-slate-200 dark:border-github-dark-border bg-slate-50 dark:bg-github-dark-subtle/50 space-y-3">
                         <div className="flex items-center gap-2">
                             <Users size={16} className="text-slate-500" />

@@ -60,3 +60,18 @@ export const getMyProfile = catchAsync(async (req, res) => {
         }
     });
 });
+
+/**
+ * PATCH /profile/preferences - Update user preferences
+ */
+export const updatePreferences = catchAsync(async (req, res) => {
+    const { user_id } = req.user;
+    const updates = req.body;
+
+    await profileService.updatePreferences(user_id, updates);
+
+    res.json({
+        ok: true,
+        message: 'Preferences updated successfully'
+    });
+});

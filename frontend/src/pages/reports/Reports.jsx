@@ -36,6 +36,9 @@ import { adminService } from '../../services/adminService';
 import { toast } from 'react-toastify';
 import DatePicker from '../../components/DatePicker';
 import MonthPicker from '../../components/MonthPicker';
+import { useTour } from '../../context/TourContext';
+
+const PAGE_KEY = 'admin_reports';
 
 const getAlignmentClass = (colHeader) => {
     if (!colHeader) return 'center';
@@ -423,6 +426,7 @@ const getStatusLabel = (status) => {
 const Reports = () => {
 
     const navigate = useNavigate();
+    const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
 
     const [attendanceMonth, setAttendanceMonth] = useState(new Date().toISOString().slice(0, 7));
     const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
@@ -500,6 +504,27 @@ const Reports = () => {
     const tableColsDropdownRef = React.useRef(null);
     const tableDeptDropdownRef = React.useRef(null);
     const tableDesgDropdownRef = React.useRef(null);
+
+    const tourSteps = React.useMemo(() => [
+        {
+            targetId: 'reports-attendance-view-tab',
+            title: 'Attendance View',
+            description: 'Switch to the Attendance View to display an interactive matrix showing a visual summary of daily attendance, leaves, and shift statuses.',
+            action: () => setPreviewMode('card')
+        },
+        {
+            targetId: 'reports-filters',
+            title: 'Data Filters',
+            description: 'Filter your report by date range, department, and specific employees.',
+            action: () => setPreviewMode('card')
+        },
+        {
+            targetId: 'reports-full-report-tab',
+            title: 'Full Report',
+            description: 'Switch to the Full Report tab to configure, generate, and export detailed reports for all activities, including Attendance, Daily Activity Reports (DAR), and Leaves in CSV or Excel format.',
+            action: () => setPreviewMode('table')
+        }
+    ], [setPreviewMode]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -621,6 +646,8 @@ const Reports = () => {
         };
         fetchEmployeesAndDepts();
     }, []);
+
+
 
     React.useEffect(() => {
         window.dispatchEvent(new CustomEvent('mano-active-tab', {
@@ -1038,20 +1065,21 @@ const Reports = () => {
     }, [previewData.cardRecords]);
 
     return (
-        <DashboardLayout title="Reports & Exports" noPadding={true}>
+        <DashboardLayout title="Reports & Exports" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={tourSteps}>
             <div className="min-h-[calc(100vh-64px)] p-4 flex flex-col space-y-4">
                 {/* Switcher & Parallel Filters Row (Tabs are kept below the header) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
                     {/* View Switcher Tabs */}
                     <div className="flex w-fit items-center gap-3 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl shrink-0">
                         {[
-                            { id: 'card', label: 'Attendance View', icon: TrendingUp },
-                            { id: 'table', label: 'Full Report', icon: Table }
+                            { id: 'card', label: 'Attendance View', icon: TrendingUp, tourId: 'reports-attendance-view-tab' },
+                            { id: 'table', label: 'Full Report', icon: Table, tourId: 'reports-full-report-tab' }
                         ].map((tab) => {
                             const isSelected = previewMode === tab.id;
                             return (
                                 <button
                                     key={tab.id}
+                                    data-tour-id={tab.tourId}
                                     onClick={() => setPreviewMode(tab.id)}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${isSelected
                                             ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
@@ -1067,7 +1095,7 @@ const Reports = () => {
 
                     {/* Parallel Filters: Only visible in Attendance View tab */}
                     {previewMode === 'card' && (
-                        <div className="flex flex-wrap items-center gap-3 animate-none">
+                        <div data-tour-id="reports-filters" className="flex flex-wrap items-center gap-3 animate-none">
                             {/* Month / Week / Date Pickers */}
                             {attendanceReportType !== 'employee_master' && (
                                 <div className="flex items-center gap-2">
@@ -1340,7 +1368,7 @@ const Reports = () => {
 
                 {/* Top Control Bar: Generate Report (Only shown on Full Report view) */}
                 {previewMode === 'table' && (
-                    <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-4 space-y-4 shrink-0">
+                    <div data-tour-id="reports-filters" className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border p-4 space-y-4 shrink-0">
                         {/* Row 1: Parameters Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 items-end">
                             {/* Custom Report Type Dropdown */}
@@ -1755,7 +1783,7 @@ const Reports = () => {
                             </div>
 
                             {/* Format Switcher & Download Button */}
-                            <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto justify-end">
+                            <div data-tour-id="reports-actions" className="flex flex-wrap items-center gap-4 w-full sm:w-auto justify-end">
                                 {/* File Format Tabs Selector */}
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-github-dark-muted">Format:</span>

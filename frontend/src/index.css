@@ -378,4 +378,9 @@ html.platform-zoomed .space-y-8 > * + * {
     display: none !important;
 }
 
+/* --- Tour Overrides --- */
+body.tour-active .overflow-y-auto {
+    padding-bottom: 350px !important;
+}
+
 

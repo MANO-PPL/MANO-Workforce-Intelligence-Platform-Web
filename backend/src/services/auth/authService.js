@@ -264,6 +264,7 @@ export const getCurrentUser = async (userId, userType) => {
         .where('users.user_id', userId)
         .select(
             'users.user_code', 'users.user_name', 'users.email', 'users.user_type', 'users.org_id', 'users.profile_image_url', 'users.force_password_change',
+            'users.tour_dismissed', 'users.pages_tour_seen',
             'organizations.max_users as org_max_users',
             'organizations.status as org_status',
             'organizations.subscription_expiry as org_subscription_expiry',
@@ -286,6 +287,17 @@ export const getCurrentUser = async (userId, userType) => {
 
     const orgStatus = isOrgExpired ? 'inactive' : user.org_status;
 
+    // Parse pages_tour_seen from JSON string to object (stored as JSON in DB)
+    let pagesTourSeen = {};
+    if (user.pages_tour_seen) {
+        try {
+            pagesTourSeen = typeof user.pages_tour_seen === 'string'
+                ? JSON.parse(user.pages_tour_seen)
+                : user.pages_tour_seen;
+        } catch {
+            pagesTourSeen = {};
+        }
+    }
     return {
         user_code: user.user_code,
         user_name: user.user_name,
@@ -297,7 +309,9 @@ export const getCurrentUser = async (userId, userType) => {
         user_id: userId,
         force_password_change: user.force_password_change === 1 || user.force_password_change === '1' || user.force_password_change === true || user.force_password_change === 'true',
         isOrgExpired: isOrgExpired,
-        org_status: orgStatus
+        org_status: orgStatus,
+        tour_dismissed: user.tour_dismissed === 1 || user.tour_dismissed === '1' || user.tour_dismissed === true || user.tour_dismissed === 'true',
+        pages_tour_seen: pagesTourSeen,
     };
 };
 

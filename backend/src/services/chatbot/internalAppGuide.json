@@ -1,7 +1,12 @@
 [
   {
     "route": "/dashboard",
-    "roles": ["employee", "admin", "hr", "super_admin"],
+    "roles": [
+      "employee",
+      "admin",
+      "hr",
+      "super_admin"
+    ],
     "moduleName": "Dashboard",
     "description": "The dashboard provides a real-time overview of attendance statistics, trends, and recent logs.",
     "roleDetails": {
@@ -24,11 +29,19 @@
       "What stats are visible on my dashboard?",
       "What is the Active Feed?",
       "How do I use Quick Actions?"
-    ]
+    ],
+    "tourInstruction": {
+      "admin": "Click on any of the Quick Action cards to instantly add employees, manage shifts, or generate reports directly from the dashboard.",
+      "hr": "Click on any of the Quick Action cards to instantly add employees, manage shifts, or generate reports directly from the dashboard."
+    }
   },
   {
     "route": "/attendance",
-    "roles": ["employee", "admin", "hr"],
+    "roles": [
+      "employee",
+      "admin",
+      "hr"
+    ],
     "moduleName": "Attendance & Corrections",
     "description": "Clock in/out in real-time or submit historical attendance corrections to adjust past data.",
     "roleDetails": {
@@ -63,11 +76,18 @@
       "What are the Correction Types?",
       "How do I request an Attendance Correction?",
       "Is there a deadline to submit corrections?"
-    ]
+    ],
+    "tourInstruction": {
+      "employee": "Click here to clock in or out for the day. Make sure your camera is uncovered for face verification."
+    }
   },
   {
     "route": "/holidays",
-    "roles": ["employee", "admin", "hr"],
+    "roles": [
+      "employee",
+      "admin",
+      "hr"
+    ],
     "moduleName": "Holidays and Leaves",
     "description": "This module handles public holidays and personal leave applications.",
     "roleDetails": {
@@ -97,7 +117,11 @@
   },
   {
     "route": "/apply-leave",
-    "roles": ["employee", "admin", "hr"],
+    "roles": [
+      "employee",
+      "admin",
+      "hr"
+    ],
     "moduleName": "Apply Leave",
     "description": "This module is used to submit a new leave request.",
     "roleDetails": {
@@ -114,11 +138,18 @@
     "suggestions": [
       "How do I apply for a leave?",
       "What types of leaves are available?"
-    ]
+    ],
+    "tourInstruction": {
+      "employee": "Click 'Apply Leave' to submit time-off requests. Check your remaining balance before requesting Casual or Sick leave."
+    }
   },
   {
     "route": "/daily-activity",
-    "roles": ["employee", "admin", "hr"],
+    "roles": [
+      "employee",
+      "admin",
+      "hr"
+    ],
     "moduleName": "Daily Activity Report (DAR)",
     "description": "This module is used to track and report daily tasks, meetings, and hours spent on various activities.",
     "roleDetails": {
@@ -140,11 +171,19 @@
       "How do I add a daily activity?",
       "How do I view my daily logs?",
       "What are AI DAR insights?"
-    ]
+    ],
+    "tourInstruction": {
+      "employee": "Fill out this form to log your tasks at the end of the day. Be specific about your workload so managers can track project progress.",
+      "admin": "Scroll through the DAR feed to review what your team accomplished today. Use this to ensure everyone is logging accurate hours against their assigned tasks.",
+      "hr": "Scroll through the DAR feed to review what your team accomplished today. Use this to ensure everyone is logging accurate hours against their assigned tasks."
+    }
   },
   {
     "route": "/attendance-monitoring",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "Live Attendance Monitoring",
     "description": "A live interface tracking employee check-ins as they happen.",
     "roleDetails": {
@@ -160,11 +199,18 @@
     "suggestions": [
       "What does Live Attendance show?",
       "How do I track employee locations?"
-    ]
+    ],
+    "tourInstruction": {
+      "admin": "Watch this grid during shift start times to monitor clock-ins as they happen. Click any employee's card to view their exact GPS punch location.",
+      "hr": "Watch this grid during shift start times to monitor clock-ins as they happen. Click any employee's card to view their exact GPS punch location."
+    }
   },
   {
     "route": "/geofencing",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "Geofencing Management",
     "description": "Configure geographic boundaries for employee check-ins.",
     "roleDetails": {
@@ -189,7 +235,10 @@
   },
   {
     "route": "/shift-management",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "Shift Management",
     "description": "Set up shifts, schedules, and grace periods for the workforce.",
     "roleDetails": {
@@ -214,11 +263,18 @@
       "How do I create a new shift?",
       "What is the Grace Period?",
       "How do I assign shifts to employees?"
-    ]
+    ],
+    "tourInstruction": {
+      "admin": "Click the 'Edit' button on a shift card to adjust its start times, grace periods, or late mark thresholds.",
+      "hr": "Click the 'Edit' button on a shift card to adjust its start times, grace periods, or late mark thresholds."
+    }
   },
   {
     "route": "/reports",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "Reports & Analytics",
     "description": "Export and analyze workforce attendance logs.",
     "roleDetails": {
@@ -238,7 +294,12 @@
   },
   {
     "route": "/profile",
-    "roles": ["employee", "admin", "hr", "super_admin"],
+    "roles": [
+      "employee",
+      "admin",
+      "hr",
+      "super_admin"
+    ],
     "moduleName": "User Profile",
     "description": "Manage individual user profiles, contact details, and account security.",
     "roleDetails": {
@@ -260,7 +321,10 @@
   },
   {
     "route": "/employees",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "Employees Directory",
     "description": "Manage the list of registered employees and upload rosters.",
     "roleDetails": {
@@ -284,7 +348,9 @@
   },
   {
     "route": "/organizations",
-    "roles": ["super_admin"],
+    "roles": [
+      "super_admin"
+    ],
     "moduleName": "Organizations Directory",
     "description": "Super admin dashboard to manage registered clients and tenants.",
     "roleDetails": {
@@ -303,7 +369,9 @@
   },
   {
     "route": "/super-admin/alerts",
-    "roles": ["super_admin"],
+    "roles": [
+      "super_admin"
+    ],
     "moduleName": "Security Alerts",
     "description": "Track system events, failed login notifications, and potential threats.",
     "roleDetails": {
@@ -317,7 +385,9 @@
   },
   {
     "route": "/super-admin/logs",
-    "roles": ["super_admin"],
+    "roles": [
+      "super_admin"
+    ],
     "moduleName": "System Logs",
     "description": "Trace API requests and system events across the server.",
     "roleDetails": {
@@ -331,7 +401,10 @@
   },
   {
     "route": "/recruitment",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "Careers & Recruitment",
     "description": "Manage job openings, view the recruitment pipeline, and rank candidate resumes using AI.",
     "roleDetails": {
@@ -356,7 +429,10 @@
   },
   {
     "route": "/documents",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "HR Document Studio",
     "description": "Compile formal corporate documents and letters including Offer Letters, Appraisals, Contracts, and Policies.",
     "roleDetails": {
@@ -381,7 +457,9 @@
   },
   {
     "route": "/subscription",
-    "roles": ["admin"],
+    "roles": [
+      "admin"
+    ],
     "moduleName": "Subscription Billing",
     "description": "Select a pricing tier, scale seats, and activate subscriptions.",
     "roleDetails": {
@@ -405,7 +483,12 @@
   },
   {
     "route": "/collaboration",
-    "roles": ["employee", "admin", "hr", "super_admin"],
+    "roles": [
+      "employee",
+      "admin",
+      "hr",
+      "super_admin"
+    ],
     "moduleName": "Chat & Collaboration",
     "description": "Send direct messages or chat in group channels, share files, and collaborate in real-time.",
     "roleDetails": {
@@ -436,7 +519,10 @@
   },
   {
     "route": "/employee-master",
-    "roles": ["admin", "hr"],
+    "roles": [
+      "admin",
+      "hr"
+    ],
     "moduleName": "Employee Master & Onboarding",
     "description": "Comprehensive employee profiles, onboarding checklist tracker, digital document lockers, and KPI performance cycles.",
     "roleDetails": {

@@ -13,7 +13,10 @@ import DARAdmin from './DARAdmin';
 import { Plus, ChevronDown, Calendar, CheckSquare, Video, Shield } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTour } from '../../context/TourContext';
 
+const EMPLOYEE_PAGE_KEY = 'employee_daily_activity';
+const ADMIN_PAGE_KEY = 'admin_dar';
 
 const getTodayLocalDateString = () => {
     const d = new Date();
@@ -36,6 +39,7 @@ const getLocalDateString = (dateInput) => {
 
 const DailyActivity = () => {
     const [activeMainTab, setActiveMainTab] = useState('daily_activity'); // 'daily_activity' | 'admin'
+    const [adminTab, setAdminTab] = useState('insights');
     const [selectedDate, setSelectedDate] = useState(getTodayLocalDateString());
     const [daysToShow, setDaysToShow] = useState(1);
     const [tasks, setTasks] = useState([]);
@@ -43,6 +47,75 @@ const DailyActivity = () => {
     const [holidays, setHolidays] = useState([]); // Store holidays
     const [loading, setLoading] = useState(true);
     const [taskDrafts, setTaskDrafts] = useState({}); // Cache for unsaved tasks by date
+    const { startTour, completeTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
+    const { user } = useAuth();
+
+    const ADMIN_TOUR_STEPS = React.useMemo(() => [
+        {
+            targetId: 'dar-admin-tabs',
+            title: 'Admin Controls',
+            description: 'Switch between Insights, Requests, and Master Data.',
+            action: () => {
+                setAdminTab('insights');
+            }
+        },
+        {
+            targetId: 'dar-admin-insights-tab-content',
+            title: 'Insights Dashboard',
+            description: 'This is the Insights dashboard. Here you can monitor overall team productivity, task workload distribution, department-wise activity focus, and employee report submission consistency.',
+            action: () => {
+                setAdminTab('insights');
+            }
+        },
+        {
+            targetId: 'dar-admin-requests-tab-content',
+            title: 'Requests & Approvals',
+            description: 'This is the Requests queue. As an administrator, you can review, approve, or reject employee requests for late daily activity report submissions or corrections.',
+            action: () => {
+                setAdminTab('requests');
+            }
+        },
+        {
+            targetId: 'dar-admin-master-data-tab-content',
+            title: 'Master Data Config & Audit',
+            description: 'This is the Master Data tab. Here you can configure system-wide activity categories, view raw unedited audit timelines, and manage historical daily activity report submissions.',
+            action: () => {
+                setAdminTab('data');
+            }
+        }
+    ], [setAdminTab]);
+
+    const EMPLOYEE_TOUR_STEPS = React.useMemo(() => {
+        const steps = [
+            { targetId: 'dar-entry-form', title: 'Quick Action', description: 'Log a new daily task or schedule a meeting.' },
+            { targetId: 'dar-timeline', title: 'Activity Timeline', description: 'View your tasks throughout the day on the timeline.' },
+            {
+                targetId: 'dar-task-list',
+                title: 'Task List',
+                description: 'Manage your tasks, change their status, or add comments.'
+            }
+        ];
+
+        // If the user has admin or hr role, they have access to the admin tab.
+        // We chain the Admin Panel tour by defining onNext on the final step.
+        if (['admin', 'hr'].includes(user?.user_type)) {
+            steps[2].onNext = async () => {
+                await completeTour(EMPLOYEE_PAGE_KEY);
+                setActiveMainTab('admin');
+                setAdminTab('insights');
+                setTimeout(() => {
+                    startTour(ADMIN_PAGE_KEY, ADMIN_TOUR_STEPS);
+                }, 200);
+            };
+        }
+
+        return steps;
+    }, [user, completeTour, startTour, ADMIN_TOUR_STEPS]);
+
+    const currentPageKey = activeMainTab === 'admin' ? ADMIN_PAGE_KEY : EMPLOYEE_PAGE_KEY;
+    const currentTourSteps = activeMainTab === 'admin' ? ADMIN_TOUR_STEPS : EMPLOYEE_TOUR_STEPS;
+
+
 
 
     // Modal State
@@ -239,19 +312,20 @@ const DailyActivity = () => {
     };
 
     // --- SHIFT & TIMELINE RANGE LOGIC ---
-    const { user } = useAuth(); // Get current user
+    // user is destructured at the top of the component
     const [timelineRange, setTimelineRange] = useState({ start: 0, end: 24 }); // 24-hour timeline range
     const [showActions, setShowActions] = useState(false);
 
 
     return (
-        <DashboardLayout title="Daily Activity Report" noPadding={true}>
+        <DashboardLayout title="Daily Activity Report" noPadding={true} tourPageKey={currentPageKey} tourSteps={currentTourSteps}>
             <div className="h-[calc(100vh-64px)] p-4 flex flex-col overflow-hidden space-y-4 dar-context">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
                 {/* Admin Tabs */}
                 {['admin', 'hr'].includes(user?.user_type) ? (
                     <div className="flex w-fit items-center gap-3 p-1.5 bg-[#f6f8fa] dark:bg-[#161b22] border border-[#d0d7de] dark:border-[#30363d] rounded-xl shrink-0">
                         <button
+                            data-tour-id="dar-main-tab-activity"
                             onClick={() => setActiveMainTab('daily_activity')}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeMainTab === 'daily_activity'
                                 ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
@@ -262,6 +336,7 @@ const DailyActivity = () => {
                             <span className="leading-none">Daily Activity</span>
                         </button>
                         <button
+                            data-tour-id="dar-main-tab-admin"
                             onClick={() => setActiveMainTab('admin')}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${activeMainTab === 'admin'
                                 ? 'bg-white dark:bg-slate-700 text-[#0969da] dark:text-[#f0f6fc] shadow-sm'
@@ -293,6 +368,7 @@ const DailyActivity = () => {
                         <div className="relative">
                             <button
                                 onClick={() => setShowActions(!showActions)}
+                                data-tour-id="dar-entry-form"
                                 className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95"
                             >
                                 <Plus size={18} />
@@ -337,7 +413,7 @@ const DailyActivity = () => {
             </div>
 
                 {activeMainTab === 'admin' ? (
-                    <DARAdmin embedded={true} />
+                    <DARAdmin embedded={true} activeTab={adminTab} setActiveTab={setAdminTab} />
                 ) : (
                     <>
                         <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
@@ -397,7 +473,7 @@ const DailyActivity = () => {
                                                 onDateSelect={handleDateRangeSelect}
                                             />
 
-                                            <div className="px-2">
+                                            <div className="px-2" data-tour-id="dar-task-list">
                                                 <h3 className="text-xs font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-widest mb-4">Upcoming Schedule</h3>
                                                 <div className="space-y-4">
                                                     <UpcomingMeetings listMode={true} />
@@ -412,6 +488,7 @@ const DailyActivity = () => {
 
                             {/* Main Content (Horizontal Multi-Day Timeline) */}
                             <motion.div
+                                data-tour-id="dar-timeline"
                                 layout
                                 className="flex-1 min-w-0 bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border overflow-hidden flex flex-col"
                             >

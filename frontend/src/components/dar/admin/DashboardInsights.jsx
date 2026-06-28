@@ -505,7 +505,7 @@ const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                <div data-tour-id="dar-admin-insights-submission" className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                     <div>
                         <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Submission Rate</div>
                         <div className="text-lg font-black text-slate-800 dark:text-github-dark-text">{stats.submissionRate}%</div>
@@ -517,7 +517,7 @@ const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
                         <FileText size={16} className="text-emerald-500" />
                     </div>
                 </div>
-                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                <div data-tour-id="dar-admin-insights-activity" className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                     <div className="min-w-0 flex-1 mr-1.5">
                         <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Top Activity</div>
                         <div className="text-lg font-black text-indigo-600 dark:text-indigo-400 truncate" title={stats.topActivity}>{stats.topActivity}</div>
@@ -527,7 +527,7 @@ const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
                         <BarChart3 size={16} className="text-indigo-500" />
                     </div>
                 </div>
-                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                <div data-tour-id="dar-admin-insights-workhours" className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                     <div>
                         <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Average Work Hours</div>
                         <div className="flex items-baseline gap-1.5 mt-0.5">
@@ -544,7 +544,7 @@ const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
                         <Clock size={16} className="text-purple-500" />
                     </div>
                 </div>
-                <div className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                <div data-tour-id="dar-admin-insights-idletime" className="bg-white dark:bg-dark-card p-3.5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
                     <div>
                         <div className="text-slate-500 text-[9px] font-bold uppercase tracking-wide mb-1">Average Idle Time</div>
                         <div className="text-lg font-black text-orange-500 dark:text-orange-400">{stats.avgIdle}</div>
@@ -557,7 +557,7 @@ const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
             </div>
 
             {/* Row 2: Workload Trend (Area Chart) */}
-            <div className="lg:col-span-2 bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
+            <div data-tour-id="dar-admin-insights-workload" className="lg:col-span-2 bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border">
                 <div className="flex items-center justify-between mb-5">
                     <h3 className="font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2 text-sm">
                         <BarChart3 size={18} className="text-indigo-500" />
@@ -602,7 +602,7 @@ const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
             {/* Row 3: Department Breakdown & Capacity Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Department Activity Stacked Bar */}
-                <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
+                <div data-tour-id="dar-admin-insights-focus" className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text mb-6 flex items-center gap-2">
                         <Building size={20} className="text-orange-500" /> Department Focus
                     </h3>
@@ -642,7 +642,7 @@ const DashboardInsights = ({ departments, allUsers, onOpenConfig }) => {
 
 
                 {/* Employee Consistency */}
-                <div className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
+                <div data-tour-id="dar-admin-insights-consistency" className="bg-white dark:bg-dark-card p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-slate-800 dark:text-github-dark-text flex items-center gap-2">
                             <FileText size={20} className="text-indigo-500" /> Employee Consistency
