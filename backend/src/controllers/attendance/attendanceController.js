@@ -524,10 +524,16 @@ export async function getMyShift(req, res) {
     const shift = await AttendanceService.getUserShift(user_id);
 
     if (!shift) {
+      const rules = ShiftManagementService.getShiftRules(null);
       return res.json({
         ok: true,
-        shift: null,
-        message: "No shift assigned to this user"
+        shift: {
+          id: null,
+          name: "Open Shift",
+          start_time: null,
+          end_time: null,
+          rules
+        }
       });
     }
 

@@ -127,7 +127,8 @@ export function evaluateStatus(rules, data) {
     }
 
     // 2. Absent Check (Less than 4 hours total at checkout)
-    if (totalHours < 4 && data.event_type === "time_out") {
+    // Only apply if the shift timing has a start_time (i.e. it is not an open/flexible shift)
+    if (rules?.shift_timing?.start_time && totalHours < 4 && data.event_type === "time_out") {
         return "ABSENT";
     }
 

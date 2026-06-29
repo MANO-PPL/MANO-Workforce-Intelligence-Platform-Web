@@ -215,8 +215,11 @@ export function getExpectedHours(date, policy, shiftRules) {
     }
 
     const timingToUse = customTiming || shiftRules?.shift_timing || {};
-    const [sH, sM] = (timingToUse.start_time || '09:00:00').split(':').map(Number);
-    const [eH, eM] = (timingToUse.end_time || '18:00:00').split(':').map(Number);
+    if (!timingToUse.start_time || !timingToUse.end_time) {
+        return 0;
+    }
+    const [sH, sM] = timingToUse.start_time.split(':').map(Number);
+    const [eH, eM] = timingToUse.end_time.split(':').map(Number);
     
     let fullHours = ((eH * 60 + eM) - (sH * 60 + sM)) / 60;
     if (fullHours < 0) fullHours += 24; // Handle overnight shifts if any
@@ -264,7 +267,9 @@ export function getMonthSummary(year, month, policy) {
  * Combines direct shift columns with optional policy_rules JSON for backward compatibility.
  */
 export function getShiftRules(shift) {
-    if (!shift) {
+    if (!shift || 
+        (shift.hasOwnProperty('shift_id') && !shift.shift_id) || 
+        (!shift.shift_id && !shift.policy_rules && !shift.start_time)) {
         return getDefaultShiftConfig();
     }
 
@@ -324,29 +329,27 @@ export function getShiftRules(shift) {
 function getDefaultShiftConfig() {
     return {
         shift_timing: {
-            start_time: "09:00:00",
-            end_time: "18:00:00"
+            start_time: null,
+            end_time: null
         },
         grace_period: {
-            minutes: 10
+            minutes: 0
         },
         overtime: {
-            enabled: true,
-            threshold: 9,
-            buffer: 0.5  // 30 minutes buffer after shift end before OT kicks in
+            enabled: false,
+            threshold: 0,
+            buffer: 0
         },
         entry_requirements: {
-            selfie: true,
-            geofence: true
+            selfie: false,
+            geofence: false
         },
         exit_requirements: {
-            selfie: true,
-            geofence: true
+            selfie: false,
+            geofence: false
         },
         correction_deadline: 2,
-        week_off_policy: [
-            { day: 'Sun', type: 'full', frequency: 'every' }  // Sunday off by default
-        ]
+        week_off_policy: []
     };
 }
 
