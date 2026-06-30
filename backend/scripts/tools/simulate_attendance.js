@@ -200,19 +200,20 @@ async function fetchTargetUsers() {
   const targetUserIds = SIM_CONFIG?.config?.target_user_ids || [];
   const targetOrgIds = SIM_CONFIG?.config?.target_org_ids || [];
 
-  if (targetUserIds.length > 0) {
-    return await attendanceDB('users')
-      .whereIn('user_id', targetUserIds)
-      .where({ is_deleted: 0, is_active: 1 });
-  } else if (targetOrgIds.length > 0) {
-    return await attendanceDB('users')
-      .whereIn('org_id', targetOrgIds)
-      .where({ is_deleted: 0, is_active: 1 });
-  } else {
-    // If target_org_ids is empty, simulate all active users across all organizations
-    return await attendanceDB('users')
-      .where({ is_deleted: 0, is_active: 1 });
+  if (targetUserIds.length === 0) {
+    log("⚠️ No target_user_ids provided in configuration. Skipping simulation to prevent accidental runs.");
+    return [];
   }
+
+  let query = attendanceDB('users')
+    .whereIn('user_id', targetUserIds)
+    .where({ is_deleted: 0, is_active: 1 });
+
+  if (targetOrgIds.length > 0) {
+    query = query.whereIn('org_id', targetOrgIds);
+  }
+
+  return await query;
 }
 
 /**

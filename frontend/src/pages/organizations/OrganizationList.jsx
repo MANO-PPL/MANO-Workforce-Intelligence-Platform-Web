@@ -49,6 +49,9 @@ const OrganizationList = () => {
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [listTab, setListTab] = useState('active'); // 'active' | 'deleted'
     const [isOrgCodeManuallyEdited, setIsOrgCodeManuallyEdited] = useState(false);
+    const [isCheckingCode, setIsCheckingCode] = useState(false);
+    const [codeAvailability, setCodeAvailability] = useState(null); // null | 'available' | 'unavailable' | 'invalid'
+    const [validationErrors, setValidationErrors] = useState({});
 
     // Auto-generate organization code based on organization name (only when creating new)
     useEffect(() => {
@@ -70,12 +73,12 @@ const OrganizationList = () => {
                 code = words[0];
             }
 
-            let cleanCode = code.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+            let cleanCode = code.replace(/[^a-zA-Z]/g, "").toUpperCase();
             if (cleanCode.length > 10) {
                 cleanCode = cleanCode.substring(0, 10);
             }
             if (cleanCode.length < 3 && cleanCode.length > 0) {
-                const originalClean = name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+                const originalClean = name.replace(/[^a-zA-Z]/g, "").toUpperCase();
                 if (originalClean.length >= 3) {
                     cleanCode = originalClean.substring(0, 5);
                 } else {
@@ -87,6 +90,42 @@ const OrganizationList = () => {
             }
         }
     }, [formData.org_name, isOrgCodeManuallyEdited, selectedOrg, isEditing]);
+
+    // Verify organization code availability in real-time
+    useEffect(() => {
+        if (!isEditing || !formData.org_code) {
+            setCodeAvailability(null);
+            return;
+        }
+
+        const code = formData.org_code.trim().toUpperCase();
+        if (code.length < 3 || code.length > 10 || !/^[A-Z]+$/.test(code)) {
+            setCodeAvailability('invalid');
+            return;
+        }
+
+        const delayDebounce = setTimeout(async () => {
+            setIsCheckingCode(true);
+            try {
+                const url = selectedOrg 
+                    ? `/organizations/check-code?code=${code}&excludeId=${selectedOrg.org_id}` 
+                    : `/organizations/check-code?code=${code}`;
+                const res = await api.get(url);
+                if (res.data.available) {
+                    setCodeAvailability('available');
+                } else {
+                    setCodeAvailability('unavailable');
+                }
+            } catch (err) {
+                console.error("Error checking code availability:", err);
+                setCodeAvailability(null);
+            } finally {
+                setIsCheckingCode(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounce);
+    }, [formData.org_code, isEditing, selectedOrg]);
 
     useEffect(() => {
         fetchOrganizations();
@@ -111,6 +150,7 @@ const OrganizationList = () => {
         if (selectedOrg?.org_id === org.org_id) {
             setSelectedOrg(null);
             setIsEditing(false);
+            setValidationErrors({});
             return;
         }
         setSelectedOrg(org);
@@ -121,6 +161,7 @@ const OrganizationList = () => {
             subscription_expiry: org.subscription_expiry ? new Date(org.subscription_expiry).toISOString().split('T')[0] : ''
         });
         setIsEditing(false); // Mode: View existing
+        setValidationErrors({});
         setActiveDetailTab('details'); // Reset tab to overview on org switch
         fetchOrgAdmins(org.org_id);
     };
@@ -229,38 +270,44 @@ const OrganizationList = () => {
             gst_number: '', pan_number: ''
         });
         setIsOrgCodeManuallyEdited(false);
+        setValidationErrors({});
         setIsEditing(true); // Mode: Create new
     };
 
     const handleSave = async (e) => {
         e.preventDefault();
         
+        const errors = {};
+
+        // Validate organization name
+        if (!formData.org_name || !formData.org_name.trim()) {
+            errors.org_name = "Organization name is required.";
+        }
+
         // Validate organization code
         const cleanCode = formData.org_code.trim().toUpperCase();
-        if (cleanCode.length < 3 || cleanCode.length > 10 || !/^[A-Z0-9]+$/.test(cleanCode)) {
-            toast.error("Organization code must be 3-10 alphanumeric characters with no spaces.");
-            return;
+        if (cleanCode.length < 3 || cleanCode.length > 10 || !/^[A-Z]+$/.test(cleanCode)) {
+            errors.org_code = "Organization code must be 3-10 alphabetical characters (letters only) with no spaces.";
         }
         
         // Validate contact details
         if (!validateEmail(formData.contact_email)) {
-            toast.error("Please enter a valid contact email address.");
-            return;
+            errors.contact_email = "Please enter a valid contact email address.";
         }
         if (!validatePhone(formData.contact_phone)) {
-            toast.error("Please enter a valid contact phone number according to the country code.");
-            return;
+            errors.contact_phone = "Please enter a valid contact phone number according to the country code.";
         }
         
         // Admin details validation (only for new organization creation)
         if (!selectedOrg) {
             if (!validateEmail(formData.admin_email)) {
-                toast.error("Please enter a valid admin email address.");
-                return;
+                errors.admin_email = "Please enter a valid admin email address.";
             }
             if (formData.admin_phone && !validatePhone(formData.admin_phone)) {
-                toast.error("Please enter a valid admin phone number according to the country code.");
-                return;
+                errors.admin_phone = "Please enter a valid admin phone number according to the country code.";
+            }
+            if (!formData.admin_password) {
+                errors.admin_password = "Initial admin password is required.";
             }
         }
 
@@ -269,23 +316,28 @@ const OrganizationList = () => {
         const pan = (formData.pan_number || '').trim().toUpperCase();
 
         if ((gst && !pan) || (!gst && pan)) {
-            toast.error("Please enter both GST and PAN, or leave both fields blank.");
-            return;
-        }
-
-        if (gst && pan) {
+            errors.gst_number = "Please enter both GST and PAN, or leave both fields blank.";
+            errors.pan_number = "Please enter both GST and PAN, or leave both fields blank.";
+        } else if (gst && pan) {
             const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
             const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
             if (!gstRegex.test(gst)) {
-                toast.error("Please enter a valid GST number.");
-                return;
+                errors.gst_number = "Please enter a valid GST number.";
             }
             if (!panRegex.test(pan)) {
-                toast.error("Please enter a valid PAN number.");
-                return;
+                errors.pan_number = "Please enter a valid PAN number.";
             }
         }
+
+        if (Object.keys(errors).length > 0) {
+            setValidationErrors(errors);
+            const firstErrorMessage = Object.values(errors)[0];
+            toast.error(firstErrorMessage);
+            return;
+        }
+
+        setValidationErrors({});
 
         const payload = {
             ...formData,
@@ -1307,18 +1359,69 @@ const OrganizationList = () => {
                                                     <div className="space-y-1.5">
                                                         <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Organization Name</label>
                                                         {isEditing ? (
-                                                            <input required value={formData.org_name} onChange={(e) => setFormData({ ...formData, org_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="e.g. Acme Corp" />
+                                                            <input 
+                                                                required 
+                                                                value={formData.org_name} 
+                                                                onChange={(e) => {
+                                                                    setFormData({ ...formData, org_name: e.target.value });
+                                                                    if (validationErrors.org_name) {
+                                                                        setValidationErrors(prev => ({ ...prev, org_name: null }));
+                                                                    }
+                                                                }} 
+                                                                className={`w-full px-4 py-2.5 border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-1 transition-colors text-sm ${
+                                                                    validationErrors.org_name 
+                                                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+                                                                        : 'border-slate-300 dark:border-github-dark-border focus:border-indigo-500 focus:ring-indigo-500'
+                                                                }`} 
+                                                                placeholder="e.g. Acme Corp" 
+                                                            />
                                                         ) : (
                                                             <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-semibold text-sm shadow-sm">{selectedOrg.org_name}</div>
+                                                        )}
+                                                        {isEditing && validationErrors.org_name && (
+                                                            <p className="text-[11px] text-red-600 font-semibold mt-1">{validationErrors.org_name}</p>
                                                         )}
                                                     </div>
 
                                                     <div className="space-y-1.5">
                                                         <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Organization Code</label>
                                                         {isEditing ? (
-                                                            <input required value={formData.org_code} onChange={(e) => { setIsOrgCodeManuallyEdited(true); setFormData({ ...formData, org_code: e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase() }); }} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-900 font-mono text-sm" placeholder="e.g. ACM01" />
+                                                            <div className="relative">
+                                                                <input 
+                                                                    required 
+                                                                    value={formData.org_code} 
+                                                                    onChange={(e) => { 
+                                                                        setIsOrgCodeManuallyEdited(true); 
+                                                                        setFormData({ ...formData, org_code: e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase() }); 
+                                                                        if (validationErrors.org_code) {
+                                                                            setValidationErrors(prev => ({ ...prev, org_code: null }));
+                                                                        }
+                                                                    }} 
+                                                                    className={`w-full px-4 py-2.5 border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-1 transition-colors disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-900 font-mono text-sm ${
+                                                                        validationErrors.org_code ? 'border-red-500 focus:border-red-500 focus:ring-red-500' :
+                                                                        codeAvailability === 'available' ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500' :
+                                                                        codeAvailability === 'unavailable' ? 'border-red-500 focus:border-red-500 focus:ring-red-500' :
+                                                                        codeAvailability === 'invalid' ? 'border-amber-500 focus:border-amber-500 focus:ring-amber-500' :
+                                                                        'border-slate-300 dark:border-github-dark-border focus:border-indigo-500 focus:ring-indigo-500'
+                                                                    }`} 
+                                                                    placeholder="e.g. ACM" 
+                                                                />
+                                                                {isCheckingCode && (
+                                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                                        <Loader2 size={16} className="animate-spin text-slate-400" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         ) : (
                                                             <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-mono text-sm shadow-sm">{selectedOrg.org_code}</div>
+                                                        )}
+                                                        {isEditing && (validationErrors.org_code || codeAvailability) && (
+                                                            <div className="text-[11px] font-semibold mt-1">
+                                                                {validationErrors.org_code && <span className="text-red-600 block mb-1">{validationErrors.org_code}</span>}
+                                                                {!validationErrors.org_code && codeAvailability === 'available' && <span className="text-emerald-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Code is available</span>}
+                                                                {!validationErrors.org_code && codeAvailability === 'unavailable' && <span className="text-red-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Code is already registered</span>}
+                                                                {!validationErrors.org_code && codeAvailability === 'invalid' && <span className="text-amber-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Code must be 3-10 alphabetical characters</span>}
+                                                            </div>
                                                         )}
                                                     </div>
 
@@ -1334,9 +1437,27 @@ const OrganizationList = () => {
                                                     <div className="space-y-1.5">
                                                         <label className="text-xs font-bold text-slate-500 dark:text-github-dark-muted uppercase tracking-wider">Contact Email Address</label>
                                                         {isEditing ? (
-                                                            <input type="email" value={formData.contact_email} onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="contact@example.com" />
+                                                            <input 
+                                                                type="email" 
+                                                                value={formData.contact_email} 
+                                                                onChange={(e) => {
+                                                                    setFormData({ ...formData, contact_email: e.target.value });
+                                                                    if (validationErrors.contact_email) {
+                                                                        setValidationErrors(prev => ({ ...prev, contact_email: null }));
+                                                                    }
+                                                                }} 
+                                                                className={`w-full px-4 py-2.5 border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-1 transition-colors text-sm ${
+                                                                    validationErrors.contact_email 
+                                                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+                                                                        : 'border-slate-300 dark:border-github-dark-border focus:border-indigo-500 focus:ring-indigo-500'
+                                                                }`} 
+                                                                placeholder="contact@example.com" 
+                                                            />
                                                         ) : (
                                                             <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text text-sm shadow-sm truncate" title={selectedOrg.contact_email}>{selectedOrg.contact_email || 'N/A'}</div>
+                                                        )}
+                                                        {isEditing && validationErrors.contact_email && (
+                                                            <p className="text-[11px] text-red-650 font-semibold mt-1">{validationErrors.contact_email}</p>
                                                         )}
                                                     </div>
 
@@ -1345,11 +1466,20 @@ const OrganizationList = () => {
                                                         {isEditing ? (
                                                             <PhoneInput
                                                                 value={formData.contact_phone}
-                                                                onChange={(val) => setFormData({ ...formData, contact_phone: val })}
+                                                                onChange={(val) => {
+                                                                    setFormData({ ...formData, contact_phone: val });
+                                                                    if (validationErrors.contact_phone) {
+                                                                        setValidationErrors(prev => ({ ...prev, contact_phone: null }));
+                                                                    }
+                                                                }}
                                                                 variant="admin-desktop"
+                                                                error={!!validationErrors.contact_phone}
                                                             />
                                                         ) : (
                                                             <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-mono text-sm shadow-sm">{selectedOrg.contact_phone || 'N/A'}</div>
+                                                        )}
+                                                        {isEditing && validationErrors.contact_phone && (
+                                                            <p className="text-[11px] text-red-650 font-semibold mt-1">{validationErrors.contact_phone}</p>
                                                         )}
                                                     </div>
 
@@ -1358,12 +1488,24 @@ const OrganizationList = () => {
                                                         {isEditing ? (
                                                             <input 
                                                                 value={formData.gst_number || ''} 
-                                                                onChange={(e) => setFormData({ ...formData, gst_number: e.target.value })} 
-                                                                className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm font-mono uppercase" 
+                                                                onChange={(e) => {
+                                                                    setFormData({ ...formData, gst_number: e.target.value });
+                                                                    if (validationErrors.gst_number) {
+                                                                        setValidationErrors(prev => ({ ...prev, gst_number: null, pan_number: null }));
+                                                                    }
+                                                                }} 
+                                                                className={`w-full px-4 py-2.5 border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-1 transition-colors text-sm font-mono uppercase ${
+                                                                    validationErrors.gst_number 
+                                                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+                                                                        : 'border-slate-300 dark:border-github-dark-border focus:border-indigo-500 focus:ring-indigo-500'
+                                                                }`} 
                                                                 placeholder="e.g. 22AAAAA0000A1Z5" 
                                                             />
                                                         ) : (
                                                             <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-mono text-sm shadow-sm">{selectedOrg.gst_number || 'N/A'}</div>
+                                                        )}
+                                                        {isEditing && validationErrors.gst_number && (
+                                                            <p className="text-[11px] text-red-650 font-semibold mt-1">{validationErrors.gst_number}</p>
                                                         )}
                                                     </div>
 
@@ -1372,12 +1514,24 @@ const OrganizationList = () => {
                                                         {isEditing ? (
                                                             <input 
                                                                 value={formData.pan_number || ''} 
-                                                                onChange={(e) => setFormData({ ...formData, pan_number: e.target.value })} 
-                                                                className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm font-mono uppercase" 
+                                                                onChange={(e) => {
+                                                                    setFormData({ ...formData, pan_number: e.target.value });
+                                                                    if (validationErrors.pan_number) {
+                                                                        setValidationErrors(prev => ({ ...prev, pan_number: null }));
+                                                                    }
+                                                                }} 
+                                                                className={`w-full px-4 py-2.5 border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-1 transition-colors text-sm font-mono uppercase ${
+                                                                    validationErrors.pan_number 
+                                                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+                                                                        : 'border-slate-300 dark:border-github-dark-border focus:border-indigo-500 focus:ring-indigo-500'
+                                                                }`} 
                                                                 placeholder="e.g. ABCDE1234F" 
                                                             />
                                                         ) : (
                                                             <div className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-github-dark-border/50 rounded-lg text-slate-800 dark:text-github-dark-text font-mono text-sm shadow-sm">{selectedOrg.pan_number || 'N/A'}</div>
+                                                        )}
+                                                        {isEditing && validationErrors.pan_number && (
+                                                            <p className="text-[11px] text-red-650 font-semibold mt-1">{validationErrors.pan_number}</p>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1497,22 +1651,63 @@ const OrganizationList = () => {
 
                                                         <div className="space-y-1.5">
                                                             <label className="text-xs font-bold text-indigo-900/80 dark:text-indigo-400 uppercase tracking-wider">Admin Email Address <span className="text-red-500">*</span></label>
-                                                            <input type="email" required value={formData.admin_email} onChange={(e) => setFormData({ ...formData, admin_email: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm" placeholder="admin@example.com" />
+                                                            <input 
+                                                                type="email" 
+                                                                required 
+                                                                value={formData.admin_email} 
+                                                                onChange={(e) => {
+                                                                    setFormData({ ...formData, admin_email: e.target.value });
+                                                                    if (validationErrors.admin_email) {
+                                                                        setValidationErrors(prev => ({ ...prev, admin_email: null }));
+                                                                    }
+                                                                }} 
+                                                                className={`w-full px-4 py-2.5 border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-1 transition-colors text-sm ${
+                                                                    validationErrors.admin_email 
+                                                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+                                                                        : 'border-slate-300 dark:border-github-dark-border focus:border-indigo-500 focus:ring-indigo-500'
+                                                                }`} 
+                                                                placeholder="admin@example.com" 
+                                                            />
+                                                            {validationErrors.admin_email && <p className="text-[11px] text-red-650 font-semibold mt-1">{validationErrors.admin_email}</p>}
                                                         </div>
 
                                                         <div className="space-y-1.5">
                                                             <label className="text-xs font-bold text-indigo-900/80 dark:text-indigo-400 uppercase tracking-wider">Admin Phone Number</label>
                                                             <PhoneInput
                                                                 value={formData.admin_phone}
-                                                                onChange={(val) => setFormData({ ...formData, admin_phone: val })}
+                                                                onChange={(val) => {
+                                                                    setFormData({ ...formData, admin_phone: val });
+                                                                    if (validationErrors.admin_phone) {
+                                                                        setValidationErrors(prev => ({ ...prev, admin_phone: null }));
+                                                                    }
+                                                                }}
                                                                 variant="admin-desktop"
                                                                 placeholder="Admin Phone"
+                                                                error={!!validationErrors.admin_phone}
                                                             />
+                                                            {validationErrors.admin_phone && <p className="text-[11px] text-red-650 font-semibold mt-1">{validationErrors.admin_phone}</p>}
                                                         </div>
 
                                                         <div className="space-y-1.5 sm:col-span-2">
                                                             <label className="text-xs font-bold text-indigo-900/80 dark:text-indigo-400 uppercase tracking-wider">Initial Admin Password <span className="text-red-500">*</span></label>
-                                                            <input type="text" required value={formData.admin_password} onChange={(e) => setFormData({ ...formData, admin_password: e.target.value })} className="w-full px-4 py-2.5 border border-slate-300 dark:border-github-dark-border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors font-mono text-sm" placeholder="Set a secure password for the first admin login" />
+                                                            <input 
+                                                                type="text" 
+                                                                required 
+                                                                value={formData.admin_password} 
+                                                                onChange={(e) => {
+                                                                    setFormData({ ...formData, admin_password: e.target.value });
+                                                                    if (validationErrors.admin_password) {
+                                                                        setValidationErrors(prev => ({ ...prev, admin_password: null }));
+                                                                    }
+                                                                }} 
+                                                                className={`w-full px-4 py-2.5 border rounded-lg dark:bg-github-dark-subtle text-slate-900 dark:text-github-dark-text focus:outline-none focus:ring-1 transition-colors font-mono text-sm ${
+                                                                    validationErrors.admin_password 
+                                                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+                                                                        : 'border-slate-300 dark:border-github-dark-border focus:border-indigo-500 focus:ring-indigo-500'
+                                                                }`} 
+                                                                placeholder="Set a secure password for the first admin login" 
+                                                            />
+                                                            {validationErrors.admin_password && <p className="text-[11px] text-red-650 font-semibold mt-1">{validationErrors.admin_password}</p>}
                                                             <p className="text-[11px] text-indigo-600/70 dark:text-indigo-400/50 mt-1">This user will be created as the organization's primary administrator.</p>
                                                         </div>
                                                     </div>

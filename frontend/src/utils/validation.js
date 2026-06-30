@@ -1,5 +1,5 @@
 export const COUNTRIES = [
-    { name: "India", code: "IN", dial_code: "+91", flag: "🇮🇳", pattern: /^[6-9]\d{9}$/, length: 10, placeholder: "98765 43210" },
+    { name: "India", code: "IN", dial_code: "+91", flag: "🇮🇳", pattern: /^[1-9]\d{9}$/, length: 10, placeholder: "98765 43210" },
     { name: "United States", code: "US", dial_code: "+1", flag: "🇺🇸", pattern: /^\d{10}$/, length: 10, placeholder: "201 555 0123" },
     { name: "Canada", code: "CA", dial_code: "+1", flag: "🇨🇦", pattern: /^\d{10}$/, length: 10, placeholder: "613 555 0142" },
     { name: "United Kingdom", code: "GB", dial_code: "+44", flag: "🇬🇧", pattern: /^[7-9]\d{9}$/, length: 10, placeholder: "7911 123456" },

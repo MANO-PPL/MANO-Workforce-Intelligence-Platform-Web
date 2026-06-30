@@ -8,6 +8,7 @@ router.use(authenticateJWT, authorize('super_admin'));
 
 router.post('/', orgController.createOrganization);
 router.get('/', orgController.getOrganizations);
+router.get('/check-code', orgController.checkOrgCodeAvailability);
 router.put('/:id', orgController.updateOrganization);
 router.delete('/:id', orgController.deleteOrganization);
 router.post('/:id/cancel-deletion', orgController.cancelOrgDeletion);

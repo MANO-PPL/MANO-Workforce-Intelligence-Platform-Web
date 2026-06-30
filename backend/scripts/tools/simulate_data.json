@@ -1,7 +1,7 @@
 {
   "config": {
-    "target_org_ids": [1],
-    "target_user_ids": [],
+    "target_org_ids": [90],
+    "target_user_ids": [335, 336, 337, 338, 339, 340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350, 351, 352, 353, 354, 355, 356, 357],
     "check_interval_ms": 60000,
     "images_dir": "./attendance_selfies"
   },

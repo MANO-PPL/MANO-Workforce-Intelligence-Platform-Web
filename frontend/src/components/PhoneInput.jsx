@@ -11,7 +11,8 @@ const PhoneInput = ({
     placeholder,
     className = "",
     externalCountries = null, // Optional: [{name, iso2, phone_code, emoji}, ...] from locations API
-    disableDropdown = false // lock the country/flag dial code dropdown
+    disableDropdown = false, // lock the country/flag dial code dropdown
+    error = false
 }) => {
     // Build the active country list — use external if provided, else fall back to hardcoded
     const activeCountries = React.useMemo(() => {
@@ -134,7 +135,7 @@ const PhoneInput = ({
         inputClass = "w-full bg-transparent py-3 px-4 text-sm text-slate-900 dark:text-white outline-none";
         triggerClass = "flex items-center gap-1 px-3 py-3 text-slate-700 dark:text-slate-300 rounded-l-xl border-r border-slate-200 dark:border-white/10 text-sm shrink-0 h-full";
     } else if (variant === "admin-desktop") {
-        containerClass = `flex items-center rounded-lg border transition-all bg-white dark:bg-github-dark-subtle border-slate-300 dark:border-github-dark-border focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 ${className}`;
+        containerClass = `flex items-center rounded-lg border transition-all bg-white dark:bg-github-dark-subtle ${error ? 'border-red-500 focus-within:border-red-500 focus-within:ring-red-500' : 'border-slate-300 dark:border-github-dark-border focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500'} ${className}`;
         inputClass = "w-full bg-transparent py-2.5 px-3 text-slate-900 dark:text-github-dark-text focus:outline-none placeholder:text-slate-450 text-sm";
         triggerClass = "flex items-center gap-1.5 px-3 py-2.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-[#21262d] transition-colors rounded-l-lg border-r border-slate-300 dark:border-github-dark-border text-sm shrink-0 h-full";
     }

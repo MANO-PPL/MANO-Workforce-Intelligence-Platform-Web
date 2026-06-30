@@ -21,6 +21,9 @@ export const createOrganization = catchAsync(async (req, res, next) => {
     }
 
     const cleanOrgCode = org_code.trim().toUpperCase();
+    if (cleanOrgCode.length < 3 || cleanOrgCode.length > 10 || !/^[A-Z]+$/.test(cleanOrgCode)) {
+        throw new AppError("Organization code must be 3-10 alphabetical characters (letters only) with no spaces.", 400);
+    }
 
     // Check uniqueness
     const existingOrg = await attendanceDB('organizations').where('org_code', cleanOrgCode).first();
@@ -60,7 +63,7 @@ export const createOrganization = catchAsync(async (req, res, next) => {
 
         // Create the admin user for this organization
         const hashedPassword = await bcrypt.hash(admin_password, 10);
-        const userCode = `${cleanOrgCode}001`;
+        const userCode = `${cleanOrgCode}-001`;
 
         await trx('users').insert({
             org_id: orgId,
@@ -124,6 +127,9 @@ export const updateOrganization = catchAsync(async (req, res, next) => {
 
     if (org_code !== undefined) {
         const cleanOrgCode = org_code.trim().toUpperCase();
+        if (cleanOrgCode.length < 3 || cleanOrgCode.length > 10 || !/^[A-Z]+$/.test(cleanOrgCode)) {
+            throw new AppError("Organization code must be 3-10 alphabetical characters (letters only) with no spaces.", 400);
+        }
         if (cleanOrgCode !== org.org_code) {
             // Check uniqueness of the new code
             const existingOrg = await attendanceDB('organizations').where('org_code', cleanOrgCode).first();
@@ -142,34 +148,49 @@ export const updateOrganization = catchAsync(async (req, res, next) => {
                 const users = await trx('users').where('org_id', id);
                 for (const user of users) {
                     if (user.user_code) {
+                        let newUserCode = '';
                         if (user.user_code.startsWith(oldPrefix + "-")) {
                             const suffix = user.user_code.substring(oldPrefix.length);
-                            const newUserCode = `${newPrefix}${suffix}`;
-                            await trx('users').where('user_id', user.user_id).update({ user_code: newUserCode });
+                            newUserCode = `${newPrefix}${suffix}`;
                         } else if (user.user_code.startsWith(oldPrefix)) {
                             const suffix = user.user_code.substring(oldPrefix.length);
-                            const newUserCode = `${newPrefix}${suffix}`;
-                            await trx('users').where('user_id', user.user_id).update({ user_code: newUserCode });
+                            newUserCode = `${newPrefix}${suffix}`;
                         } else {
                             // Robust Fallback: Handles codes not matching oldPrefix
                             let suffix = '';
                             const hyphenIndex = user.user_code.lastIndexOf('-');
                             if (hyphenIndex !== -1) {
                                 suffix = user.user_code.substring(hyphenIndex);
-                                const newUserCode = `${newPrefix}${suffix}`;
-                                await trx('users').where('user_id', user.user_id).update({ user_code: newUserCode });
+                                newUserCode = `${newPrefix}${suffix}`;
                             } else {
                                 const match = user.user_code.match(/\d+$/);
                                 if (match) {
                                     suffix = match[0];
-                                    const newUserCode = `${newPrefix}-${suffix.padStart(3, '0')}`;
-                                    await trx('users').where('user_id', user.user_id).update({ user_code: newUserCode });
+                                    newUserCode = `${newPrefix}-${suffix.padStart(3, '0')}`;
                                 } else {
-                                    const newUserCode = `${newPrefix}-${String(user.user_id).padStart(3, '0')}`;
-                                    await trx('users').where('user_id', user.user_id).update({ user_code: newUserCode });
+                                    newUserCode = `${newPrefix}-${String(user.user_id).padStart(3, '0')}`;
                                 }
                             }
                         }
+
+                        // Ensure global uniqueness to prevent duplicate key constraint violations (e.g. from deleted users or collisions)
+                        let finalUserCode = newUserCode;
+                        let isUnique = false;
+                        let attempt = 0;
+                        while (!isUnique) {
+                            const conflict = await trx('users')
+                                .where('user_code', finalUserCode)
+                                .whereNot('user_id', user.user_id)
+                                .first();
+                            if (!conflict) {
+                                isUnique = true;
+                            } else {
+                                attempt++;
+                                finalUserCode = `${newUserCode}-${user.user_id}${attempt > 1 ? `-${attempt}` : ''}`;
+                            }
+                        }
+
+                        await trx('users').where('user_id', user.user_id).update({ user_code: finalUserCode });
                     }
                 }
             }
@@ -605,3 +626,28 @@ export const getOrgLogs = catchAsync(async (req, res, next) => {
         }
     });
 });
+
+export const checkOrgCodeAvailability = catchAsync(async (req, res, next) => {
+    const { code, excludeId } = req.query;
+    if (!code) {
+        throw new AppError("Code query parameter is required", 400);
+    }
+    const cleanCode = code.trim().toUpperCase();
+    if (cleanCode.length < 3 || cleanCode.length > 10 || !/^[A-Z]+$/.test(cleanCode)) {
+        return res.status(200).json({
+            success: true,
+            available: false,
+            message: "Invalid code format (letters only)"
+        });
+    }
+    let query = attendanceDB('organizations').where('org_code', cleanCode);
+    if (excludeId) {
+        query = query.andWhereNot('org_id', excludeId);
+    }
+    const existingOrg = await query.first();
+    res.status(200).json({
+        success: true,
+        available: !existingOrg
+    });
+});
+

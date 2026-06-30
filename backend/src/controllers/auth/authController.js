@@ -150,8 +150,8 @@ export const onboardOrganization = catchAsync(async (req, res, next) => {
     }
 
     const cleanOrgCode = org_code.trim().toUpperCase();
-    if (cleanOrgCode.length < 3 || cleanOrgCode.length > 10 || !/^[A-Z0-9]+$/.test(cleanOrgCode)) {
-        throw new AppError("Organization code must be 3-10 alphanumeric characters with no spaces.", 400);
+    if (cleanOrgCode.length < 3 || cleanOrgCode.length > 10 || !/^[A-Z]+$/.test(cleanOrgCode)) {
+        throw new AppError("Organization code must be 3-10 alphabetical characters (letters only) with no spaces.", 400);
     }
 
     if (!contact_name || !contact_email || !contact_phone) {
@@ -220,7 +220,7 @@ export const onboardOrganization = catchAsync(async (req, res, next) => {
         });
 
         const hashedPassword = await bcrypt.hash(finalAdminPassword, 10);
-        const userCode = `${cleanOrgCode}001`;
+        const userCode = `${cleanOrgCode}-001`;
 
         await trx('users').insert({
             org_id: orgId,
@@ -241,7 +241,7 @@ export const onboardOrganization = catchAsync(async (req, res, next) => {
         success: true,
         message: "Organization self-onboarded successfully.",
         org_id: insertedId,
-        user_code: `${cleanOrgCode}001`,
+        user_code: `${cleanOrgCode}-001`,
         email: finalAdminEmail.trim().toLowerCase()
     });
 });
