@@ -17,6 +17,7 @@ import {
     Bug,
     Building,
     ShieldAlert,
+    Shield,
     MessageSquare,
     Code,
     Hammer,
@@ -63,6 +64,7 @@ const SidebarItem = ({ icon, text, to }) => {
 };
 
 const getNavItems = (userType) => {
+    const isAdminOrHr = ['admin', 'hr'].includes(userType);
     const allItems = [
         { icon: <LayoutDashboard size={18} />, text: "Dashboard", to: "/dashboard", roles: ['admin', 'hr', 'employee', 'super_admin'] },
         { icon: <Building size={18} />, text: "Organizations", to: "/organizations", roles: ['super_admin'] },
@@ -75,14 +77,11 @@ const getNavItems = (userType) => {
         { icon: <Calendar size={18} />, text: "Attendance", to: "/attendance", roles: ['admin', 'hr', 'employee'] },
         { icon: <Clock size={18} />, text: "Live Attendance", to: "/attendance-monitoring", roles: ['admin', 'hr'] },
         { icon: <TrendingUp size={18} />, text: "Reports", to: "/reports", roles: ['admin', 'hr'] },
+        { icon: <CreditCard size={18} />, text: "Payroll", to: "/payroll", roles: ['admin', 'hr'] },
 
         { icon: <ClipboardList size={18} />, text: "Daily Activity Report", to: "/daily-activity", roles: ['admin', 'hr', 'employee'] },
-        { icon: <MapPin size={18} />, text: "Geo Fencing", to: "/geofencing", roles: ['admin', 'hr'] },
-        { icon: <Settings size={18} />, text: "Shift Management", to: "/shift-management", roles: ['admin', 'hr'] },
-        { icon: <Calendar size={18} />, text: "Holidays and Leave", to: "/holidays", roles: ['admin', 'hr', 'employee'] },
-        { icon: <CreditCard size={18} />, text: "Payroll", to: "/payroll", roles: ['admin', 'hr'] },
-        { icon: <Layers size={18} />, text: "Salary Packages", to: "/payroll-packages", roles: ['admin', 'hr'] },
-        // { icon: <CreditCard size={18} />, text: "Subscription", to: "/subscription", roles: ['admin'] },
+        { icon: <Shield size={18} />, text: "Policies", to: "/policies", roles: ['admin', 'hr'] },
+        { icon: <Calendar size={18} />, text: "Holidays & Leaves", to: "/holidays", roles: ['admin', 'hr', 'employee'] }
     ];
 
     return allItems.filter(item => item.roles.includes(userType));

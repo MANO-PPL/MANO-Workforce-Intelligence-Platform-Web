@@ -254,8 +254,6 @@ function startLogTailing(ioInstance) {
 server.listen(activePort, '0.0.0.0', () => {
   console.log(`Backend server listening at http://0.0.0.0:${activePort}`);
 
-
-
   if (!hasStartedSchedulers) {
     hasStartedSchedulers = true;
     initAttendanceProcessor();

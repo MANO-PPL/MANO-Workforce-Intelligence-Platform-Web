@@ -319,7 +319,7 @@ const DailyActivity = () => {
 
     return (
         <DashboardLayout title="Daily Activity Report" noPadding={true} tourPageKey={currentPageKey} tourSteps={currentTourSteps}>
-            <div className="h-[calc(100vh-64px)] p-4 flex flex-col overflow-hidden space-y-4 dar-context">
+            <div className="h-[calc(100vh-64px)] p-3 flex flex-col overflow-hidden space-y-3 dar-context">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
                 {/* Admin Tabs */}
                 {['admin', 'hr'].includes(user?.user_type) ? (

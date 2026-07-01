@@ -85,7 +85,7 @@ const APIAnalytics = () => {
 
     return (
         <DashboardLayout title="API Analytics & Stress Monitor" noPadding={true}>
-            <div className="flex flex-col h-auto lg:h-[calc(100vh-64px)] p-4 space-y-4 overflow-y-auto lg:overflow-hidden dark:text-github-dark-text">
+            <div className="flex flex-col h-auto lg:h-[calc(100vh-64px)] p-3 space-y-3 overflow-y-auto lg:overflow-hidden dark:text-github-dark-text">
                 {/* Header Filter Panel */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
                     <div>

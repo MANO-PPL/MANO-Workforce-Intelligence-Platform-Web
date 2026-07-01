@@ -288,8 +288,8 @@ const EmployeeDashboard = () => {
                             <Clock size={16} /> My Attendance
                         </button>
                         <button
-                            onClick={() => navigate('/apply-leave')}
-                            className="flex-1 bg-white text-indigo-600 hover:bg-indigo-50 py-2.5 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
+                            onClick={() => navigate('/holidays?tab=leaves&apply=true')}
+                            className="flex-1 py-3 border border-indigo-300/35 text-white font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 backdrop-blur-md cursor-pointer"
                         >
                             <Coffee size={16} /> Apply Leave
                         </button>
@@ -340,8 +340,11 @@ const EmployeeDashboard = () => {
                             </div>
                         </div>
                         <button
-                            onClick={() => navigate('/attendance?tab=my_attendance&subTab=correction')}
-                            className="w-full py-3 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white text-xs font-bold rounded-xl transition-all shadow-md text-center"
+                            onClick={() => {
+                                const missedDate = missedPunchWarning && missedPunchWarning.dates && missedPunchWarning.dates.length > 0 ? missedPunchWarning.dates[0] : '';
+                                navigate(`/attendance?tab=my_attendance&subTab=correction&openDrawer=true${missedDate ? `&date=${missedDate}` : ''}`);
+                            }}
+                            className="w-full py-3 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white text-xs font-bold rounded-xl transition-all shadow-md text-center cursor-pointer"
                         >
                             Fix Now
                         </button>

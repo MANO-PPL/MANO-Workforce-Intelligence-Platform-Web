@@ -183,7 +183,7 @@ const getSuggestionsForRoute = (pathname, tabInfo, userRole) => {
     // 3. Holidays Management & Apply Leave
     if (cleanPath === '/holidays') {
         const activeTab = tabInfo?.tab || 'holidays';
-        if (activeTab === 'leave_application' || activeTab === 'my_leaves' || activeTab === 'requests') {
+        if (activeTab === 'leaves') {
             return [
                 "How do I apply for a new leave?",
                 "How do I check my remaining leave balances?",

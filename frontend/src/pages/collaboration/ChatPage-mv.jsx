@@ -1204,6 +1204,9 @@ const MobileChatPage = () => {
                                                                                         <div className="text-[10px] space-y-0.5 opacity-90">
                                                                                             <div><span className="font-bold">Period:</span> {formatDatePretty(cardPayload.start_date)} to {formatDatePretty(cardPayload.end_date)}</div>
                                                                                             <div><span className="font-bold">Reason:</span> "{cardPayload.reason}"</div>
+                                                                                            {cardPayload.pay_type && (
+                                                                                                <div><span className="font-bold">Pay Type:</span> {cardPayload.pay_type}</div>
+                                                                                            )}
                                                                                             {cardPayload.admin_comment && cardPayload.admin_comment !== 'None' && (
                                                                                                 <div className="mt-1 border-t border-sky-950/10 dark:border-sky-50/10 pt-1 text-slate-800 dark:text-slate-200">
                                                                                                     <span className="font-bold">Comment:</span> "{cardPayload.admin_comment}"

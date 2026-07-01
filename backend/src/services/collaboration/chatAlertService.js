@@ -278,6 +278,8 @@ export async function notifyLeaveStatusUpdated({ org_id, reviewer_id, leave_id, 
             reason: leave.reason || 'None',
             admin_comment: leave.admin_comment || 'None',
             status: leave.status,
+            pay_type: leave.pay_type,
+            pay_percentage: leave.pay_percentage,
             local_time: new Date().toISOString(),
             attachments: formatAttachments
         };
@@ -297,9 +299,9 @@ export async function notifyLeaveStatusUpdated({ org_id, reviewer_id, leave_id, 
         EventBus.emitNotification({
             org_id,
             user_id: leave.user_id,
-            title: `Leave Request ${leave.status}`,
-            message: `Your leave request for ${leave.leave_type} has been ${leave.status.toLowerCase()} by ${reviewerName}.`,
-            type: leave.status === 'Approved' ? 'SUCCESS' : 'ERROR',
+            title: `Leave Request ${leave.status ? leave.status.charAt(0).toUpperCase() + leave.status.slice(1) : ''}`,
+            message: `Your leave request for ${leave.leave_type} has been ${leave.status ? leave.status.toLowerCase() : ''}${leave.status?.toLowerCase() === 'approved' && leave.pay_type ? ` as ${leave.pay_type}` : ''} by ${reviewerName}.`,
+            type: leave.status?.toLowerCase() === 'approved' ? 'SUCCESS' : 'ERROR',
             related_entity_type: 'LEAVE',
             related_entity_id: leave_id
         });

@@ -163,6 +163,30 @@ export const homeData = {
             ],
             image: "/showcase/chat.png",
             link: "/features/chat-collaboration"
+        },
+        {
+            title: "Salary Packages & OT Rate Configurations",
+            body: "Establish organization-wide salary standards and customize overtime allowances dynamically. Transition employees seamlessly from standardized packages to individual custom configurations with automatic historical rate audits.",
+            bullets: [
+                "Define standard salary packages with custom OT rates",
+                "Create future-dated rate revisions and automatically recalculate draft payroll",
+                "Assign and unassign employee salary configurations with single-click actions",
+                "Ensure complete data integrity with historical contract tracking"
+            ],
+            image: "/showcase/dashboard.png",
+            link: "/product/salary-packages"
+        },
+        {
+            title: "Real-time Compliance Audit Trails",
+            body: "Every critical HR and payroll action leaves an indelible, detailed trail. Instantly audit who finalized a payroll run, who updated manual adjustments, or when a salary package rate revision was committed.",
+            bullets: [
+                "Detailed changelogs including user IP and action logs",
+                "Record specific details for locks, unlocks, adjustments, and package updates",
+                "Filter audit trails by month or specific employee in one click",
+                "Maintain strict security standard logs for compliance and reporting"
+            ],
+            image: "/showcase/reports.png",
+            link: "/features/audit-trails"
         }
     ],
     impactStats: [
@@ -254,6 +278,67 @@ export const pageContent = {
             "Workforce Analytics",
             "Real-time Notifications",
         ],
+    },
+    "/product/salary-packages": {
+        title: "Salary Packages & OT Rate Configurations",
+        image: "/showcase/dashboard.png",
+        intro:
+            "MANO-Attendance enables organizations to define structured salary packages, manage active rate configurations, and dynamically assign compensation terms across employees.",
+        body:
+            "Say goodbye to separate spreadsheets and fragmented communication. The integrated packages engine lets you standardize salary structures and adjust overtime allocations with built-in audit trails.",
+        points: [
+            "Organization-wide standard packages",
+            "Dynamic Overtime (OT) rate revisions",
+            "Single-click staff assignment & unassignment",
+            "Timezone-safe history auditing",
+            "Automatic integration with payroll drafts",
+        ],
+        sections: [
+            {
+                title: "Standardized Package Templates",
+                body: "Create named salary templates representing specific roles or departments. Change active rates dynamically while keeping historical assignments intact.",
+                bullets: [
+                    "Define base salary configurations and OT capabilities",
+                    "Toggle package activation status on and off with a single click",
+                    "Delete unused configurations safely"
+                ]
+            },
+            {
+                title: "Overtime Rate Revision History",
+                body: "Revise overtime allowances in response to contract changes or standard reviews. The revision timeline details past rate histories without duplicating current live terms.",
+                bullets: [
+                    "Future-dated and retroactive revisions",
+                    "Direct state synchronization on submit",
+                    "Historical tracking for past active periods"
+                ]
+            }
+        ]
+    },
+    "/features/audit-trails": {
+        title: "Compliance Audit Trails",
+        image: "/showcase/reports.png",
+        intro:
+            "Promote trust and compliance within your company using real-time security logs. Keep a complete log of all critical changes made by managers and administrators.",
+        body:
+            "Every action related to payroll lock state updates, manual salary adjustments, pay status changes, and salary package assignments is recorded with user identities, and action details.",
+        points: [
+            "Comprehensive security logging",
+            "Clear action categorization badges",
+            "Month-based audit filtering",
+            "Employee-specific logging context",
+            "Regulatory compliance recordkeeping",
+        ],
+        sections: [
+            {
+                title: "Tamper-Evident Action Logs",
+                body: "Ensure complete clarity regarding operations. Track exactly who performed an action, when it occurred, and what values were modified.",
+                bullets: [
+                    "Detailed logs for payroll finalization (LOCK/UNLOCK)",
+                    "Audit tags for salary adjustments (ADJUSTMENT_UPDATE)",
+                    "Full logs for package creation, revision, deletion, and assignment changes"
+                ]
+            }
+        ]
     },
     "/product/attendance-tracking": {
         title: "Attendance Tracking",

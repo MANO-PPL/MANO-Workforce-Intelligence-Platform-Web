@@ -28,9 +28,13 @@ router.get('/dashboard-stats', adminController.getDashboardStats);
 
 router.get('/departments', adminController.getDepartments);
 router.post('/departments', adminController.createDepartment);
+router.put('/departments/:dept_id', adminController.updateDepartment);
+router.delete('/departments/:dept_id', adminController.deleteDepartment);
 
 router.get('/designations', adminController.getDesignations);
 router.post('/designations', adminController.createDesignation);
+router.put('/designations/:desg_id', adminController.updateDesignation);
+router.delete('/designations/:desg_id', adminController.deleteDesignation);
 
 // Shifts - Use dedicated shift controller
 router.get('/shifts', shiftController.getShifts);

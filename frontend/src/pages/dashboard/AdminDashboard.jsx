@@ -374,7 +374,7 @@ const AdminDashboard = () => {
                         {/* Greeting and Action Buttons */}
                         <div>
                             <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-2">
-                                Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, {user?.user_name || user?.name || 'Admin'}! 👋
+                                Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, {user?.user_name || user?.name || 'Admin'}!
                             </h1>
                             <p className="text-indigo-100/70 text-base font-medium mt-2">
                                 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -396,8 +396,8 @@ const AdminDashboard = () => {
                                 Holiday List
                             </button>
                             <button
-                                onClick={() => navigate('/apply-leave')}
-                                className="px-6 py-2.5 bg-indigo-555/40 border border-indigo-300/30 text-white font-semibold rounded-xl hover:bg-indigo-500/60 transition-all flex items-center gap-2 backdrop-blur-sm"
+                                onClick={() => navigate('/holidays?tab=leaves&apply=true')}
+                                className="px-6 py-2.5 bg-indigo-555/40 border border-indigo-300/30 text-white font-semibold rounded-xl hover:bg-indigo-500/60 transition-all flex items-center gap-2 backdrop-blur-sm cursor-pointer"
                             >
                                 <Coffee size={18} />
                                 Apply Leave

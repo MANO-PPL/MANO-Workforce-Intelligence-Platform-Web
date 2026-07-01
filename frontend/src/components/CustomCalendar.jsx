@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const CustomCalendar = ({ selectedDate, onChange, onClose, events = {} }) => {
+const CustomCalendar = ({ selectedDate, onChange, onClose, events = {}, className = "" }) => {
     // Parse the initial date or default to today
     const initialDate = selectedDate ? new Date(selectedDate) : new Date();
 
@@ -94,7 +94,7 @@ const CustomCalendar = ({ selectedDate, onChange, onClose, events = {} }) => {
 
     return (
         <div
-            className="absolute top-full right-0 mt-2 z-50 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border p-4 w-[320px] animate-in fade-in zoom-in-95 duration-200"
+            className={`bg-white dark:bg-dark-card rounded-xl shadow-xl border border-slate-200 dark:border-github-dark-border p-4 w-[320px] select-none ${className}`}
             onClick={(e) => e.stopPropagation()}
         >
             {/* Header */}

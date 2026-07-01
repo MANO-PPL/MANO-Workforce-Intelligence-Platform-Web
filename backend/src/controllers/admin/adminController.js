@@ -196,6 +196,22 @@ export const createDepartment = catchAsync(async (req, res, next) => {
     res.status(201).json({ success: true, department: dept });
 });
 
+export const updateDepartment = catchAsync(async (req, res, next) => {
+    if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+        throw new AppError("Only admin and HR can update departments", 403);
+    }
+    const dept = await userService.updateDepartment(req.params.dept_id, req.body.dept_name, req.user.org_id);
+    res.json({ success: true, message: "Department updated successfully", department: dept });
+});
+
+export const deleteDepartment = catchAsync(async (req, res, next) => {
+    if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+        throw new AppError("Only admin and HR can delete departments", 403);
+    }
+    await userService.deleteDepartment(req.params.dept_id, req.user.org_id);
+    res.json({ success: true, message: "Department deleted successfully" });
+});
+
 export const getDesignations = catchAsync(async (req, res, next) => {
     const desgs = await userService.getDesignations(req.user.org_id);
     res.json({ success: true, designations: desgs, data: desgs });
@@ -204,6 +220,22 @@ export const getDesignations = catchAsync(async (req, res, next) => {
 export const createDesignation = catchAsync(async (req, res, next) => {
     const desg = await userService.createDesignation(req.body.desg_name, req.user.org_id);
     res.status(201).json({ success: true, designation: desg });
+});
+
+export const updateDesignation = catchAsync(async (req, res, next) => {
+    if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+        throw new AppError("Only admin and HR can update designations", 403);
+    }
+    const desg = await userService.updateDesignation(req.params.desg_id, req.body.desg_name, req.user.org_id);
+    res.json({ success: true, message: "Designation updated successfully", designation: desg });
+});
+
+export const deleteDesignation = catchAsync(async (req, res, next) => {
+    if (req.user.user_type !== "admin" && req.user.user_type !== "hr") {
+        throw new AppError("Only admin and HR can delete designations", 403);
+    }
+    await userService.deleteDesignation(req.params.desg_id, req.user.org_id);
+    res.json({ success: true, message: "Designation deleted successfully" });
 });
 
 export const getShifts = catchAsync(async (req, res, next) => {

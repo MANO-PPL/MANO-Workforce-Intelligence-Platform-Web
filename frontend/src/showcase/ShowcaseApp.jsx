@@ -39,6 +39,7 @@ export default function App() {
                     <Route path="/product/workforce-analytics" element={<GenericPage />} />
                     <Route path="/product/policy-geofencing" element={<GenericPage />} />
                     <Route path="/product/reports-automation" element={<GenericPage />} />
+                    <Route path="/product/salary-packages" element={<GenericPage />} />
 
                     <Route path="/solutions/hr-teams" element={<GenericPage />} />
                     <Route path="/solutions/managers" element={<GenericPage />} />
@@ -52,6 +53,7 @@ export default function App() {
                     <Route path="/features/daily-activity-reports" element={<GenericPage />} />
                     <Route path="/features/employee-management" element={<GenericPage />} />
                     <Route path="/features/payroll-ready-reports" element={<GenericPage />} />
+                    <Route path="/features/audit-trails" element={<GenericPage />} />
                     <Route path="/features/real-time-notifications" element={<GenericPage />} />
 
                     <Route path="/pricing" element={<GenericPage />} />

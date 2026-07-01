@@ -292,7 +292,7 @@ const EmployeeDashboard = () => {
                         {/* Greeting and Action Buttons */}
                         <div>
                             <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-2">
-                                {getGreeting()}, {user?.user_name || user?.name || 'Employee'}! 👋
+                                {getGreeting()}, {user?.user_name || user?.name || 'Employee'}!
                             </h1>
                             <p className="text-indigo-100/70 text-base font-medium mt-2">
                                 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -316,9 +316,9 @@ const EmployeeDashboard = () => {
                                 Holiday List
                             </button>
                             <button
-                                onClick={() => navigate('/apply-leave')}
+                                onClick={() => navigate('/holidays?tab=leaves&apply=true')}
                                 data-tour-id="emp-dashboard-apply-leave-btn"
-                                className="px-6 py-2.5 bg-indigo-555/40 border border-indigo-300/30 text-white font-semibold rounded-xl hover:bg-indigo-500/60 transition-all flex items-center gap-2 backdrop-blur-sm"
+                                className="px-6 py-2.5 bg-indigo-555/40 border border-indigo-300/30 text-white font-semibold rounded-xl hover:bg-indigo-500/60 transition-all flex items-center gap-2 backdrop-blur-sm cursor-pointer"
                             >
                                 <Coffee size={18} />
                                 Apply Leave
@@ -441,8 +441,11 @@ const EmployeeDashboard = () => {
                             </div>
                         </div>
                         <button
-                            onClick={() => navigate('/attendance?tab=my_attendance&subTab=correction')}
-                            className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shrink-0 active:scale-95"
+                            onClick={() => {
+                                const missedDate = missedPunchWarning && missedPunchWarning.dates && missedPunchWarning.dates.length > 0 ? missedPunchWarning.dates[0] : '';
+                                navigate(`/attendance?tab=my_attendance&subTab=correction&openDrawer=true${missedDate ? `&date=${missedDate}` : ''}`);
+                            }}
+                            className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shrink-0 active:scale-95 cursor-pointer"
                         >
                             Fix Now
                         </button>

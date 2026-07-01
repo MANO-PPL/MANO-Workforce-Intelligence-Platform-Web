@@ -32,6 +32,8 @@ import HolidayManagement from "./pages/holidays/HolidayManagement"
 import BulkHolidayImport from "./pages/holidays/BulkHolidayImport"
 import ShiftManagement from "./pages/shift-management/ShiftManagement"
 import GeoFencing from "./pages/geofencing/GeoFencing"
+import PolicyManagement from "./pages/policies/PolicyManagement"
+import LeaveManagement from "./pages/leaves/LeaveManagement"
 import Profile from "./pages/profile/Profile"
 import Subscription from "./pages/subscription/Subscription"
 import TestAPI from "./pages/test/TestAPI"
@@ -70,12 +72,16 @@ import MobileProfile from "./pages/profile/Profile-mv";
 import MobileAttendanceMonitoring from "./pages/attendance-monitoring/AttendanceMonitoring-mv";
 import MobileShiftManagement from "./pages/shift-management/ShiftManagement-mv";
 import MobileGeoFencing from "./pages/geofencing/GeoFencing-mv";
+import MobilePolicyManagement from "./pages/policies/PolicyManagement-mv";
+import MobileLeaveManagement from "./pages/leaves/LeaveManagement-mv";
 import MobileReports from "./pages/reports/Reports-mv";
 import MobileNotifications from "./pages/notifications/Notifications-mv";
 import MobileFeedback from "./pages/feedback/Feedback-mv";
 import DailyActivityMobile from "./pages/dar/DailyActivity-mv";
 import MobileBulkHolidayImport from "./pages/holidays/BulkHolidayImport-mv";
 import MobileBulkUpload from "./pages/employees/BulkUpload-mv";
+import Payroll from "./pages/payroll/Payroll";
+import MobilePayroll from "./pages/payroll/Payroll-mv";
 import SuperAdminDashboardMobile from "./pages/dashboard/SuperAdminDashboard-mv";
 import OrganizationListMobile from "./pages/organizations/OrganizationList-mv";
 import SecurityAlertsMobile from "./pages/super-admin/SecurityAlerts-mv";
@@ -320,7 +326,7 @@ function App() {
               <Route path="/holidays" element={<ResponsiveRoute DesktopComponent={HolidayManagement} MobileComponent={MobileHolidayManagement} />} />
               <Route path="/profile" element={<ResponsiveRoute DesktopComponent={Profile} MobileComponent={MobileProfile} />} />
               <Route path="/daily-activity" element={<ResponsiveRoute DesktopComponent={DailyActivity} MobileComponent={DailyActivityMobile} />} />
-              <Route path="/apply-leave" element={<ResponsiveRoute DesktopComponent={LeaveApplication} MobileComponent={MobileLeaveApplication} />} />
+              <Route path="/apply-leave" element={<Navigate to="/holidays?tab=leaves&apply=true" replace />} />
               <Route path="/collaboration" element={<ResponsiveRoute DesktopComponent={ChatPage} MobileComponent={MobileChatPage} />} />
               <Route path="/documentation" element={<Documentation />} />
 
@@ -333,8 +339,11 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={['admin', 'hr']} />}>
               <Route path="/attendance-monitoring" element={<ResponsiveRoute DesktopComponent={AttendanceMonitoring} MobileComponent={MobileAttendanceMonitoring} />} />
               <Route path="/reports" element={<ResponsiveRoute DesktopComponent={Reports} MobileComponent={MobileReports} />} />
-              <Route path="/shift-management" element={<ResponsiveRoute DesktopComponent={ShiftManagement} MobileComponent={MobileShiftManagement} />} />
-              <Route path="/geofencing" element={<ResponsiveRoute DesktopComponent={GeoFencing} MobileComponent={MobileGeoFencing} />} />
+              <Route path="/payroll" element={<ResponsiveRoute DesktopComponent={Payroll} MobileComponent={MobilePayroll} />} />
+              <Route path="/policies" element={<ResponsiveRoute DesktopComponent={PolicyManagement} MobileComponent={MobilePolicyManagement} />} />
+              <Route path="/leave-management" element={<Navigate to="/holidays?tab=leaves" replace />} />
+              <Route path="/shift-management" element={<ResponsiveRoute DesktopComponent={PolicyManagement} MobileComponent={MobilePolicyManagement} />} />
+              <Route path="/geofencing" element={<ResponsiveRoute DesktopComponent={PolicyManagement} MobileComponent={MobilePolicyManagement} />} />
               <Route path="/employees" element={<ResponsiveRoute DesktopComponent={EmployeeList} MobileComponent={MobileEmployeeList} />} />
               <Route path="/employees/add" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
               <Route path="/employees/edit/:id" element={<ResponsiveRoute DesktopComponent={EmployeeForm} MobileComponent={MobileEmployeeForm} />} />
@@ -343,7 +352,7 @@ function App() {
               <Route path="/dar-admin" element={<DARAdmin />} />
               <Route path="/labour-management" element={<ResponsiveRoute DesktopComponent={LabourManagement} MobileComponent={MobileLabourManagement} />} />
               <Route path="/payroll" element={<ResponsiveRoute DesktopComponent={PayrollDashboard} MobileComponent={PayrollDashboard} />} />
-              <Route path="/payroll-packages" element={<ResponsiveRoute DesktopComponent={SalaryPackages} MobileComponent={SalaryPackages} />} />
+              <Route path="/payroll-packages" element={<Navigate to="/policies?tab=salary_packages" replace />} />
             </Route>
 
             {/* Admin Only Routes */}

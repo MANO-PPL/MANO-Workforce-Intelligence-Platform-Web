@@ -57,7 +57,7 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
     };
 
     const getDurationPct = (start, end) => {
-        return timeToPos(end) - timeToPos(start);
+        return Math.max(1.8, timeToPos(end) - timeToPos(start));
     };
 
     // Helper to normalize HH:MM:SS -> HH:MM
@@ -185,20 +185,29 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
 
                         <div className="relative space-y-12 pt-8 z-10">
                             {/* Original Timeline */}
-                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50">
-                                {(data.originalTasks || []).map(task => (
-                                    <div
-                                        key={`orig-${task.id}`}
-                                        className="absolute top-2 bottom-2 rounded-md bg-slate-400/20 border border-slate-400/30 flex items-center px-2 text-[10px] text-slate-500 whitespace-nowrap overflow-hidden transition-all hover:bg-slate-400/40 cursor-help"
-                                        style={{
-                                            left: `${timeToPos(task.startTime)}%`,
-                                            width: `${getDurationPct(task.startTime, task.endTime)}%`
-                                        }}
-                                        title={`${task.title} (${task.startTime} - ${task.endTime})`}
-                                    >
-                                        {task.title}
-                                    </div>
-                                ))}
+                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden [isolation:isolate] flex items-center">
+                                {(data.originalTasks || []).map(task => {
+                                    const leftPos = timeToPos(task.startTime);
+                                    const rawWidth = getDurationPct(task.startTime, task.endTime);
+                                    const maxW = Math.max(0, 100 - leftPos);
+                                    const widthPos = Math.min(rawWidth, maxW);
+                                    return (
+                                        <div
+                                            key={`orig-${task.id}`}
+                                            className="absolute top-2 bottom-2 rounded-md bg-slate-400/20 border border-slate-400/30 flex items-center px-2 text-[10px] text-slate-500 whitespace-nowrap overflow-hidden transition-all hover:bg-slate-400/40 cursor-help max-h-[36px]"
+                                            style={{
+                                                left: `${leftPos}%`,
+                                                width: `${widthPos}%`,
+                                                maxWidth: `${maxW}%`,
+                                                minWidth: leftPos > 90 ? '10px' : '24px',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            title={`${task.title} (${task.startTime} - ${task.endTime})`}
+                                        >
+                                            {task.title}
+                                        </div>
+                                    );
+                                })}
                             </div>
 
                             {/* SVG Connections Layer */}
@@ -235,25 +244,33 @@ const RequestReviewModal = ({ isOpen, onClose, request, onApprove, onReject, inl
                             </div>
 
                             {/* Proposed Timeline */}
-                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50">
+                            <div className="relative h-14 w-full bg-slate-200/50 dark:bg-github-dark-subtle/50 rounded-lg border border-slate-200 dark:border-github-dark-border/50 overflow-hidden [isolation:isolate] flex items-center">
                                 {(data.proposedTasks || []).map(task => {
                                     const isNew = !(data.originalTasks || []).find(o => o.id === task.id);
                                     const isChanged = (data.originalTasks || []).find(o => o.id === task.id && (o.startTime !== task.startTime || o.endTime !== task.endTime));
 
-                                    let baseClasses = "absolute top-2 bottom-2 rounded-md flex items-center px-2 text-[10px] font-medium whitespace-nowrap overflow-hidden transition-all shadow-sm";
+                                    let baseClasses = "absolute top-2 bottom-2 rounded-md flex items-center px-2 text-[10px] font-medium whitespace-nowrap overflow-hidden transition-all shadow-sm max-h-[36px]";
                                     let colorClasses = isNew
                                         ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
                                         : isChanged
                                             ? "bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400"
                                             : "bg-slate-300 dark:bg-slate-700 border border-slate-400/30 text-slate-600 dark:text-slate-300";
 
+                                    const leftPos = timeToPos(task.startTime);
+                                    const rawWidth = getDurationPct(task.startTime, task.endTime);
+                                    const maxW = Math.max(0, 100 - leftPos);
+                                    const widthPos = Math.min(rawWidth, maxW);
+
                                     return (
                                         <div
                                             key={`prop-${task.id}`}
                                             className={`${baseClasses} ${colorClasses}`}
                                             style={{
-                                                left: `${timeToPos(task.startTime)}%`,
-                                                width: `${getDurationPct(task.startTime, task.endTime)}%`
+                                                left: `${leftPos}%`,
+                                                width: `${widthPos}%`,
+                                                maxWidth: `${maxW}%`,
+                                                minWidth: leftPos > 90 ? '10px' : '24px',
+                                                boxSizing: 'border-box'
                                             }}
                                         >
                                             {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />}
