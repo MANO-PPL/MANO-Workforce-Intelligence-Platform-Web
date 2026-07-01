@@ -167,7 +167,15 @@ export function calculateOvertime(totalHours, rules) {
     const isEnabled = rules?.overtime?.enabled !== false;
 
     if (isEnabled && totalHours >= (threshold + buffer)) {
-        return parseFloat((totalHours - threshold).toFixed(2));
+        let overtime = parseFloat((totalHours - threshold).toFixed(2));
+        const maxOvertimeVal = rules?.overtime?.max_overtime ?? rules?.overtime?.maxOvertime;
+        if (maxOvertimeVal !== undefined && maxOvertimeVal !== null) {
+            const maxOvertime = Number(maxOvertimeVal);
+            if (overtime > maxOvertime) {
+                overtime = maxOvertime;
+            }
+        }
+        return overtime;
     }
     return 0;
 }
