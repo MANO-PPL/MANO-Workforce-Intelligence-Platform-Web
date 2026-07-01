@@ -683,6 +683,39 @@ export const createDepartment = async (deptName, orgId) => {
     return { dept_id: newId, dept_name: deptName };
 };
 
+export const updateDepartment = async (deptId, deptName, orgId) => {
+    if (!deptName || !deptName.trim()) throw new AppError("Department name is required", 400);
+    const trimmed = deptName.trim();
+
+    const dept = await attendanceDB("departments").where({ dept_id: deptId, org_id: orgId }).first();
+    if (!dept) throw new AppError("Department not found", 404);
+
+    const existing = await attendanceDB("departments")
+        .where({ dept_name: trimmed, org_id: orgId })
+        .whereNot({ dept_id: deptId })
+        .first();
+    if (existing) throw new AppError("Another department with this name already exists", 400);
+
+    await attendanceDB("departments").where({ dept_id: deptId, org_id: orgId }).update({ dept_name: trimmed });
+    return { dept_id: deptId, dept_name: trimmed };
+};
+
+export const deleteDepartment = async (deptId, orgId) => {
+    const dept = await attendanceDB("departments").where({ dept_id: deptId, org_id: orgId }).first();
+    if (!dept) throw new AppError("Department not found", 404);
+
+    const userInDept = await attendanceDB('users')
+        .where({ dept_id: deptId, org_id: orgId })
+        .where(builder => builder.where('is_deleted', false).orWhereNull('is_deleted'))
+        .first();
+    if (userInDept) {
+        throw new AppError("Cannot delete department because it is currently assigned to employee(s)", 400);
+    }
+
+    await attendanceDB("departments").where({ dept_id: deptId, org_id: orgId }).del();
+    return { success: true };
+};
+
 export const getDesignations = async (orgId) => {
     return await attendanceDB("designations").where({ org_id: orgId }).select("desg_id", "desg_name");
 };
@@ -695,6 +728,40 @@ export const createDesignation = async (desgName, orgId) => {
     const [newId] = await attendanceDB("designations").insert({ desg_name: desgName, org_id: orgId });
     return { desg_id: newId, desg_name: desgName };
 };
+
+export const updateDesignation = async (desgId, desgName, orgId) => {
+    if (!desgName || !desgName.trim()) throw new AppError("Designation name is required", 400);
+    const trimmed = desgName.trim();
+
+    const desg = await attendanceDB("designations").where({ desg_id: desgId, org_id: orgId }).first();
+    if (!desg) throw new AppError("Designation not found", 404);
+
+    const existing = await attendanceDB("designations")
+        .where({ desg_name: trimmed, org_id: orgId })
+        .whereNot({ desg_id: desgId })
+        .first();
+    if (existing) throw new AppError("Another designation with this name already exists", 400);
+
+    await attendanceDB("designations").where({ desg_id: desgId, org_id: orgId }).update({ desg_name: trimmed });
+    return { desg_id: desgId, desg_name: trimmed };
+};
+
+export const deleteDesignation = async (desgId, orgId) => {
+    const desg = await attendanceDB("designations").where({ desg_id: desgId, org_id: orgId }).first();
+    if (!desg) throw new AppError("Designation not found", 404);
+
+    const userInDesg = await attendanceDB('users')
+        .where({ desg_id: desgId, org_id: orgId })
+        .where(builder => builder.where('is_deleted', false).orWhereNull('is_deleted'))
+        .first();
+    if (userInDesg) {
+        throw new AppError("Cannot delete designation because it is currently assigned to employee(s)", 400);
+    }
+
+    await attendanceDB("designations").where({ desg_id: desgId, org_id: orgId }).del();
+    return { success: true };
+};
+
 
 export const getShifts = async (orgId) => {
     const shifts = await attendanceDB("shifts").where({ org_id: orgId });
@@ -709,6 +776,7 @@ export const getShifts = async (orgId) => {
             grace_period_mins: rules.grace_period?.minutes || 0,
             is_overtime_enabled: rules.overtime?.enabled ? 1 : 0,
             overtime_threshold_hours: rules.overtime?.threshold || 8.0,
+            is_active: rules.is_active !== undefined ? (rules.is_active ? 1 : 0) : (s.is_active !== undefined ? s.is_active : 1),
             policy_rules: rules
         };
     });
@@ -717,7 +785,7 @@ export const getShifts = async (orgId) => {
 export const createShift = async (shiftData, orgId) => {
     const {
         shift_name, start_time, end_time, grace_period_mins,
-        is_overtime_enabled, overtime_threshold_hours,
+        is_overtime_enabled, overtime_threshold_hours, is_active,
         policy_rules
     } = shiftData;
 
@@ -727,8 +795,11 @@ export const createShift = async (shiftData, orgId) => {
     if (existing) throw new AppError("Shift already exists", 400);
 
     const rules = policy_rules || {};
+    const isActiveVal = is_active !== undefined ? (is_active ? 1 : 0) : (rules.is_active !== undefined ? (rules.is_active ? 1 : 0) : 1);
+
     const finalRules = {
         ...rules,
+        is_active: isActiveVal === 1,
         shift_timing: {
             start_time: start_time || null,
             end_time: end_time || null
@@ -746,6 +817,7 @@ export const createShift = async (shiftData, orgId) => {
     const [newId] = await attendanceDB("shifts").insert({
         org_id,
         shift_name,
+        is_active: isActiveVal,
         policy_rules: JSON.stringify(finalRules)
     });
     return { shift_id: newId, shift_name };
@@ -754,15 +826,23 @@ export const createShift = async (shiftData, orgId) => {
 export const updateShift = async (shiftId, shiftData, orgId) => {
     const {
         shift_name,
+        is_active,
         policy_rules = {}
     } = shiftData;
 
+    const rules = shiftData.policy_rules || {};
+    const isActiveVal = is_active !== undefined ? (is_active ? 1 : 0) : (rules.is_active !== undefined ? (rules.is_active ? 1 : 0) : 1);
+
     const updates = {
-        shift_name
+        shift_name,
+        is_active: isActiveVal
     };
 
-    if (shiftData.policy_rules) {
-        updates.policy_rules = JSON.stringify(policy_rules);
+    if (shiftData.policy_rules || is_active !== undefined) {
+        updates.policy_rules = JSON.stringify({
+            ...rules,
+            is_active: isActiveVal === 1
+        });
     }
 
     const affected = await attendanceDB("shifts").where({ shift_id: shiftId, org_id }).update(updates);

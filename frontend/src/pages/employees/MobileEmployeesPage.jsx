@@ -19,7 +19,9 @@ import {
     User,
     Shield,
     Eye,
-    Settings
+    Settings,
+    Check,
+    DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { adminService, adminCacheData } from '../../services/adminService';
@@ -27,9 +29,31 @@ import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import MobileDashboardLayout from '../../components/MobileDashboardLayout';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
+import payrollService from '../../services/payrollService';
 
 const EmployeeDetailModal = ({ employee, onClose, onAction, avatarTimestamp }) => {
     const [showPreview, setShowPreview] = useState(false);
+    const [salary, setSalary] = useState(null);
+    const [loadingSalary, setLoadingSalary] = useState(false);
+
+    useEffect(() => {
+        if (employee) {
+            const fetchSalary = async () => {
+                setLoadingSalary(true);
+                try {
+                    const res = await payrollService.getEmployeeSalary(employee.id);
+                    if (res.status === 'success') {
+                        setSalary(res.data);
+                    }
+                } catch (err) {
+                    console.error("Failed to load mobile employee salary:", err);
+                } finally {
+                    setLoadingSalary(false);
+                }
+            };
+            fetchSalary();
+        }
+    }, [employee]);
 
     useEffect(() => {
         const handlePopState = (e) => {
@@ -131,6 +155,65 @@ const EmployeeDetailModal = ({ employee, onClose, onAction, avatarTimestamp }) =
                         ))}
                     </div>
 
+                    {/* Salary Breakdown Section */}
+                    <div className="w-full bg-slate-50 dark:bg-white/5 p-5 rounded-3xl border border-slate-100 dark:border-white/5 mb-6 space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/10 pb-2">
+                            <div className="flex items-center gap-1.5">
+                                <DollarSign size={14} className="text-indigo-500" />
+                                <span className="text-[10px] font-black text-slate-400 dark:text-github-dark-muted uppercase tracking-wider">Salary Details</span>
+                            </div>
+                            {salary?.package_name && (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30">
+                                    {salary.package_name}
+                                </span>
+                            )}
+                        </div>
+                        {loadingSalary ? (
+                            <div className="text-center py-2 text-xs font-semibold text-slate-400 dark:text-github-dark-muted animate-pulse">
+                                Loading salary details...
+                            </div>
+                        ) : salary ? (() => {
+                            const gross = Number(salary.gross_monthly_salary || 0);
+                            const basic = gross * 0.40;
+                            const hra = basic * 0.50;
+                            const pf = basic * 0.12;
+                            const specialAllowance = gross - (basic + hra + pf);
+                            const netTakeHome = gross - pf;
+                            return (
+                                <div className="space-y-2 text-xs font-medium">
+                                    <div className="flex justify-between font-bold text-slate-800 dark:text-white">
+                                        <span>Gross Monthly</span>
+                                        <span>₹{gross.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-500">
+                                        <span>Basic Salary (40%)</span>
+                                        <span>₹{basic.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-500">
+                                        <span>HRA (50% of Basic)</span>
+                                        <span>₹{hra.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-500">
+                                        <span>Special Allowance</span>
+                                        <span>₹{specialAllowance.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="flex justify-between text-rose-500">
+                                        <span>Provident Fund (12% of Basic)</span>
+                                        <span>-₹{pf.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold text-emerald-600 dark:text-emerald-400 pt-1.5 border-t border-slate-200/50 dark:border-white/10">
+                                        <span>Est. Net Take-Home</span>
+                                        <span>₹{netTakeHome.toLocaleString('en-IN')}</span>
+                                    </div>
+                                </div>
+                            );
+                        })() : (
+                            <div className="text-center py-2 text-xs font-medium text-slate-400 italic">
+                                No active salary config.
+                            </div>
+                        )}
+                    </div>
+
                     {/* Premium Quick Actions */}
                     <div className="w-full flex gap-3">
                         <button
@@ -189,9 +272,13 @@ const EmployeeDetailModal = ({ employee, onClose, onAction, avatarTimestamp }) =
     );
 };
 
-const DeptDesgModal = ({ isOpen, onClose, departments, designations, onAddDept, onAddDesg, isAddingItem }) => {
+const DeptDesgModal = ({ isOpen, onClose, departments, designations, onAddDept, onAddDesg, onUpdateDept, onDeleteDept, onUpdateDesg, onDeleteDesg, isAddingItem }) => {
     const [sidebarTab, setSidebarTab] = useState('depts');
     const [newItemName, setNewItemName] = useState('');
+    const [editingDeptId, setEditingDeptId] = useState(null);
+    const [editingDeptName, setEditingDeptName] = useState('');
+    const [editingDesgId, setEditingDesgId] = useState(null);
+    const [editingDesgName, setEditingDesgName] = useState('');
 
     useEffect(() => {
         const handlePopState = (e) => {
@@ -249,7 +336,7 @@ const DeptDesgModal = ({ isOpen, onClose, departments, designations, onAddDept, 
                 {/* Tab Switcher */}
                 <div className="flex bg-[#f6f8fa] dark:bg-github-dark-subtle p-1.5 flex rounded-2xl border border-slate-200 dark:border-github-dark-border mb-6">
                     <button
-                        onClick={() => { setSidebarTab('depts'); setNewItemName(''); }}
+                        onClick={() => { setSidebarTab('depts'); setNewItemName(''); setEditingDeptId(null); setEditingDesgId(null); }}
                         className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all ${
                             sidebarTab === 'depts'
                                 ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 shadow-sm'
@@ -259,7 +346,7 @@ const DeptDesgModal = ({ isOpen, onClose, departments, designations, onAddDept, 
                         Departments
                     </button>
                     <button
-                        onClick={() => { setSidebarTab('desgs'); setNewItemName(''); }}
+                        onClick={() => { setSidebarTab('desgs'); setNewItemName(''); setEditingDeptId(null); setEditingDesgId(null); }}
                         className={`flex-1 py-2.5 text-[11px] font-semibold rounded-xl transition-all ${
                             sidebarTab === 'desgs'
                                 ? 'bg-white dark:bg-[#21262d] text-indigo-600 dark:text-indigo-400 shadow-sm'
@@ -290,12 +377,60 @@ const DeptDesgModal = ({ isOpen, onClose, departments, designations, onAddDept, 
                 </div>
 
                 {/* List Container */}
-                <div className="flex-1 overflow-y-auto min-h-[30vh] max-h-[55vh] pr-1 space-y-2 no-scrollbar">
+                <div className="flex-1 overflow-y-auto min-h-[30vh] max-h-[55vh] space-y-1 no-scrollbar">
                     {sidebarTab === 'depts' ? (
                         departments.length > 0 ? (
                             departments.map(dept => (
-                                <div key={dept.dept_id || dept.dept_name} className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 font-semibold text-slate-800 dark:text-white text-sm">
-                                    {dept.dept_name}
+                                <div key={dept.dept_id || dept.dept_name} className="px-3.5 py-3 rounded-xl font-medium text-slate-800 dark:text-slate-200 text-sm flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-github-dark-subtle/40 transition-all border-b border-slate-100/60 dark:border-github-dark-border/40 last:border-b-0">
+                                    {editingDeptId === dept.dept_id ? (
+                                        <div className="flex items-center gap-2 w-full">
+                                            <input
+                                                type="text"
+                                                value={editingDeptName}
+                                                onChange={(e) => setEditingDeptName(e.target.value)}
+                                                className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-github-dark-subtle border border-indigo-500 rounded-xl focus:outline-none text-slate-800 dark:text-white"
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={async () => {
+                                                    await onUpdateDept(dept.dept_id, editingDeptName);
+                                                    setEditingDeptId(null);
+                                                }}
+                                                className="p-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl transition-colors"
+                                            >
+                                                <Check size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingDeptId(null)}
+                                                className="p-2 text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-xl transition-colors"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/60 dark:bg-indigo-400/60 flex-shrink-0" />
+                                                <span className="truncate">{dept.dept_name}</span>
+                                            </div>
+                                            {dept.dept_id && (
+                                                <div className="flex items-center gap-1 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => { setEditingDeptId(dept.dept_id); setEditingDeptName(dept.dept_name); }}
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-colors"
+                                                    >
+                                                        <Edit2 size={15} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => onDeleteDept(dept.dept_id, dept.dept_name)}
+                                                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-colors"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             ))
                         ) : (
@@ -304,8 +439,56 @@ const DeptDesgModal = ({ isOpen, onClose, departments, designations, onAddDept, 
                     ) : (
                         designations.length > 0 ? (
                             designations.map(desg => (
-                                <div key={desg.desg_id || desg.desg_name} className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 font-semibold text-slate-800 dark:text-white text-sm">
-                                    {desg.desg_name}
+                                <div key={desg.desg_id || desg.desg_name} className="px-3.5 py-3 rounded-xl font-medium text-slate-800 dark:text-slate-200 text-sm flex items-center justify-between hover:bg-slate-100/70 dark:hover:bg-github-dark-subtle/40 transition-all border-b border-slate-100/60 dark:border-github-dark-border/40 last:border-b-0">
+                                    {editingDesgId === desg.desg_id ? (
+                                        <div className="flex items-center gap-2 w-full">
+                                            <input
+                                                type="text"
+                                                value={editingDesgName}
+                                                onChange={(e) => setEditingDesgName(e.target.value)}
+                                                className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-github-dark-subtle border border-indigo-500 rounded-xl focus:outline-none text-slate-800 dark:text-white"
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={async () => {
+                                                    await onUpdateDesg(desg.desg_id, editingDesgName);
+                                                    setEditingDesgId(null);
+                                                }}
+                                                className="p-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl transition-colors"
+                                            >
+                                                <Check size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingDesgId(null)}
+                                                className="p-2 text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-xl transition-colors"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/60 dark:bg-indigo-400/60 flex-shrink-0" />
+                                                <span className="truncate">{desg.desg_name}</span>
+                                            </div>
+                                            {desg.desg_id && (
+                                                <div className="flex items-center gap-1 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => { setEditingDesgId(desg.desg_id); setEditingDesgName(desg.desg_name); }}
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-colors"
+                                                    >
+                                                        <Edit2 size={15} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => onDeleteDesg(desg.desg_id, desg.desg_name)}
+                                                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-colors"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             ))
                         ) : (
@@ -369,6 +552,72 @@ const MobileEmployeesPage = () => {
         }
     };
 
+
+    const handleUpdateDept = async (deptId, name) => {
+        try {
+            await adminService.updateDepartment(deptId, name);
+            toast.success("Department updated successfully!");
+            await fetchDepartments();
+        } catch (err) {
+            toast.error(err.message || "Failed to update department");
+        }
+    };
+
+    const handleDeleteDept = async (deptId, deptName) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Delete Department",
+            message: `Are you sure you want to delete the department "${deptName}"?`,
+            type: "danger",
+            confirmText: "Delete",
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.deleteDepartment(deptId);
+                    toast.success("Department deleted successfully!");
+                    await fetchDepartments();
+                } catch (err) {
+                    toast.error(err.message || "Failed to delete department");
+                } finally {
+                    setIsSubmitting(false);
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }
+            }
+        });
+    };
+
+    const handleUpdateDesg = async (desgId, name) => {
+        try {
+            await adminService.updateDesignation(desgId, name);
+            toast.success("Designation updated successfully!");
+            await fetchDesignations();
+        } catch (err) {
+            toast.error(err.message || "Failed to update designation");
+        }
+    };
+
+    const handleDeleteDesg = async (desgId, desgName) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Delete Designation",
+            message: `Are you sure you want to delete the designation "${desgName}"?`,
+            type: "danger",
+            confirmText: "Delete",
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.deleteDesignation(desgId);
+                    toast.success("Designation deleted successfully!");
+                    await fetchDesignations();
+                } catch (err) {
+                    toast.error(err.message || "Failed to delete designation");
+                } finally {
+                    setIsSubmitting(false);
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }
+            }
+        });
+    };
 
     const tabs = ['Active', 'Inactive', 'Deleted'];
     const currentIndex = tabs.indexOf(statusFilter);
@@ -871,6 +1120,10 @@ const MobileEmployeesPage = () => {
                             designations={designations}
                             onAddDept={handleAddDept}
                             onAddDesg={handleAddDesg}
+                            onUpdateDept={handleUpdateDept}
+                            onDeleteDept={handleDeleteDept}
+                            onUpdateDesg={handleUpdateDesg}
+                            onDeleteDesg={handleDeleteDesg}
                             isAddingItem={isAddingItem}
                         />
                     )}

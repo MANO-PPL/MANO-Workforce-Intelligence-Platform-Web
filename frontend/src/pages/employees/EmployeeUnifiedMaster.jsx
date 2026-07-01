@@ -1944,7 +1944,7 @@ const EmployeeUnifiedMaster = () => {
 
     return (
         <DashboardLayout title="Employee Master Directory (Unified)" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={TOUR_STEPS}>
-            <div className="h-[calc(100vh-64px)] p-4 space-y-4 overflow-hidden flex flex-col">
+            <div className="h-[calc(100vh-64px)] p-3 space-y-3 overflow-hidden flex flex-col">
 
                 {/* 4 Top Metric & Status Filtering Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">

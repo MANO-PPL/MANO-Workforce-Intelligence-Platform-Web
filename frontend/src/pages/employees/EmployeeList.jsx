@@ -18,7 +18,9 @@ import {
     AlertTriangle,
     X,
     User,
-    Settings
+    Settings,
+    Check,
+    DollarSign
 } from 'lucide-react';
 import { adminService, adminCacheData } from '../../services/adminService';
 import { toast } from 'react-toastify';
@@ -27,6 +29,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EmployeeFormContent from '../../components/employees/EmployeeFormContent';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import MinimalSelect from '../../components/MinimalSelect';
+import payrollService from '../../services/payrollService';
 
 
 const EmployeeList = () => {
@@ -57,6 +60,37 @@ const EmployeeList = () => {
     const [sidebarTab, setSidebarTab] = useState('depts'); // 'depts' | 'desgs'
     const [newItemName, setNewItemName] = useState('');
     const [isAddingItem, setIsAddingItem] = useState(false);
+    const [editingDeptId, setEditingDeptId] = useState(null);
+    const [editingDeptName, setEditingDeptName] = useState('');
+    const [editingDesgId, setEditingDesgId] = useState(null);
+    const [editingDesgName, setEditingDesgName] = useState('');
+
+    const [selectedEmployeeSalary, setSelectedEmployeeSalary] = useState(null);
+    const [loadingSalary, setLoadingSalary] = useState(false);
+
+    useEffect(() => {
+        if (selectedEmployee && sidebarMode === 'view') {
+            const fetchSalary = async () => {
+                setLoadingSalary(true);
+                try {
+                    const res = await payrollService.getEmployeeSalary(selectedEmployee.id);
+                    if (res.status === 'success') {
+                        setSelectedEmployeeSalary(res.data);
+                    } else {
+                        setSelectedEmployeeSalary(null);
+                    }
+                } catch (err) {
+                    console.error("Failed to load employee salary:", err);
+                    setSelectedEmployeeSalary(null);
+                } finally {
+                    setLoadingSalary(false);
+                }
+            };
+            fetchSalary();
+        } else {
+            setSelectedEmployeeSalary(null);
+        }
+    }, [selectedEmployee, sidebarMode]);
 
     const handleAddDepartment = async () => {
         if (!newItemName.trim()) return;
@@ -73,6 +107,41 @@ const EmployeeList = () => {
         }
     };
 
+    const handleUpdateDepartment = async (deptId) => {
+        if (!editingDeptName.trim()) return;
+        try {
+            await adminService.updateDepartment(deptId, editingDeptName);
+            toast.success("Department updated successfully!");
+            setEditingDeptId(null);
+            await fetchDepartments();
+        } catch (err) {
+            toast.error(err.message || "Failed to update department");
+        }
+    };
+
+    const handleDeleteDepartment = async (deptId, deptName) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Delete Department",
+            message: `Are you sure you want to delete the department "${deptName}"?`,
+            type: "danger",
+            confirmText: "Delete",
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.deleteDepartment(deptId);
+                    toast.success("Department deleted successfully!");
+                    await fetchDepartments();
+                } catch (err) {
+                    toast.error(err.message || "Failed to delete department");
+                } finally {
+                    setIsSubmitting(false);
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }
+            }
+        });
+    };
+
     const handleAddDesignation = async () => {
         if (!newItemName.trim()) return;
         try {
@@ -86,6 +155,41 @@ const EmployeeList = () => {
         } finally {
             setIsAddingItem(false);
         }
+    };
+
+    const handleUpdateDesignation = async (desgId) => {
+        if (!editingDesgName.trim()) return;
+        try {
+            await adminService.updateDesignation(desgId, editingDesgName);
+            toast.success("Designation updated successfully!");
+            setEditingDesgId(null);
+            await fetchDesignations();
+        } catch (err) {
+            toast.error(err.message || "Failed to update designation");
+        }
+    };
+
+    const handleDeleteDesignation = async (desgId, desgName) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Delete Designation",
+            message: `Are you sure you want to delete the designation "${desgName}"?`,
+            type: "danger",
+            confirmText: "Delete",
+            onConfirm: async () => {
+                try {
+                    setIsSubmitting(true);
+                    await adminService.deleteDesignation(desgId);
+                    toast.success("Designation deleted successfully!");
+                    await fetchDesignations();
+                } catch (err) {
+                    toast.error(err.message || "Failed to delete designation");
+                } finally {
+                    setIsSubmitting(false);
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }
+            }
+        });
     };
 
     // Fetch Employees, Departments, and Designations on Mount
@@ -618,6 +722,89 @@ const EmployeeList = () => {
                                             </div>
                                         </div>
 
+                                        {/* Salary Breakdown Section */}
+                                        <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50 space-y-4">
+                                            <div className="flex items-center justify-between border-b border-slate-150 dark:border-github-dark-border/60 pb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                                                        <DollarSign size={16} />
+                                                    </div>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">Salary Breakdown</span>
+                                                </div>
+                                                {selectedEmployeeSalary?.package_name && (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border border-indigo-200/30">
+                                                        {selectedEmployeeSalary.package_name}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {loadingSalary ? (
+                                                <div className="py-4 text-center text-xs font-semibold text-slate-400 dark:text-github-dark-muted animate-pulse">
+                                                    Loading salary details...
+                                                </div>
+                                            ) : selectedEmployeeSalary ? (() => {
+                                                const gross = Number(selectedEmployeeSalary.gross_monthly_salary || 0);
+                                                const basic = gross * 0.40;
+                                                const hra = basic * 0.50;
+                                                const pf = basic * 0.12;
+                                                const specialAllowance = gross - (basic + hra + pf);
+                                                const netTakeHome = gross - pf;
+                                                return (
+                                                    <div className="space-y-4">
+                                                        {/* Gross and Take-Home Summary Row */}
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="bg-indigo-50/20 dark:bg-indigo-950/10 p-3 rounded-xl border border-indigo-100/40 dark:border-indigo-900/20">
+                                                                <span className="block text-[8px] font-bold text-indigo-650 dark:text-indigo-400 uppercase tracking-wider">Gross Monthly</span>
+                                                                <span className="text-sm font-extrabold text-slate-800 dark:text-github-dark-text mt-0.5 block">
+                                                                    ₹{gross.toLocaleString('en-IN')}
+                                                                </span>
+                                                            </div>
+                                                            <div className="bg-emerald-50/20 dark:bg-emerald-950/10 p-3 rounded-xl border border-emerald-100/40 dark:border-emerald-900/20">
+                                                                <span className="block text-[8px] font-bold text-emerald-650 dark:text-emerald-400 uppercase tracking-wider">Est. Net Take-Home</span>
+                                                                <span className="text-sm font-extrabold text-slate-800 dark:text-github-dark-text mt-0.5 block">
+                                                                    ₹{netTakeHome.toLocaleString('en-IN')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Detailed Components Grid */}
+                                                        <div className="space-y-2">
+                                                            <div className="flex justify-between items-center text-[11px] font-medium py-1 border-b border-dashed border-slate-100 dark:border-github-dark-border/40">
+                                                                <span className="text-slate-500 dark:text-github-dark-muted">Basic Salary (40%)</span>
+                                                                <span className="font-semibold text-slate-700 dark:text-github-dark-text">₹{basic.toLocaleString('en-IN')}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-[11px] font-medium py-1 border-b border-dashed border-slate-100 dark:border-github-dark-border/40">
+                                                                <span className="text-slate-500 dark:text-github-dark-muted">HRA (50% of Basic)</span>
+                                                                <span className="font-semibold text-slate-700 dark:text-github-dark-text">₹{hra.toLocaleString('en-IN')}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-[11px] font-medium py-1 border-b border-dashed border-slate-100 dark:border-github-dark-border/40">
+                                                                <span className="text-slate-500 dark:text-github-dark-muted">Special Allowance</span>
+                                                                <span className="font-semibold text-slate-700 dark:text-github-dark-text">₹{specialAllowance.toLocaleString('en-IN')}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-[11px] font-medium py-1 border-b border-dashed border-slate-100 dark:border-github-dark-border/40">
+                                                                <span className="text-rose-500 dark:text-rose-400">Provident Fund (PF) (12% of Basic)</span>
+                                                                <span className="font-semibold text-rose-500 dark:text-rose-400">₹{pf.toLocaleString('en-IN')}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-[11px] font-medium py-1">
+                                                                <span className="text-slate-500 dark:text-github-dark-muted">Overtime Plan</span>
+                                                                <span className={`font-semibold ${selectedEmployeeSalary.overtime_enabled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
+                                                                    {selectedEmployeeSalary.overtime_enabled ? `₹${selectedEmployeeSalary.overtime_rate} / hr` : 'Disabled'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <p className="text-[8px] text-slate-400 dark:text-github-dark-muted italic leading-normal border-t border-slate-100 dark:border-github-dark-border/60 pt-2">
+                                                            * Take-home is estimated before LOP (Loss of Pay) deductions.
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })() : (
+                                                <div className="text-center py-4 text-xs font-medium text-slate-400 dark:text-github-dark-muted italic">
+                                                    No active salary configuration found.
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Geofences Section */}
                                         <div className="bg-slate-50/50 dark:bg-github-dark-subtle/40 p-5 rounded-2xl border border-slate-100 dark:border-github-dark-border/50">
                                             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 opacity-60">Allowed Geofences</span>
@@ -756,11 +943,60 @@ const EmployeeList = () => {
                                         {/* List Depts */}
                                         <div className="flex-1 flex flex-col min-h-0 space-y-2">
                                             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">All Departments</label>
-                                            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850 border border-slate-100 dark:border-github-dark-border rounded-2xl bg-slate-50/20 dark:bg-github-dark-subtle/20 custom-scrollbar">
+                                            <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar pr-1">
                                                 {departments.length > 0 ? (
                                                     departments.map((dept) => (
-                                                        <div key={dept.dept_id || dept.dept_name} className="p-3.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                            {dept.dept_name}
+                                                        <div key={dept.dept_id || dept.dept_name} className="px-3.5 py-2.5 rounded-xl flex items-center justify-between text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100/80 dark:hover:bg-github-dark-subtle/50 transition-all group border border-transparent hover:border-slate-200/50 dark:hover:border-github-dark-border/50">
+                                                            {editingDeptId === dept.dept_id ? (
+                                                                <div className="flex items-center gap-2 w-full">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editingDeptName}
+                                                                        onChange={(e) => setEditingDeptName(e.target.value)}
+                                                                        className="flex-1 px-3 py-1 text-sm bg-white dark:bg-github-dark-subtle border border-indigo-500 rounded-lg focus:outline-none text-slate-800 dark:text-white shadow-sm"
+                                                                        autoFocus
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => handleUpdateDepartment(dept.dept_id)}
+                                                                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition-colors"
+                                                                        title="Save"
+                                                                    >
+                                                                        <Check size={16} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setEditingDeptId(null)}
+                                                                        className="p-1.5 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                                                        title="Cancel"
+                                                                    >
+                                                                        <X size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/60 dark:bg-indigo-400/60 group-hover:scale-125 transition-transform flex-shrink-0" />
+                                                                        <span className="truncate">{dept.dept_name}</span>
+                                                                    </div>
+                                                                    {dept.dept_id && (
+                                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                                                            <button
+                                                                                onClick={() => { setEditingDeptId(dept.dept_id); setEditingDeptName(dept.dept_name); }}
+                                                                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                                                                                title="Edit Department"
+                                                                            >
+                                                                                <Edit2 size={14} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeleteDepartment(dept.dept_id, dept.dept_name)}
+                                                                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                                                                                title="Delete Department"
+                                                                            >
+                                                                                <Trash2 size={14} />
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            )}
                                                         </div>
                                                     ))
                                                 ) : (
@@ -796,11 +1032,60 @@ const EmployeeList = () => {
                                         {/* List Designations */}
                                         <div className="flex-1 flex flex-col min-h-0 space-y-2">
                                             <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">All Designations</label>
-                                            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850 border border-slate-100 dark:border-github-dark-border rounded-2xl bg-slate-50/20 dark:bg-github-dark-subtle/20 custom-scrollbar">
+                                            <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar pr-1">
                                                 {designations.length > 0 ? (
                                                     designations.map((desg) => (
-                                                        <div key={desg.desg_id || desg.desg_name} className="p-3.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                            {desg.desg_name}
+                                                        <div key={desg.desg_id || desg.desg_name} className="px-3.5 py-2.5 rounded-xl flex items-center justify-between text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100/80 dark:hover:bg-github-dark-subtle/50 transition-all group border border-transparent hover:border-slate-200/50 dark:hover:border-github-dark-border/50">
+                                                            {editingDesgId === desg.desg_id ? (
+                                                                <div className="flex items-center gap-2 w-full">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editingDesgName}
+                                                                        onChange={(e) => setEditingDesgName(e.target.value)}
+                                                                        className="flex-1 px-3 py-1 text-sm bg-white dark:bg-github-dark-subtle border border-indigo-500 rounded-lg focus:outline-none text-slate-800 dark:text-white shadow-sm"
+                                                                        autoFocus
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => handleUpdateDesignation(desg.desg_id)}
+                                                                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition-colors"
+                                                                        title="Save"
+                                                                    >
+                                                                        <Check size={16} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setEditingDesgId(null)}
+                                                                        className="p-1.5 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                                                        title="Cancel"
+                                                                    >
+                                                                        <X size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/60 dark:bg-indigo-400/60 group-hover:scale-125 transition-transform flex-shrink-0" />
+                                                                        <span className="truncate">{desg.desg_name}</span>
+                                                                    </div>
+                                                                    {desg.desg_id && (
+                                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                                                            <button
+                                                                                onClick={() => { setEditingDesgId(desg.desg_id); setEditingDesgName(desg.desg_name); }}
+                                                                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                                                                                title="Edit Designation"
+                                                                            >
+                                                                                <Edit2 size={14} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeleteDesignation(desg.desg_id, desg.desg_name)}
+                                                                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                                                                                title="Delete Designation"
+                                                                            >
+                                                                                <Trash2 size={14} />
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            )}
                                                         </div>
                                                     ))
                                                 ) : (
