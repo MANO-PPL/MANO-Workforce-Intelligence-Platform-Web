@@ -52,6 +52,41 @@ export async function processTimeIn(context) {
     return { ok: false, status: 400, message: "Already timed in. Please time out first." };
   }
 
+  // Auto-resolve any open sessions from previous days as MISSED_PUNCH
+  try {
+    const priorOpenSessions = await attendanceDB("attendance_records")
+      .where({ user_id })
+      .whereNull("time_out")
+      .whereRaw("DATE(time_in) < DATE(?)", [todayDate]);
+
+    for (const session of priorOpenSessions) {
+      let metadata = {};
+      try {
+        metadata = typeof session.metadata === 'string'
+          ? JSON.parse(session.metadata)
+          : (session.metadata || {});
+      } catch (e) {
+        metadata = {};
+      }
+      metadata.missed_punch = {
+        flagged_at: new Date().toISOString(),
+        reason: "System auto-flagged: Checked in on a new day before checking out."
+      };
+      await attendanceDB("attendance_records")
+        .where({ attendance_id: session.attendance_id })
+        .update({
+          status: "MISSED_PUNCH",
+          metadata: JSON.stringify(metadata),
+          updated_at: attendanceDB.fn.now()
+        });
+      
+      const sessionDate = new Date(session.time_in).toISOString().split('T')[0];
+      await syncDailyAttendance(user_id, sessionDate, { status: "MISSED_PUNCH" }).catch(console.error);
+    }
+  } catch (err) {
+    console.error("Error auto-resolving prior open sessions:", err);
+  }
+
   // 2. Shift Context
   const sessionContext = await StatusService.buildSessionContext(user_id, localTime, "time_in");
   const shift = await getUserShift(user_id);
@@ -202,6 +237,25 @@ export async function processTimeOut(context) {
   if (!openSession) {
     console.warn(`[Attendance] No open session found for user ${user_id}.`);
     return { ok: false, status: 400, message: "No active time-in found to time out." };
+  }
+
+  // Prevent checking out sessions that have already been flagged as MISSED_PUNCH by the cron job
+  if (openSession.status === 'MISSED_PUNCH') {
+    return {
+      ok: false,
+      status: 400,
+      message: "This session has been flagged as a missed punch. Please submit a correction request to adjust your hours."
+    };
+  }
+
+  // Prevent checking out sessions older than 24 hours
+  const durationHours = (new Date(localTime) - new Date(openSession.time_in)) / (1000 * 60 * 60);
+  if (durationHours > 24) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Your active session is older than 24 hours. Please submit a correction request to adjust your hours."
+    };
   }
 
   // 2. Shift Context

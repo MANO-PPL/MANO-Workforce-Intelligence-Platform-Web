@@ -84,7 +84,8 @@ const LabourManagement = () => {
     const [editingLabour, setEditingLabour] = useState(null);
     const [labourForm, setLabourForm] = useState({
         name: '', phone: '', sex: 'Male', role: '',
-        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+        overtime_pay_per_hour: '0'
     });
 
     const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -113,6 +114,13 @@ const LabourManagement = () => {
         accrued_credit: 0, advances_taken: 0, net_payable: 0, paid_amount: '',
         status: 'Paid', payment_date: new Date().toISOString().split('T')[0], notes: ''
     });
+
+    // Daily Schedule Planner States
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedScheduleLabour, setSelectedScheduleLabour] = useState(null);
+    const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
+    const [scheduleSites, setScheduleSites] = useState([]);
+    const [scheduleLoading, setScheduleLoading] = useState(false);
 
     const [financeMonth, setFinanceMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
     const [financeRoleFilter, setFinanceRoleFilter] = useState('');
@@ -468,9 +476,11 @@ const LabourManagement = () => {
             const payload = {
                 ...labourForm,
                 phone: cleanPhone || null,
+                wage_type: 'Daily Wage',
                 monthly_salary: Number(labourForm.monthly_salary),
                 allowed_leaves: 0,
-                site_id: labourForm.site_id ? Number(labourForm.site_id) : null
+                site_id: labourForm.site_id ? Number(labourForm.site_id) : null,
+                overtime_pay_per_hour: Number(labourForm.overtime_pay_per_hour || 0)
             };
 
             if (editingLabour) {
@@ -484,7 +494,8 @@ const LabourManagement = () => {
             setEditingLabour(null);
             setLabourForm({
                 name: '', phone: '', sex: 'Male', role: '',
-                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+                overtime_pay_per_hour: '0'
             });
             fetchLabours();
         } catch (err) {
@@ -499,10 +510,11 @@ const LabourManagement = () => {
             phone: lab.phone || '',
             sex: lab.sex || 'Male',
             role: lab.role,
-            wage_type: lab.wage_type,
+            wage_type: 'Daily Wage',
             monthly_salary: lab.monthly_salary,
-            allowed_leaves: lab.allowed_leaves?.toString() || '0',
-            site_id: lab.site_id?.toString() || ''
+            allowed_leaves: '0',
+            site_id: lab.site_id?.toString() || '',
+            overtime_pay_per_hour: lab.overtime_pay_per_hour?.toString() || '0'
         });
         setShowLabourModal(true);
     };
@@ -524,13 +536,70 @@ const LabourManagement = () => {
         });
     };
 
+    const fetchScheduleForLabour = async (labourId, date) => {
+        setScheduleLoading(true);
+        try {
+            const res = await labourService.getLabourSchedule(labourId, date);
+            setScheduleSites(res.site_ids || []);
+        } catch (err) {
+            toast.error(err.message || 'Failed to fetch schedule');
+            setScheduleSites([]);
+        }
+        setScheduleLoading(false);
+    };
+
+    const handleOpenScheduleModal = async (labour) => {
+        setSelectedScheduleLabour(labour);
+        const todayStr = new Date().toISOString().split('T')[0];
+        setScheduleDate(todayStr);
+        setShowScheduleModal(true);
+        await fetchScheduleForLabour(labour.labour_id, todayStr);
+    };
+
+    const handleScheduleDateChange = async (date) => {
+        setScheduleDate(date);
+        if (selectedScheduleLabour) {
+            await fetchScheduleForLabour(selectedScheduleLabour.labour_id, date);
+        }
+    };
+
+    const handleToggleScheduleSite = (siteId) => {
+        setScheduleSites(prev =>
+            prev.includes(siteId)
+                ? prev.filter(id => id !== siteId)
+                : [...prev, siteId]
+        );
+    };
+
+    const handleSaveSchedule = async () => {
+        if (!selectedScheduleLabour) return;
+        try {
+            await labourService.saveLabourSchedule({
+                labour_id: selectedScheduleLabour.labour_id,
+                date: scheduleDate,
+                site_ids: scheduleSites
+            });
+            toast.success(`Schedule updated for ${selectedScheduleLabour.name}`);
+            setShowScheduleModal(false);
+            fetchLabours();
+        } catch (err) {
+            toast.error(err.message || 'Failed to save daily schedule');
+        }
+    };
+
     // ==========================================
     // ATTENDANCE HANDLERS
     // ==========================================
 
     const handleStatusChange = (labourId, newStatus) => {
         setAttendanceRoster(prev =>
-            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus } : item)
+            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus, overtime_hours: newStatus === 'Present' ? (item.overtime_hours || 0) : 0 } : item)
+        );
+    };
+
+    const handleOvertimeChange = (labourId, otHours) => {
+        setAttendanceRoster(prev =>
+            prev.map(item => item.labour_id === labourId ? { ...item, overtime_hours: otHours } : item)
         );
     };
 
@@ -1081,17 +1150,18 @@ const LabourManagement = () => {
                                                     >
                                                         <table className="w-full text-left border-collapse text-xs">
                                                             <thead>
-                                                                <tr className="bg-slate-50/50 dark:bg-github-dark-border/20 text-slate-500 dark:text-github-dark-muted dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border">
+                                                                <tr className="bg-slate-50/50 dark:bg-github-dark-border/20 text-slate-500 dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border">
                                                                     <th className="p-3">Worker Name</th>
                                                                     <th className="p-3">Role</th>
                                                                     <th className="p-3">Wage Model</th>
                                                                     <th className="p-3 text-center">Status Assignment</th>
+                                                                    <th className="p-3 text-center w-[120px]">Overtime</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
                                                                 {attendanceRoster.filter(r => !attendanceRoleFilter || r.role.toLowerCase() === attendanceRoleFilter.toLowerCase()).length === 0 ? (
                                                                     <tr>
-                                                                        <td colSpan="4" className="p-10 text-center text-slate-400 italic">No labours assigned to this site or matching the role filter.</td>
+                                                                        <td colSpan="5" className="p-10 text-center text-slate-400 italic">No labours assigned to this site or matching the role filter.</td>
                                                                     </tr>
                                                                 ) : (
                                                                     attendanceRoster
@@ -1099,10 +1169,17 @@ const LabourManagement = () => {
                                                                         .map(item => (
                                                                             <tr key={item.labour_id} className="border-b border-slate-100 dark:border-github-dark-border/50 hover:bg-slate-50/20 dark:hover:bg-slate-800/10 relative">
                                                                                 <td className="p-3 font-semibold text-slate-800 dark:text-github-dark-text">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <span>{item.name}</span>
-                                                                                        {item.is_borrowed && (
-                                                                                            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-extrabold text-[8px] uppercase tracking-wider">Added</span>
+                                                                                    <div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span>{item.name}</span>
+                                                                                            {item.is_borrowed && (
+                                                                                                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-extrabold text-[8px] uppercase tracking-wider">Added</span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        {item.already_marked_at && (
+                                                                                            <span className="block text-[9px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+                                                                                                ⚠️ Marked {item.already_marked_at.status} at {item.already_marked_at.site_name}
+                                                                                            </span>
                                                                                         )}
                                                                                     </div>
                                                                                 </td>
@@ -1124,18 +1201,41 @@ const LabourManagement = () => {
                                                                                             ...(item.wage_type === 'Fixed Salary' ? [{ id: 'Paid Leave', label: 'Paid Leave', activeColor: 'bg-indigo-500 text-white dark:bg-indigo-600', inactiveColor: 'bg-slate-50 dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' }] : [])
                                                                                         ].map(statusOpt => {
                                                                                             const isSelected = item.status === statusOpt.id;
+                                                                                            const isButtonDisabled = (statusOpt.id === 'Present' || statusOpt.id === 'Half Day' || statusOpt.id === 'Paid Leave') &&
+                                                                                                item.already_marked_at && !item.is_scheduled_multi_site;
                                                                                             return (
                                                                                                 <button
                                                                                                     key={statusOpt.id}
                                                                                                     onClick={() => handleStatusChange(item.labour_id, statusOpt.id)}
-                                                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-150 cursor-pointer ${isSelected ? statusOpt.activeColor + ' shadow-sm' : statusOpt.inactiveColor
-                                                                                                        }`}
+                                                                                                    disabled={isButtonDisabled}
+                                                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-150 ${
+                                                                                                        isButtonDisabled
+                                                                                                            ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-850/40 dark:text-slate-600 border border-slate-200/50 dark:border-[#30363d]/50'
+                                                                                                            : isSelected
+                                                                                                                ? statusOpt.activeColor + ' shadow-sm cursor-pointer'
+                                                                                                                : statusOpt.inactiveColor + ' cursor-pointer'
+                                                                                                    }`}
                                                                                                 >
                                                                                                     {statusOpt.label}
                                                                                                 </button>
                                                                                             );
                                                                                         })}
                                                                                     </div>
+                                                                                </td>
+                                                                                <td className="p-3 text-center">
+                                                                                    {item.status === 'Present' ? (
+                                                                                        <select
+                                                                                            value={item.overtime_hours || 0}
+                                                                                            onChange={(e) => handleOvertimeChange(item.labour_id, Number(e.target.value))}
+                                                                                            className="bg-slate-50 hover:bg-slate-100 dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-slate-200 dark:border-[#30363d] text-slate-800 dark:text-[#c9d1d9] rounded-lg px-2 py-1 text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-sm min-w-[85px] text-center"
+                                                                                        >
+                                                                                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(hrs => (
+                                                                                                <option key={hrs} value={hrs}>{hrs} hr{hrs !== 1 ? 's' : ''}</option>
+                                                                                            ))}
+                                                                                        </select>
+                                                                                    ) : (
+                                                                                        <span className="text-slate-300 dark:text-[#21262d] font-bold font-mono">-</span>
+                                                                                    )}
                                                                                 </td>
                                                                             </tr>
                                                                         ))
@@ -1268,7 +1368,7 @@ const LabourManagement = () => {
                                                              <tr className="bg-slate-50/50 dark:bg-github-dark-border/20 text-slate-500 dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border text-[11px]">
                                                                  <th className="p-3 text-left">Worker Name</th>
                                                                  <th className="p-3 text-left">Role</th>
-                                                                 <th className="p-3 text-left">Wage Type</th>
+                                                                 <th className="p-3 text-left">Wage & OT Rates</th>
                                                                  <th className="p-3 text-right">Total Earned</th>
                                                                  <th className="p-3 text-right">Total Paid</th>
                                                                  <th className="p-3 text-right">Accrued to Pay</th>
@@ -1302,14 +1402,13 @@ const LabourManagement = () => {
                                                                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 whitespace-nowrap">{row.role}</span>
                                                                                  </td>
                                                                                  <td className="p-3">
-                                                                                     <div className="flex flex-col items-start gap-1">
-                                                                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${row.wage_type === 'Fixed Salary'
-                                                                                             ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400'
-                                                                                             : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400'
-                                                                                             }`}>
-                                                                                             {row.wage_type}
+                                                                                     <div className="flex flex-col items-start gap-0.5">
+                                                                                         <span className="text-slate-800 dark:text-[#f0f6fc] font-bold text-[11px] whitespace-nowrap">
+                                                                                             ₹{row.monthly_salary.toLocaleString()}/day
                                                                                          </span>
-                                                                                         <span className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap">Base: ₹{row.monthly_salary.toLocaleString()}</span>
+                                                                                         <span className="text-[10px] text-slate-500 dark:text-github-dark-muted font-semibold whitespace-nowrap">
+                                                                                             ₹{Number(row.overtime_pay_per_hour || 0).toLocaleString()}/hr OT
+                                                                                         </span>
                                                                                      </div>
                                                                                  </td>
                                                                                  <td className="p-3 font-semibold text-slate-700 dark:text-slate-300 text-right whitespace-nowrap">₹{row.accrued_credit.toLocaleString()}</td>
@@ -1422,8 +1521,9 @@ const LabourManagement = () => {
                                                 <th className="p-3">Phone Number</th>
                                                 <th className="p-3">Gender</th>
                                                 <th className="p-3">Role / Designation</th>
-                                                <th className="p-3">Assigned Site</th>
                                                 <th className="p-3">Daily Wage</th>
+                                                <th className="p-3">OT Pay / hr</th>
+                                                <th className="p-3">Assigned Site</th>
                                                 <th className="p-3 text-right">Actions</th>
                                             </tr>
                                         </thead>
@@ -1456,6 +1556,12 @@ const LabourManagement = () => {
                                                         <td className="p-3 text-slate-655 dark:text-slate-400 font-mono">{lab.phone || 'No phone'}</td>
                                                         <td className="p-3 text-slate-655 dark:text-slate-400">{lab.sex}</td>
                                                         <td className="p-3 text-slate-650 dark:text-slate-400">{lab.role}</td>
+                                                        <td className="p-3 font-medium text-slate-700 dark:text-github-dark-text dark:text-slate-300">
+                                                            ₹{Number(lab.monthly_salary).toLocaleString()}
+                                                        </td>
+                                                        <td className="p-3 font-medium text-slate-700 dark:text-github-dark-text dark:text-slate-300">
+                                                            ₹{Number(lab.overtime_pay_per_hour || 0).toLocaleString()}
+                                                        </td>
                                                         <td className="p-3 text-slate-650 dark:text-slate-400">
                                                             {(() => {
                                                                 // Build list of assigned site names
@@ -1481,11 +1587,15 @@ const LabourManagement = () => {
                                                                 );
                                                             })()}
                                                         </td>
-                                                        <td className="p-3 font-medium text-slate-700 dark:text-github-dark-text dark:text-slate-300">
-                                                            ₹{Number(lab.monthly_salary).toLocaleString()}
-                                                        </td>
                                                         <td className="p-3 text-right">
                                                             <div className="flex justify-end gap-1.5">
+                                                                <button
+                                                                    onClick={() => handleOpenScheduleModal(lab)}
+                                                                    title="Plan Daily Schedule"
+                                                                    className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-indigo-500 rounded border border-slate-200 dark:border-github-dark-border"
+                                                                >
+                                                                    <Calendar size={12} />
+                                                                </button>
                                                                 <button
                                                                     onClick={() => handleEditLabour(lab)}
                                                                     className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 rounded border border-slate-200 dark:border-github-dark-border"
@@ -1603,6 +1713,121 @@ const LabourManagement = () => {
                     document.body
                 )}
 
+                {/* MODAL: DAILY SCHEDULE PLANNER */}
+                {createPortal(
+                    <AnimatePresence>
+                        {showScheduleModal && selectedScheduleLabour && (
+                            <div className="fixed inset-0 z-[1000] flex items-center justify-center overflow-hidden p-4">
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    onClick={() => setShowScheduleModal(false)}
+                                    className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                                />
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                                    className="relative w-full max-w-md bg-white dark:bg-[#0d1117] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#30363d] overflow-hidden flex flex-col z-10"
+                                >
+                                    <div className="flex justify-between items-center p-5 border-b border-slate-100 dark:border-[#30363d] bg-slate-50/50 dark:bg-[#010409]/40">
+                                        <div>
+                                            <h4 className="font-bold text-sm text-slate-800 dark:text-[#f0f6fc] uppercase tracking-wider">
+                                                Daily Site Schedule
+                                            </h4>
+                                            <p className="text-[9px] font-bold text-indigo-550 dark:text-indigo-400 mt-0.5 tracking-wider uppercase">
+                                                Plan Shift for {selectedScheduleLabour.name}
+                                            </p>
+                                        </div>
+                                        <button onClick={() => setShowScheduleModal(false)} className="p-1.5 rounded-full text-slate-400 hover:text-[#58a6ff] hover:bg-slate-100 dark:hover:bg-[#30363d] transition-all">
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+
+                                    <div className="p-6 space-y-4 text-xs flex-1">
+                                        <div>
+                                            <label className="block text-slate-500 dark:text-slate-300 font-semibold mb-1.5 uppercase tracking-wide text-[10px]">Select Target Date</label>
+                                            <DatePicker
+                                                value={scheduleDate}
+                                                onChange={handleScheduleDateChange}
+                                                className="w-full text-xs"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-slate-500 dark:text-slate-300 font-semibold mb-2 uppercase tracking-wide text-[10px]">
+                                                Assign Sites for this Day ({scheduleSites.length} selected)
+                                            </label>
+                                            {scheduleLoading ? (
+                                                <div className="flex justify-center py-8">
+                                                    <Clock className="animate-spin text-indigo-500" size={20} />
+                                                </div>
+                                            ) : (
+                                                <div className="max-h-[220px] overflow-y-auto pr-1 space-y-2 border border-slate-100 dark:border-[#30363d] rounded-xl p-3 bg-slate-50/30 dark:bg-[#161b22]/30 custom-scrollbar">
+                                                    {sites.map(site => {
+                                                        const isChecked = scheduleSites.includes(site.site_id);
+                                                        const isPrimary = selectedScheduleLabour.site_id === site.site_id;
+                                                        return (
+                                                            <div
+                                                                key={site.site_id}
+                                                                onClick={() => handleToggleScheduleSite(site.site_id)}
+                                                                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none ${
+                                                                    isChecked
+                                                                        ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-400 font-medium'
+                                                                        : 'border-slate-100 dark:border-[#30363d] text-slate-650 dark:text-[#c9d1d9] hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={() => {}} // handled by div onClick
+                                                                        className="rounded text-indigo-650 focus:ring-indigo-500 pointer-events-none"
+                                                                    />
+                                                                    <span className="text-xs">{site.site_name}</span>
+                                                                </div>
+                                                                {isPrimary && (
+                                                                    <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-extrabold text-[8px] uppercase tracking-wider">
+                                                                        Primary
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 dark:text-github-dark-muted italic leading-relaxed">
+                                            Note: If no daily schedule is configured for a date, the worker will automatically default to their primary site checklist.
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 border-t border-slate-100 dark:border-[#30363d] bg-slate-50/50 dark:bg-[#010409]/40 flex justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowScheduleModal(false)}
+                                            className="px-4 py-2 border border-slate-200 dark:border-[#30363d] rounded-lg font-bold text-slate-600 dark:text-github-dark-muted hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveSchedule}
+                                            disabled={scheduleLoading}
+                                            className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md hover:shadow-indigo-550/20 transition-all cursor-pointer disabled:opacity-50"
+                                        >
+                                            Save Schedule
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>,
+                    document.body
+                )}
+
                 {/* DRAWERS: LABOUR FORM */}
                 {createPortal(
                     <AnimatePresence>
@@ -1701,6 +1926,18 @@ const LabourManagement = () => {
                                                 required
                                                 min="0"
                                                 placeholder="e.g., 600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-500 dark:text-slate-300 font-semibold mb-1">Overtime Pay (per hour)</label>
+                                            <input
+                                                type="number"
+                                                value={labourForm.overtime_pay_per_hour}
+                                                onChange={(e) => setLabourForm({ ...labourForm, overtime_pay_per_hour: e.target.value })}
+                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border text-slate-900 dark:text-[#f0f6fc] placeholder-slate-400 dark:placeholder-slate-500 rounded-lg focus:outline-none focus:border-indigo-500"
+                                                required
+                                                min="0"
+                                                placeholder="e.g., 100"
                                             />
                                         </div>
                                         {editingLabour && (

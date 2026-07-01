@@ -22,23 +22,75 @@ export async function processHourlyAttendance() {
         .leftJoin('user_work_locations', 'users.user_id', 'user_work_locations.user_id')
         .leftJoin('work_locations', 'user_work_locations.location_id', 'work_locations.location_id')
         .leftJoin('organizations', 'users.org_id', 'organizations.org_id')
-        .whereNotNull('users.org_id')
+        .whereNotNull('users.shift_id')
         .where('users.is_deleted', 0)
         .where('users.is_active', 1)
         .select(
             'users.user_id',
-            'users.org_id',
             'users.shift_id',
             'shifts.*',
+            'users.org_id',
             'work_locations.timezone',
             'organizations.timezone as org_timezone'
         );
 
     for (const user of users) {
         try {
-            // ... (timezone logic remains same)
-            let timeZone = user.org_timezone || 'UTC';
+            // 1. Calculate target hour in-memory first (no DB queries)
+            let targetHour = 2;
+            let endTime = '18:00:00';
+            if (user.end_time) {
+                endTime = user.end_time;
+            } else {
+                try {
+                    let rules = user.policy_rules;
+                    if (typeof rules === 'string') rules = JSON.parse(rules);
+                    if (rules?.shift_timing?.end_time) {
+                        endTime = rules.shift_timing.end_time;
+                    }
+                } catch (e) {}
+            }
 
+            let maxOvertime = 2.5; // Default max overtime fallback
+            try {
+                let rules = user.policy_rules;
+                if (typeof rules === 'string') rules = JSON.parse(rules);
+                if (rules?.overtime?.max_overtime !== undefined) {
+                    maxOvertime = Number(rules.overtime.max_overtime);
+                } else if (rules?.overtime?.maxOvertime !== undefined) {
+                    maxOvertime = Number(rules.overtime.maxOvertime);
+                }
+            } catch (e) {}
+
+            const [endH, endM] = endTime.split(':').map(Number);
+            const latestCheckout = endH + (endM / 60) + maxOvertime;
+            const calculatedHour = Math.ceil(latestCheckout + 2) % 24;
+
+            if (user.processing_time && user.processing_time !== '02:00:00') {
+                const [h] = user.processing_time.split(':');
+                targetHour = parseInt(h, 10);
+            } else {
+                targetHour = calculatedHour;
+            }
+
+            // Quick timezone check with the default timezone (no DB query needed)
+            let baseTimeZone = user.timezone || user.org_timezone || 'UTC';
+            try {
+                Intl.DateTimeFormat(undefined, { timeZone: baseTimeZone });
+            } catch (e) {
+                baseTimeZone = 'UTC';
+            }
+
+            const tempNow = new Date(new Date().toLocaleString('en-US', { timeZone: baseTimeZone }));
+            const baseHour = tempNow.getHours();
+
+            // Skip database queries for 96% of loops where it's not the user's processing hour
+            if (baseHour !== targetHour) {
+                continue;
+            }
+
+            // Only query DB to fetch custom timezone override when baseHour matches targetHour
+            let timeZone = baseTimeZone;
             const lastRecord = await attendanceDB('attendance_records')
                 .where({ user_id: user.user_id })
                 .orderBy('created_at', 'desc')
@@ -51,40 +103,53 @@ export async function processHourlyAttendance() {
                     if (typeof meta === 'string') meta = JSON.parse(meta);
                     if (meta?.time_in?.timezone) {
                         timeZone = meta.time_in.timezone;
+                        // Re-validate custom timezone
+                        try {
+                            Intl.DateTimeFormat(undefined, { timeZone });
+                        } catch (e) {
+                            timeZone = baseTimeZone;
+                        }
                     }
                 } catch (e) {
                     console.warn(`Failed to parse metadata for user ${user.user_id}`, e);
                 }
             }
 
-            // Validate timezone
-            try {
-                Intl.DateTimeFormat(undefined, { timeZone });
-            } catch (e) {
-                timeZone = 'UTC';
-            }
-
             const nowInUserTZ = new Date(new Date().toLocaleString('en-US', { timeZone }));
             const currentHour = nowInUserTZ.getHours();
 
-            // Target Window: Shift's processing_time (default 02:00)
-            let targetHour = 2;
-            if (user.processing_time) {
-                const [h] = user.processing_time.split(':');
-                targetHour = parseInt(h, 10);
+            // Determine if the shift is a night shift
+            let isNightShift = false;
+            if (user.crosses_midnight === 1 || user.crosses_midnight === true) {
+                isNightShift = true;
+            } else {
+                // Heuristic fallback if crosses_midnight column is null
+                let startTime = '09:00:00';
+                if (user.start_time) {
+                    startTime = user.start_time;
+                } else {
+                    try {
+                        let rules = user.policy_rules;
+                        if (typeof rules === 'string') rules = JSON.parse(rules);
+                        if (rules?.shift_timing?.start_time) {
+                            startTime = rules.shift_timing.start_time;
+                        }
+                    } catch (e) {}
+                }
+                const [startH] = startTime.split(':').map(Number);
+                isNightShift = (endH < startH) || (startH >= 17 || startH < 6);
             }
 
-            // Shift target processing hour to a daytime hour (10:00 AM) if it falls at midnight or late night (12 AM - 5 AM)
-            if (targetHour >= 0 && targetHour <= 5) {
-                targetHour = 10;
-            }
+            const isNextDayCheck = isNightShift || (endH + (endM / 60) + maxOvertime + 2) >= 24;
 
             if (currentHour === targetHour) {
-                const yesterday = new Date(nowInUserTZ);
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yyyy = yesterday.getFullYear();
-                const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
-                const dd = String(yesterday.getDate()).padStart(2, '0');
+                const targetDateObj = new Date(nowInUserTZ);
+                if (isNextDayCheck) {
+                    targetDateObj.setDate(targetDateObj.getDate() - 1);
+                }
+                const yyyy = targetDateObj.getFullYear();
+                const mm = String(targetDateObj.getMonth() + 1).padStart(2, '0');
+                const dd = String(targetDateObj.getDate()).padStart(2, '0');
                 const targetDate = `${yyyy}-${mm}-${dd}`;
 
                 await processUserAttendanceForDate(user, targetDate);
@@ -250,8 +315,36 @@ async function escalateExpiredMissedPunches() {
             const nowInUserTZ = new Date(new Date().toLocaleString('en-US', { timeZone }));
             const currentHour = nowInUserTZ.getHours();
 
-            // Only run the escalation logic and send the "Attendance Marked Absent" notification at 10:00 AM in the user's local timezone
-            if (currentHour !== 10) {
+            // Determine escalation hour (latest checkout + 2 hours buffer, modulo 24)
+            let endTime = '18:00:00';
+            if (user.end_time) {
+                endTime = user.end_time;
+            } else {
+                try {
+                    let rules = user.policy_rules;
+                    if (typeof rules === 'string') rules = JSON.parse(rules);
+                    if (rules?.shift_timing?.end_time) {
+                        endTime = rules.shift_timing.end_time;
+                    }
+                } catch (e) {}
+            }
+
+            let maxOvertime = 2.5; // Default max overtime fallback
+            try {
+                let rules = user.policy_rules;
+                if (typeof rules === 'string') rules = JSON.parse(rules);
+                if (rules?.overtime?.max_overtime !== undefined) {
+                    maxOvertime = Number(rules.overtime.max_overtime);
+                } else if (rules?.overtime?.maxOvertime !== undefined) {
+                    maxOvertime = Number(rules.overtime.maxOvertime);
+                }
+            } catch (e) {}
+
+            const [endH, endM] = endTime.split(':').map(Number);
+            const latestCheckout = endH + (endM / 60) + maxOvertime;
+            const escalationHour = Math.ceil(latestCheckout + 2) % 24;
+
+            if (currentHour !== escalationHour) {
                 continue;
             }
 
@@ -334,14 +427,14 @@ export async function checkAndSendShiftReminders() {
         .leftJoin('user_work_locations', 'users.user_id', 'user_work_locations.user_id')
         .leftJoin('work_locations', 'user_work_locations.location_id', 'work_locations.location_id')
         .leftJoin('organizations', 'users.org_id', 'organizations.org_id')
-        .whereNotNull('users.org_id')
+        .whereNotNull('users.shift_id')
         .where('users.is_deleted', 0)
         .where('users.is_active', 1)
         .select(
             'users.user_id',
-            'users.org_id',
             'users.shift_id',
             'shifts.*',
+            'users.org_id',
             'work_locations.timezone',
             'organizations.timezone as org_timezone'
         );
