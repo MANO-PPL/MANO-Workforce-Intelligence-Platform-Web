@@ -30,7 +30,7 @@ import { buildPolicy, parsePolicy } from '../../utils/weekOffPolicy';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 
-const ShiftManagement = () => {
+const ShiftManagement = ({ embedded = false }) => {
     const { avatarTimestamp } = useAuth();
     
     // Data State
@@ -65,6 +65,35 @@ const ShiftManagement = () => {
     const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
     // Helpers
+    const formatDecimalHours = (val) => {
+        const totalMinutes = Math.round((parseFloat(val) || 0) * 60);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        return hrs > 0 ? `${hrs}h ${mins > 0 ? `${mins}m` : '00m'}` : `${mins}m`;
+    };
+
+    const otThresholdVal = parseFloat(newOtThreshold) || 0;
+    const otThresholdMins = Math.round(otThresholdVal * 60);
+    const otThresholdHr = Math.floor(otThresholdMins / 60);
+    const otThresholdMin = otThresholdMins % 60;
+
+    const handleOtThresholdChange = (hr, min) => {
+        const totalMinutes = (parseInt(hr) || 0) * 60 + (parseInt(min) || 0);
+        const decimal = parseFloat((totalMinutes / 60).toFixed(2));
+        setNewOtThreshold(decimal.toString());
+    };
+
+    const otBufferVal = parseFloat(newOtBuffer) || 0;
+    const otBufferMins = Math.round(otBufferVal * 60);
+    const otBufferHr = Math.floor(otBufferMins / 60);
+    const otBufferMin = otBufferMins % 60;
+
+    const handleOtBufferChange = (hr, min) => {
+        const totalMinutes = (parseInt(hr) || 0) * 60 + (parseInt(min) || 0);
+        const decimal = parseFloat((totalMinutes / 60).toFixed(2));
+        setNewOtBuffer(decimal.toString());
+    };
+
     const calculateDuration = (start, end) => {
         if (!start || !end) return '0h 00m';
         const [sh, sm] = start.split(':').map(Number);
@@ -90,6 +119,7 @@ const ShiftManagement = () => {
                     otBuffer: parseFloat(s.overtime_buffer_hours ?? s.policy_rules?.overtime?.buffer ?? 0.5),
                     correctionDeadline: parseInt(s.policy_rules?.correction_deadline ?? 2),
                     color: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400',
+                    isActive: s.is_active !== undefined ? !!s.is_active : (s.policy_rules?.is_active !== undefined ? !!s.policy_rules.is_active : true),
                     policy_rules: s.policy_rules || {},
                     type: 'Shift'
                 }));
@@ -141,7 +171,7 @@ const ShiftManagement = () => {
         setNewCorrectionDeadline('2');
         setNewValCheckInGps(true);
         setNewValCheckInSelfie(true);
-        setNewValCheckOutGps(false);
+        setNewValCheckOutGps(true); // GPS is mandatory
         setNewValCheckOutSelfie(false);
         setNewWorkingDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
         setNewWeekOffRules([]);
@@ -164,9 +194,9 @@ const ShiftManagement = () => {
         setNewOtThreshold(selectedShift.otThreshold.toString());
         setNewOtBuffer(selectedShift.otBuffer.toString());
         setNewCorrectionDeadline(selectedShift.correctionDeadline.toString());
-        setNewValCheckInGps(rules.entry_requirements?.geofence ?? true);
+        setNewValCheckInGps(true); // GPS is mandatory
         setNewValCheckInSelfie(rules.entry_requirements?.selfie ?? true);
-        setNewValCheckOutGps(rules.exit_requirements?.geofence ?? false);
+        setNewValCheckOutGps(true); // GPS is mandatory
         setNewValCheckOutSelfie(rules.exit_requirements?.selfie ?? false);
         setNewWorkingDays(parsed.workingDays.length > 0 ? parsed.workingDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
         setNewWeekOffRules(parsed.weekOffRules);
@@ -223,17 +253,17 @@ const ShiftManagement = () => {
             grace_period: { minutes: parseInt(newGracePeriod) || 0 },
             overtime: { enabled: newOvertime, threshold: parseFloat(newOtThreshold) || 0, buffer: parseFloat(newOtBuffer) || 0 },
             correction_deadline: parseInt(newCorrectionDeadline) || 2,
-            entry_requirements: { selfie: newValCheckInSelfie, geofence: newValCheckInGps },
-            exit_requirements: { selfie: newValCheckOutSelfie, geofence: newValCheckOutGps },
+            entry_requirements: { selfie: newValCheckInSelfie, geofence: true }, // GPS is mandatory
+            exit_requirements: { selfie: newValCheckOutSelfie, geofence: true }, // GPS is mandatory
             week_off_policy
         };
 
         try {
             if (isEditing) {
-                await adminService.updateShift(selectedShift.id, { shift_name: newShiftName, policy_rules: policies });
+                await adminService.updateShift(selectedShift.id, { shift_name: newShiftName, is_active: selectedShift.isActive !== false ? 1 : 0, policy_rules: policies });
                 toast.success('Shift updated');
             } else {
-                await adminService.createShift({ shift_name: newShiftName, policy_rules: policies });
+                await adminService.createShift({ shift_name: newShiftName, is_active: 1, policy_rules: policies });
                 toast.success('Shift created');
             }
             setIsAddModalOpen(false);
@@ -244,21 +274,29 @@ const ShiftManagement = () => {
         }
     };
 
-    const handleDeleteShift = async (shiftId) => {
-        if (!window.confirm('Are you sure you want to delete this shift?')) return;
+    const handleToggleShiftStatus = async (shift) => {
+        const newStatus = !shift.isActive;
+        const policies = {
+            ...(shift.policy_rules || {}),
+            is_active: newStatus
+        };
+        setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, isActive: newStatus, policy_rules: policies } : s));
+        if (selectedShift?.id === shift.id) {
+            setSelectedShift(prev => prev ? { ...prev, isActive: newStatus, policy_rules: policies } : prev);
+        }
         try {
-            await adminService.deleteShift(shiftId);
-            toast.success('Shift deleted');
-            setIsViewModalOpen(false);
+            await adminService.updateShift(shift.id, { shift_name: shift.name, is_active: newStatus ? 1 : 0, policy_rules: policies });
+            toast.success(`Shift marked as ${newStatus ? 'Active' : 'Inactive'}`);
             loadShifts();
         } catch (err) {
-            toast.error(err.message || 'Failed to delete shift');
+            toast.error('Failed to update shift status');
+            loadShifts();
         }
     };
 
-    return (
-        <MobileDashboardLayout title="Shift Management">
-            <div className="px-2 pb-24 pt-2 space-y-4">
+    const content = (
+        <>
+            <div className={embedded ? "px-1 pb-20 pt-1 space-y-4" : "px-2 pb-24 pt-2 space-y-4"}>
                 {/* Header Stats / Info Card */}
                 <div className="bg-white dark:bg-dark-card rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-github-dark-border flex justify-between items-center bg-gradient-to-br from-white to-slate-50/50 dark:from-dark-card dark:to-github-dark-subtle/30">
                     <div>
@@ -294,7 +332,9 @@ const ShiftManagement = () => {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-start">
                                         <h3 className="font-bold text-slate-800 dark:text-github-dark-text text-[14px] truncate tracking-tight">{shift.name}</h3>
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-github-dark-subtle text-slate-500 dark:text-github-dark-muted border border-slate-200/50 dark:border-github-dark-border uppercase tracking-wider">{shift.type}</span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${shift.isActive !== false ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+                                            {shift.isActive !== false ? 'Active' : 'Inactive'}
+                                        </span>
                                     </div>
 
                                     <div className="flex items-center gap-3 mt-1.5">
@@ -351,19 +391,17 @@ const ShiftManagement = () => {
                                         </div>
                                     </div>
                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="flex gap-2">
+                                        <div className="flex items-center gap-2">
                                             <button
                                                 onClick={handleOpenEditModal}
-                                                className="w-10 h-10 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                                                className="w-9 h-9 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
                                             >
-                                                <Settings2 size={20} />
+                                                <Settings2 size={18} />
                                             </button>
-                                            <button
-                                                onClick={() => handleDeleteShift(selectedShift.id)}
-                                                className="w-10 h-10 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors"
-                                            >
-                                                <Trash2 size={20} />
-                                            </button>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" className="sr-only peer" checked={selectedShift.isActive !== false} onChange={() => handleToggleShiftStatus(selectedShift)} />
+                                                <div className="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                                            </label>
                                         </div>
                                         <button
                                             onClick={() => setIsViewModalOpen(false)}
@@ -444,11 +482,9 @@ const ShiftManagement = () => {
                                                                                 <span className="text-[9px] px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold border border-blue-100 dark:border-blue-900/50 uppercase">
                                                                                     {rule.day} ({rule.weeks.map(w => `${w}${w === 1 ? 'st' : w === 2 ? 'nd' : w === 3 ? 'rd' : 'th'}`).join(', ')})
                                                                                 </span>
-                                                                                {rule.timing && rule.timing.start_time && (
-                                                                                    <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-github-dark-muted">
-                                                                                        {rule.timing.start_time.substring(0,5)} → {rule.timing.end_time.substring(0,5)}
-                                                                                    </span>
-                                                                                )}
+                                                                                <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-github-dark-muted">
+                                                                                    {rule.timing?.start_time ? rule.timing.start_time.substring(0, 5) : (selectedShift.start ? selectedShift.start.substring(0, 5) : '09:00')} → {rule.timing?.end_time ? rule.timing.end_time.substring(0, 5) : (selectedShift.end ? selectedShift.end.substring(0, 5) : '13:00')}
+                                                                                </span>
                                                                             </div>
                                                                         ))}
                                                                     </div>
@@ -473,7 +509,7 @@ const ShiftManagement = () => {
                                         <div className="flex justify-between items-center py-3">
                                             <div className="flex items-center gap-2">
                                                 <FileClock size={16} className="text-rose-500" />
-                                                <span className="text-sm font-semibold text-slate-600 dark:text-github-dark-muted">Corr. Deadline</span>
+                                                <span className="text-sm font-semibold text-slate-600 dark:text-github-dark-muted">Correction Deadline</span>
                                             </div>
                                             <span className="text-sm font-bold text-slate-800 dark:text-github-dark-text bg-white dark:bg-github-dark-subtle px-3 py-1 rounded-full shadow-sm border border-slate-100 dark:border-github-dark-border">{selectedShift.correctionDeadline || 2} Days</span>
                                         </div>
@@ -487,7 +523,7 @@ const ShiftManagement = () => {
                                                     {selectedShift.overtime ? 'Active' : 'Off'}
                                                 </div>
                                                 {selectedShift.overtime && (
-                                                    <p className="text-[10px] text-slate-400 mt-1 font-medium italic">Threshold: {selectedShift.otThreshold}h | Buffer: {selectedShift.otBuffer}h</p>
+                                                     <p className="text-[10px] text-slate-400 mt-1 font-medium italic">Threshold: {formatDecimalHours(selectedShift.otThreshold)} | Buffer: {formatDecimalHours(selectedShift.otBuffer)}</p>
                                                 )}
                                             </div>
                                         </div>
@@ -512,10 +548,6 @@ const ShiftManagement = () => {
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <p className="text-[10px] font-bold text-slate-800 dark:text-github-dark-text">Check-In</p>
-                                                <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.policy_rules?.entry_requirements?.geofence ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
-                                                    <CheckCircle2 size={14} className={selectedShift.policy_rules?.entry_requirements?.geofence ? 'text-emerald-500' : 'text-slate-300'} />
-                                                    <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">GPS Req</span>
-                                                </div>
                                                 <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.policy_rules?.entry_requirements?.selfie ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
                                                     <CheckCircle2 size={14} className={selectedShift.policy_rules?.entry_requirements?.selfie ? 'text-emerald-500' : 'text-slate-300'} />
                                                     <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">Selfie Req</span>
@@ -523,10 +555,6 @@ const ShiftManagement = () => {
                                             </div>
                                             <div className="space-y-2">
                                                 <p className="text-[10px] font-bold text-slate-800 dark:text-github-dark-text">Check-Out</p>
-                                                <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.policy_rules?.exit_requirements?.geofence ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
-                                                    <CheckCircle2 size={14} className={selectedShift.policy_rules?.exit_requirements?.geofence ? 'text-emerald-500' : 'text-slate-300'} />
-                                                    <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">GPS Req</span>
-                                                </div>
                                                 <div className={`flex items-center gap-2 p-2 rounded-xl border ${selectedShift.policy_rules?.exit_requirements?.selfie ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50 border-slate-100 dark:bg-github-dark-subtle dark:border-github-dark-border opacity-60'}`}>
                                                     <CheckCircle2 size={14} className={selectedShift.policy_rules?.exit_requirements?.selfie ? 'text-emerald-500' : 'text-slate-300'} />
                                                     <span className="text-[11px] font-bold text-slate-700 dark:text-github-dark-text">Selfie Req</span>
@@ -579,108 +607,164 @@ const ShiftManagement = () => {
                                 </div>
 
                                 <div className="space-y-6">
-                                    {/* Name Input */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shift Name</label>
-                                        <div className="relative group">
-                                            <Settings2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. Regular Day Shift"
-                                                value={newShiftName}
-                                                onChange={(e) => setNewShiftName(e.target.value)}
-                                                className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-semibold text-slate-800 dark:text-github-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 transition-all"
-                                            />
-                                        </div>
-                                    </div>
+                                    {/* SECTION 1: BASIC INFO */}
+                                    <div className="space-y-4">
+                                        <p className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest ml-1">
+                                            Step 1: Basic Details & Timings
+                                        </p>
 
-                                    {/* Time Grid */}
-                                    <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1.5">
-                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Time</label>
+                                            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Shift Name</label>
                                             <div className="relative group">
-                                                <Sun size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" />
+                                                <Settings2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                                                 <input
-                                                    type="time"
-                                                    value={newStartTime}
-                                                    onChange={(e) => setNewStartTime(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-black text-slate-800 dark:text-github-dark-text font-mono appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                    type="text"
+                                                    placeholder="e.g. Regular Day Shift"
+                                                    value={newShiftName}
+                                                    onChange={(e) => setNewShiftName(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3 text-sm font-semibold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
                                                 />
                                             </div>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">End Time</label>
-                                            <div className="relative group">
-                                                <Moon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                                                <input
-                                                    type="time"
-                                                    value={newEndTime}
-                                                    onChange={(e) => setNewEndTime(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-black text-slate-800 dark:text-github-dark-text font-mono appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                                />
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Start Time</label>
+                                                <div className="relative group">
+                                                    <Sun size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-500" />
+                                                    <input
+                                                        type="time"
+                                                        value={newStartTime}
+                                                        onChange={(e) => setNewStartTime(e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-3 py-3 text-xs font-black text-slate-800 dark:text-github-dark-text font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">End Time</label>
+                                                <div className="relative group">
+                                                    <Moon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500" />
+                                                    <input
+                                                        type="time"
+                                                        value={newEndTime}
+                                                        onChange={(e) => setNewEndTime(e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-3 py-3 text-xs font-black text-slate-800 dark:text-github-dark-text font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Working Days selection (Mirrored from Web) */}
-                                    <div className="space-y-3">
-                                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Working Days</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
-                                                const isSelected = newWorkingDays.includes(day);
-                                                return (
-                                                    <button
-                                                        key={day}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setNewWorkingDays(prev => {
-                                                                const newDays = isSelected 
-                                                                    ? prev.filter(d => d !== day)
-                                                                    : [...prev, day];
-                                                                // Clean up rules for this day if we disable it
-                                                                setNewWeekOffRules(rules => isSelected ? rules.filter(r => r.day !== day) : rules);
-                                                                setNewHalfDayRules(rules => isSelected ? rules.filter(r => r.day !== day) : rules);
-                                                                return newDays;
-                                                            });
-                                                        }}
-                                                        className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-50 dark:bg-github-dark-subtle/50 border-slate-200 dark:border-github-dark-border text-slate-400'}`}
-                                                    >
-                                                        {day}
-                                                    </button>
-                                                );
-                                            })}
+                                        <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 flex items-center justify-between">
+                                            <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">Work Duration</span>
+                                            <span className="text-xs font-black px-3 py-1 bg-indigo-600 text-white rounded-xl shadow-xs">
+                                                {calculateDuration(newStartTime, newEndTime)}
+                                            </span>
                                         </div>
                                     </div>
 
-                                    {/* Advanced Settings Toggle */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                                        className="w-full py-4 flex items-center justify-center gap-2 text-sm font-black text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-github-dark-subtle/50 hover:bg-slate-100 dark:hover:bg-github-dark-subtle rounded-2xl border border-slate-200 dark:border-github-dark-border transition-all"
-                                    >
-                                        <Settings2 size={18} />
-                                        {showAdvancedSettings ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
-                                        {showAdvancedSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                                    </button>
+                                    {/* SECTION 2: WORK SCHEDULE */}
+                                    <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-github-dark-border">
+                                        <div className="flex justify-between items-center ml-1">
+                                            <p className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
+                                                Step 2: Work Schedule
+                                            </p>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                                {newWorkingDays.length} Days Active
+                                            </span>
+                                        </div>
 
-                                    {/* Advanced Settings Section */}
-                                    {showAdvancedSettings && (
-                                        <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
-                                            {/* Advanced Week Offs & Half Days (Mirrored from Web) */}
-                                            {newWorkingDays.length < 7 && (
-                                                <div className="space-y-6">
-                                                    {/* Alternate Full Days Off */}
-                                                    <div className="space-y-3">
-                                                        <p className="text-[11px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                                                            <AlertTriangle size={14} /> Alternate Full Days Off
+                                        <div className="p-3.5 bg-slate-50/70 dark:bg-github-dark-subtle/40 rounded-2xl border border-slate-200/80 dark:border-github-dark-border space-y-2.5">
+                                            <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Select Active Workdays</label>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                                                    const isSelected = newWorkingDays.includes(day);
+                                                    const hasAlternateOff = newWeekOffRules.find(r => r.day === day)?.weeks.length > 0;
+                                                    const hasHalfDay = newHalfDayRules.find(r => r.day === day)?.weeks.length > 0;
+
+                                                    let buttonClass = "";
+                                                    if (isSelected) {
+                                                        if (hasHalfDay) {
+                                                            buttonClass = "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 scale-105 shadow-sm";
+                                                        } else {
+                                                            buttonClass = "bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 scale-105 shadow-sm";
+                                                        }
+                                                    } else {
+                                                        if (hasAlternateOff) {
+                                                            buttonClass = "bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-black dark:text-amber-400 scale-105 shadow-sm";
+                                                        } else {
+                                                            buttonClass = "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400";
+                                                        }
+                                                    }
+
+                                                    return (
+                                                        <button
+                                                            key={day}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setNewWorkingDays(prev => {
+                                                                    const newDays = isSelected 
+                                                                        ? prev.filter(d => d !== day)
+                                                                        : [...prev, day];
+                                                                    setNewWeekOffRules(rules => isSelected ? rules : rules.filter(r => r.day !== day));
+                                                                    setNewHalfDayRules(rules => isSelected ? rules.filter(r => r.day !== day) : rules);
+                                                                    return newDays;
+                                                                });
+                                                            }}
+                                                            className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${buttonClass}`}
+                                                        >
+                                                            {day}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Color Legends */}
+                                            <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 pt-2 border-t border-slate-100 dark:border-github-dark-border text-[9px] font-bold uppercase tracking-wider text-slate-400 select-none">
+                                                <span className="flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400" />
+                                                    <span>Full Workday</span>
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400" />
+                                                    <span>Half Day</span>
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400" />
+                                                    <span>Alternate Off</span>
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                                    <span>Weekly Off</span>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Advanced Settings Toggle */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                                            className="w-full py-3 px-4 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100/70 dark:bg-github-dark-subtle/50 rounded-2xl transition-all"
+                                        >
+                                            <span className="font-bold">
+                                                Alternate Offs & Half Days
+                                            </span>
+                                            {showAdvancedSettings ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                        </button>
+
+                                        {showAdvancedSettings && (
+                                            <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+                                                {newWorkingDays.length < 7 && (
+                                                    <div className="space-y-3 p-3 bg-amber-50/40 dark:bg-amber-950/20 rounded-2xl border border-amber-200/50 dark:border-amber-900/30">
+                                                        <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                                                            Alternate Full Days Off Rules
                                                         </p>
-                                                        <div className="space-y-3">
+                                                        <div className="space-y-2">
                                                             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
                                                                 .filter(day => !newWorkingDays.includes(day))
                                                                 .map(day => (
-                                                                <div key={day} className="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl border border-slate-100 dark:border-github-dark-border">
-                                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{day}</p>
-                                                                    <div className="flex flex-wrap gap-1.5">
+                                                                <div key={day} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2 rounded-xl border border-amber-200/30 dark:border-slate-700">
+                                                                    <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 w-10">{day}</span>
+                                                                    <div className="flex gap-1">
                                                                         {[1, 2, 3, 4, 5].map(week => {
                                                                             const rule = newWeekOffRules.find(r => r.day === day) || { weeks: [] };
                                                                             const isOff = rule.weeks.includes(week);
@@ -688,9 +772,9 @@ const ShiftManagement = () => {
                                                                                 <button
                                                                                     key={week} type="button"
                                                                                     onClick={() => toggleRule(day, 'weekOffRules', week)}
-                                                                                    className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all border ${isOff ? 'bg-amber-100 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-900/50 dark:text-amber-400' : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700'}`}
+                                                                                    className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${isOff ? 'bg-amber-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
                                                                                 >
-                                                                                    {week}{week === 1 ? 'st' : week === 2 ? 'nd' : week === 3 ? 'rd' : 'th'}
+                                                                                    W{week}
                                                                                 </button>
                                                                             );
                                                                         })}
@@ -699,205 +783,205 @@ const ShiftManagement = () => {
                                                             ))}
                                                         </div>
                                                     </div>
+                                                )}
 
-                                                    {/* Half Days */}
-                                                    <div className="space-y-3">
-                                                        <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                                                            <Clock size={14} /> Half Days
-                                                        </p>
-                                                        <div className="space-y-3">
-                                                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
-                                                                const rule = newHalfDayRules.find(r => r.day === day) || { weeks: [] };
-                                                                const hasHalfDays = rule.weeks.length > 0;
-                                                                return (
-                                                                    <div key={day} className="flex flex-col gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl border border-slate-100 dark:border-github-dark-border">
-                                                                        <div className="flex justify-between items-center">
-                                                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{day}</p>
-                                                                            <div className="flex flex-wrap gap-1.5">
-                                                                                {[1, 2, 3, 4, 5].map(week => {
-                                                                                    const isHalf = rule.weeks.includes(week);
-                                                                                    return (
-                                                                                        <button
-                                                                                            key={week} type="button"
-                                                                                            onClick={() => toggleRule(day, 'halfDayRules', week)}
-                                                                                            className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all border ${isHalf ? 'bg-indigo-100 border-indigo-200 text-indigo-600 dark:bg-indigo-900/20 dark:border-indigo-900/50 dark:text-indigo-400' : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700'}`}
-                                                                                        >
-                                                                                            {week}{week === 1 ? 'st' : week === 2 ? 'nd' : week === 3 ? 'rd' : 'th'}
-                                                                                        </button>
-                                                                                    );
-                                                                                })}
+                                                <div className="space-y-3 p-3 bg-blue-50/40 dark:bg-blue-950/20 rounded-2xl border border-blue-200/50 dark:border-blue-900/30">
+                                                    <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-wider">
+                                                        Half Day Schedule Rules
+                                                    </p>
+                                                    <div className="space-y-2">
+                                                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                                                            const rule = newHalfDayRules.find(r => r.day === day) || { weeks: [] };
+                                                            const hasHalfDays = rule.weeks.length > 0;
+                                                            return (
+                                                                <div key={day} className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-blue-200/30 dark:border-slate-700 space-y-2">
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 w-10">{day}</span>
+                                                                        <div className="flex gap-1">
+                                                                            {[1, 2, 3, 4, 5].map(week => {
+                                                                                const isHalf = rule.weeks.includes(week);
+                                                                                return (
+                                                                                    <button
+                                                                                        key={week} type="button"
+                                                                                        onClick={() => toggleRule(day, 'halfDayRules', week)}
+                                                                                        className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${isHalf ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
+                                                                                    >
+                                                                                        W{week}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    {hasHalfDays && (
+                                                                        <div className="flex gap-2 pt-1 border-t border-slate-100 dark:border-slate-700">
+                                                                            <div className="flex-1">
+                                                                                <label className="block text-[8px] font-bold text-slate-400 uppercase mb-0.5">Start</label>
+                                                                                <input type="time" value={rule.timing?.start_time || newStartTime || "09:00"} 
+                                                                                       onChange={e => setRuleTiming(day, 'halfDayRules', 'start_time', e.target.value)}
+                                                                                       className="w-full px-2 py-1 text-[10px] font-black font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg" />
+                                                                            </div>
+                                                                            <div className="flex-1">
+                                                                                <label className="block text-[8px] font-bold text-slate-400 uppercase mb-0.5">End</label>
+                                                                                <input type="time" value={rule.timing?.end_time || newEndTime || "13:00"} 
+                                                                                       onChange={e => setRuleTiming(day, 'halfDayRules', 'end_time', e.target.value)}
+                                                                                       className="w-full px-2 py-1 text-[10px] font-black font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg" />
                                                                             </div>
                                                                         </div>
-                                                                        
-                                                                        {hasHalfDays && (
-                                                                            <div className="flex gap-2 animate-in fade-in slide-in-from-top-2">
-                                                                                <div className="flex-1">
-                                                                                    <label className="block text-[8px] font-black text-indigo-500 uppercase mb-1 ml-1">Start</label>
-                                                                                    <input type="time" value={rule.timing?.start_time || newStartTime || "09:00"} 
-                                                                                           onChange={e => setRuleTiming(day, 'halfDayRules', 'start_time', e.target.value)}
-                                                                                           className="w-full px-2 py-2 text-[10px] font-black font-mono bg-white dark:bg-slate-800 border border-indigo-100 dark:border-indigo-900/30 text-slate-700 dark:text-slate-300 rounded-xl focus:outline-none focus:border-indigo-500" />
-                                                                                </div>
-                                                                                <div className="flex-1">
-                                                                                    <label className="block text-[8px] font-black text-indigo-500 uppercase mb-1 ml-1">End</label>
-                                                                                    <input type="time" value={rule.timing?.end_time || newEndTime || "13:00"} 
-                                                                                           onChange={e => setRuleTiming(day, 'halfDayRules', 'end_time', e.target.value)}
-                                                                                           className="w-full px-2 py-2 text-[10px] font-black font-mono bg-white dark:bg-slate-800 border border-indigo-100 dark:border-indigo-900/30 text-slate-700 dark:text-slate-300 rounded-xl focus:outline-none focus:border-indigo-500" />
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            })}
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* SECTION 3: POLICIES & VALIDATION */}
+                                    <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-github-dark-border">
+                                        <p className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest ml-1">
+                                            Step 3: Policies & Verification Controls
+                                        </p>
+
+                                        {/* Grace Period & Correction Deadline Grid */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Grace Buffer</label>
+                                                <div className="relative">
+                                                    <Hourglass size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                    <input 
+                                                        type="number" min="0"
+                                                        value={newGracePeriod}
+                                                        onChange={(e) => setNewGracePeriod(e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-10 pr-10 py-2.5 text-xs font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">mins</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Correction Window</label>
+                                                <div className="relative">
+                                                    <AlertTriangle size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                    <input 
+                                                        type="number" min="1"
+                                                        value={newCorrectionDeadline}
+                                                        onChange={(e) => setNewCorrectionDeadline(e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-10 pr-10 py-2.5 text-xs font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">days</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Overtime Toggle Card */}
+                                        <div className="bg-slate-50/70 dark:bg-github-dark-subtle/40 rounded-2xl p-4 border border-slate-200/80 dark:border-github-dark-border space-y-3">
+                                            <div className="flex justify-between items-center cursor-pointer" onClick={() => setNewOvertime(!newOvertime)}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-2 rounded-xl transition-colors ${newOvertime ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'bg-white dark:bg-slate-800 text-slate-400'}`}>
+                                                        <Zap size={18} fill={newOvertime ? 'currentColor' : 'none'} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-800 dark:text-github-dark-text">Overtime (OT) Tracking</p>
+                                                        <p className="text-[10px] text-slate-500 font-medium">Calculate extra work hours automatically</p>
+                                                    </div>
+                                                </div>
+                                                <div className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-300 ${newOvertime ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-xs transition-transform duration-300 ${newOvertime ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                                </div>
+                                            </div>
+                                             {newOvertime && (
+                                                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60 animate-in fade-in">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">OT Threshold</label>
+                                                        <div className="flex gap-1.5">
+                                                            <div className="relative flex-1">
+                                                                <input 
+                                                                    type="number" min="0" placeholder="0"
+                                                                    value={otThresholdHr || ''}
+                                                                    onChange={(e) => handleOtThresholdChange(e.target.value, otThresholdMin)}
+                                                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-2 pr-6 py-2 text-xs font-bold text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-bold">hr</span>
+                                                            </div>
+                                                            <div className="relative flex-1">
+                                                                <input 
+                                                                    type="number" min="0" max="59" placeholder="0"
+                                                                    value={otThresholdMin || ''}
+                                                                    onChange={(e) => handleOtThresholdChange(otThresholdHr, e.target.value)}
+                                                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-2 pr-7 py-2 text-xs font-bold text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-bold">min</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">OT Buffer Window</label>
+                                                        <div className="flex gap-1.5">
+                                                            <div className="relative flex-1">
+                                                                <input 
+                                                                    type="number" min="0" placeholder="0"
+                                                                    value={otBufferHr || ''}
+                                                                    onChange={(e) => handleOtBufferChange(e.target.value, otBufferMin)}
+                                                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-2 pr-6 py-2 text-xs font-bold text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-bold">hr</span>
+                                                            </div>
+                                                            <div className="relative flex-1">
+                                                                <input 
+                                                                    type="number" min="0" max="59" placeholder="0"
+                                                                    value={otBufferMin || ''}
+                                                                    onChange={(e) => handleOtBufferChange(otBufferHr, e.target.value)}
+                                                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-2 pr-7 py-2 text-xs font-bold text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
+                                                                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-bold">min</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             )}
+                                        </div>
 
-                                            {/* Grace Period & Correction Deadline Grid */}
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5">
-                                                    <div className="flex justify-between items-center mb-1 px-1">
-                                                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Late Grace</label>
-                                                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{newGracePeriod}m</span>
-                                                    </div>
-                                                    <div className="relative group">
-                                                        <Hourglass size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                        <input 
-                                                            type="number" 
-                                                            value={newGracePeriod}
-                                                            onChange={(e) => setNewGracePeriod(e.target.value)}
-                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <div className="flex justify-between items-center mb-1 px-1">
-                                                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Corr. Deadline</label>
-                                                        <span className="text-sm font-black text-rose-600 dark:text-rose-400">{newCorrectionDeadline}d</span>
-                                                    </div>
-                                                    <div className="relative group">
-                                                        <AlertTriangle size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                        <input 
-                                                            type="number" 
-                                                            value={newCorrectionDeadline}
-                                                            onChange={(e) => setNewCorrectionDeadline(e.target.value)}
-                                                            className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-4 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Toggles */}
-                                            <div className="space-y-4">
-                                                <div className="bg-slate-50 dark:bg-github-dark-subtle/50 rounded-2xl p-4 border border-slate-100 dark:border-github-dark-border flex justify-between items-center group active:bg-slate-100 dark:active:bg-github-dark-subtle transition-colors" onClick={() => setNewOvertime(!newOvertime)}>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`p-2 rounded-xl transition-colors ${newOvertime ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'bg-white dark:bg-slate-800 text-slate-400'}`}>
-                                                            <Zap size={18} fill={newOvertime ? 'currentColor' : 'none'} />
+                                        {/* Punch Requirements Card */}
+                                        <div className="bg-slate-50/70 dark:bg-github-dark-subtle/40 border border-slate-200/80 dark:border-github-dark-border rounded-2xl p-4 space-y-3">
+                                            <p className="text-xs font-bold text-slate-800 dark:text-github-dark-text">
+                                                Identity & Location Validation
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {/* Clock In Column */}
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Clock In</p>
+                                                    <label className="flex items-center gap-2.5 p-2.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl cursor-pointer">
+                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${newValCheckInSelfie ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                                                            {newValCheckInSelfie && <CheckCircle2 size={12} className="text-white" />}
                                                         </div>
-                                                        <div>
-                                                            <p className="text-[13px] font-bold text-slate-800 dark:text-github-dark-text">Overtime Tracking</p>
-                                                            <p className="text-[10px] text-slate-500 font-medium">Automate OT calculations</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 ${newOvertime ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                                                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${newOvertime ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                                                    </div>
+                                                        <input type="checkbox" className="hidden" checked={newValCheckInSelfie} onChange={() => setNewValCheckInSelfie(!newValCheckInSelfie)} />
+                                                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Selfie Photo</span>
+                                                    </label>
                                                 </div>
 
-                                                {newOvertime && (
-                                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Threshold</label>
-                                                            <div className="relative group">
-                                                                <Zap size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                                <input 
-                                                                    type="number" step="0.1"
-                                                                    value={newOtThreshold}
-                                                                    onChange={(e) => setNewOtThreshold(e.target.value)}
-                                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-10 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                                                />
-                                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">Hrs</span>
-                                                            </div>
+                                                {/* Clock Out Column */}
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Clock Out</p>
+                                                    <label className="flex items-center gap-2.5 p-2.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl cursor-pointer">
+                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${newValCheckOutSelfie ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                                                            {newValCheckOutSelfie && <CheckCircle2 size={12} className="text-white" />}
                                                         </div>
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Buffer</label>
-                                                            <div className="relative group">
-                                                                <Hourglass size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                                <input 
-                                                                    type="number" step="0.1"
-                                                                    value={newOtBuffer}
-                                                                    onChange={(e) => setNewOtBuffer(e.target.value)}
-                                                                    className="w-full bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl pl-11 pr-10 py-3.5 text-sm font-bold text-slate-800 dark:text-github-dark-text focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                                                />
-                                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">Hrs</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Validation Section */}
-                                            <div className="space-y-4 pt-2">
-                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] ml-1">Validation Requirements</p>
-                                                
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    {/* Check-In Column */}
-                                                    <div className="space-y-3">
-                                                        <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Check-In
-                                                        </p>
-                                                        <div className="space-y-2">
-                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                                    {newValCheckInGps && <CheckCircle2 size={14} className="text-white" />}
-                                                                </div>
-                                                                <input type="checkbox" className="hidden" checked={newValCheckInGps} onChange={() => setNewValCheckInGps(!newValCheckInGps)} />
-                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
-                                                            </label>
-                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckInSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                                    {newValCheckInSelfie && <CheckCircle2 size={14} className="text-white" />}
-                                                                </div>
-                                                                <input type="checkbox" className="hidden" checked={newValCheckInSelfie} onChange={() => setNewValCheckInSelfie(!newValCheckInSelfie)} />
-                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
-                                                            </label>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Check-Out Column */}
-                                                    <div className="space-y-3">
-                                                        <p className="text-[11px] font-black text-slate-800 dark:text-github-dark-text uppercase tracking-tight flex items-center gap-1.5">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Check-Out
-                                                        </p>
-                                                        <div className="space-y-2">
-                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutGps ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                                    {newValCheckOutGps && <CheckCircle2 size={14} className="text-white" />}
-                                                                </div>
-                                                                <input type="checkbox" className="hidden" checked={newValCheckOutGps} onChange={() => setNewValCheckOutGps(!newValCheckOutGps)} />
-                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">GPS</span>
-                                                            </label>
-                                                            <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-200 dark:border-github-dark-border rounded-2xl cursor-pointer active:scale-95 transition-all">
-                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${newValCheckOutSelfie ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'border-slate-300 bg-white dark:bg-slate-800'}`}>
-                                                                    {newValCheckOutSelfie && <CheckCircle2 size={14} className="text-white" />}
-                                                                </div>
-                                                                <input type="checkbox" className="hidden" checked={newValCheckOutSelfie} onChange={() => setNewValCheckOutSelfie(!newValCheckOutSelfie)} />
-                                                                <span className="text-[11px] font-bold text-slate-600 dark:text-github-dark-muted uppercase">Selfie</span>
-                                                            </label>
-                                                        </div>
-                                                    </div>
+                                                        <input type="checkbox" className="hidden" checked={newValCheckOutSelfie} onChange={() => setNewValCheckOutSelfie(!newValCheckOutSelfie)} />
+                                                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Selfie Photo</span>
+                                                    </label>
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
 
-                                <div className="mt-10 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+                                <div className="mt-8 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
                                     <button
                                         onClick={handleSaveShift}
-                                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black rounded-2xl shadow-xl shadow-indigo-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                     >
-                                        <CheckCircle2 size={20} />
+                                        <CheckCircle2 size={18} />
                                         {isEditing ? 'Update Shift Configuration' : 'Save New Shift'}
                                     </button>
                                 </div>
@@ -907,6 +991,13 @@ const ShiftManagement = () => {
                 </div>,
                 document.body
             )}
+        </>
+    );
+
+    if (embedded) return content;
+    return (
+        <MobileDashboardLayout title="Shift Management">
+            {content}
         </MobileDashboardLayout>
     );
 };

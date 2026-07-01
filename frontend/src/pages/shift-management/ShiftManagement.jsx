@@ -37,7 +37,7 @@ const TOUR_STEPS = [
 ];
 
 
-const ShiftManagement = () => {
+const ShiftManagement = ({ embedded = false }) => {
     const location = useLocation();
     const { avatarTimestamp } = useAuth();
     const { startTour, hasSeenPage, wasSkippedThisSession, tourEnabled } = useTour();
@@ -55,10 +55,11 @@ const ShiftManagement = () => {
         name: '', start: '09:00', end: '18:00', grace: 0,
         otThreshold: 9.0, otBuffer: 0.5, correctionDeadline: 2,
         reqEntrySelfie: true, reqEntryGeofence: true,
-        reqExitSelfie: false, reqExitGeofence: false,
+        reqExitSelfie: false, reqExitGeofence: true,
         workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
         weekOffRules: [],
-        halfDayRules: []
+        halfDayRules: [],
+        is_active: true
     });
     const [activeRuleDay, setActiveRuleDay] = useState(null);
     const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -99,7 +100,8 @@ const ShiftManagement = () => {
                     otThreshold: parseFloat(s.overtime_threshold_hours),
                     otBuffer: parseFloat(s.overtime_buffer_hours ?? s.policy_rules?.overtime?.buffer ?? 0.5),
                     correctionDeadline: parseInt(s.policy_rules?.correction_deadline ?? 2),
-                    policy_rules: s.policy_rules || {}
+                    policy_rules: s.policy_rules || {},
+                    is_active: s.is_active !== 0
                 }));
                 setShifts(mapped);
                 if (!selectedShift) setSelectedShift(mapped[0] || null);
@@ -150,12 +152,13 @@ const ShiftManagement = () => {
                 otBuffer: editingShift.otBuffer ?? 0.5,
                 correctionDeadline: editingShift.correctionDeadline ?? 2,
                 reqEntrySelfie: !!rules.entry_requirements?.selfie,
-                reqEntryGeofence: !!rules.entry_requirements?.geofence,
+                reqEntryGeofence: true, // GPS is mandatory
                 reqExitSelfie: !!rules.exit_requirements?.selfie,
-                reqExitGeofence: !!rules.exit_requirements?.geofence,
+                reqExitGeofence: true, // GPS is mandatory
                 workingDays: parsed.workingDays.length > 0 ? parsed.workingDays : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
                 weekOffRules: parsed.weekOffRules,
-                halfDayRules: parsed.halfDayRules
+                halfDayRules: parsed.halfDayRules,
+                is_active: !!editingShift.is_active
             });
             setIsOtEnabled(!!editingShift.overtime);
             setActiveRuleDay(null);
@@ -163,8 +166,9 @@ const ShiftManagement = () => {
         } else if (showShiftForm && !editingShift) {
             setShiftForm({ 
                 name: '', start: '09:00', end: '18:00', grace: 0, otThreshold: 9.0, otBuffer: 0.5, correctionDeadline: 2,
-                reqEntrySelfie: true, reqEntryGeofence: true, reqExitSelfie: false, reqExitGeofence: false, 
-                workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], weekOffRules: [], halfDayRules: [] 
+                reqEntrySelfie: true, reqEntryGeofence: true, reqExitSelfie: false, reqExitGeofence: true, // GPS is mandatory
+                workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], weekOffRules: [], halfDayRules: [],
+                is_active: true
             });
             setIsOtEnabled(false);
             setActiveRuleDay(null);
@@ -179,12 +183,13 @@ const ShiftManagement = () => {
         const week_off_policy = buildPolicy(shiftForm.workingDays, shiftForm.weekOffRules, shiftForm.halfDayRules);
         const policies = {
             ...baseRules,
+            is_active: shiftForm.is_active,
             shift_timing: { start_time: shiftForm.start, end_time: shiftForm.end },
             grace_period: { minutes: parseInt(shiftForm.grace) || 0 },
             overtime: { enabled: isOtEnabled, threshold: parseFloat(shiftForm.otThreshold) || 0, buffer: parseFloat(shiftForm.otBuffer) || 0 },
             correction_deadline: parseInt(shiftForm.correctionDeadline) || 2,
-            entry_requirements: { selfie: shiftForm.reqEntrySelfie, geofence: shiftForm.reqEntryGeofence },
-            exit_requirements: { selfie: shiftForm.reqExitSelfie, geofence: shiftForm.reqExitGeofence },
+            entry_requirements: { selfie: shiftForm.reqEntrySelfie, geofence: true }, // GPS is mandatory
+            exit_requirements: { selfie: shiftForm.reqExitSelfie, geofence: true }, // GPS is mandatory
             week_off_policy
         };
         // Cleanup old fields if updating an old shift
@@ -192,10 +197,10 @@ const ShiftManagement = () => {
         delete policies.alternate_saturdays;
         try {
             if (editingShift) {
-                await adminService.updateShift(editingShift.id, { shift_name: shiftForm.name, policy_rules: policies });
+                await adminService.updateShift(editingShift.id, { shift_name: shiftForm.name, is_active: shiftForm.is_active, policy_rules: policies });
                 toast.success('Shift updated');
             } else {
-                await adminService.createShift({ shift_name: shiftForm.name, policy_rules: policies });
+                await adminService.createShift({ shift_name: shiftForm.name, is_active: shiftForm.is_active, policy_rules: policies });
                 toast.success('Shift created');
             }
             setShowShiftForm(false); setEditingShift(null);
@@ -239,6 +244,35 @@ const ShiftManagement = () => {
         u.user_name?.toLowerCase().includes(userSearch.toLowerCase()) ||
         u.desg_name?.toLowerCase().includes(userSearch.toLowerCase())
     );
+
+    const formatDecimalHours = (val) => {
+        const totalMinutes = Math.round((parseFloat(val) || 0) * 60);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        return hrs > 0 ? `${hrs}h ${mins > 0 ? `${mins}m` : '00m'}` : `${mins}m`;
+    };
+
+    const otThresholdVal = parseFloat(shiftForm.otThreshold) || 0;
+    const otThresholdMins = Math.round(otThresholdVal * 60);
+    const otThresholdHr = Math.floor(otThresholdMins / 60);
+    const otThresholdMin = otThresholdMins % 60;
+
+    const handleOtThresholdChange = (hr, min) => {
+        const totalMinutes = (parseInt(hr) || 0) * 60 + (parseInt(min) || 0);
+        const decimal = parseFloat((totalMinutes / 60).toFixed(2));
+        setShiftForm(prev => ({ ...prev, otThreshold: decimal }));
+    };
+
+    const otBufferVal = parseFloat(shiftForm.otBuffer) || 0;
+    const otBufferMins = Math.round(otBufferVal * 60);
+    const otBufferHr = Math.floor(otBufferMins / 60);
+    const otBufferMin = otBufferMins % 60;
+
+    const handleOtBufferChange = (hr, min) => {
+        const totalMinutes = (parseInt(hr) || 0) * 60 + (parseInt(min) || 0);
+        const decimal = parseFloat((totalMinutes / 60).toFixed(2));
+        setShiftForm(prev => ({ ...prev, otBuffer: decimal }));
+    };
 
     const Toggle = ({ label, subLabel, checked, onChange }) => (
         <div className="flex items-center justify-between py-2">
@@ -301,9 +335,9 @@ const ShiftManagement = () => {
         });
     };
 
-    return (
-        <DashboardLayout title="Shift Management" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={TOUR_STEPS}>
-            <div className="flex h-[calc(100vh-64px)] p-3 gap-3 animate-in fade-in duration-300">
+    const content = (
+        <>
+            <div className={`flex ${embedded ? 'h-full p-0' : 'h-[calc(100vh-64px)] p-3'} gap-3 animate-in fade-in duration-300`}>
 
                 {/* LEFT: Shift List */}
                 <div data-tour-id="shift-mgmt-list" className="w-[380px] flex-shrink-0 bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-github-dark-border flex flex-col overflow-hidden">
@@ -363,16 +397,23 @@ const ShiftManagement = () => {
                                 >
                                     <div className="flex justify-between items-start mb-1.5">
                                         <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full ${isUserAssignedShift ? 'bg-emerald-500 animate-pulse' : 'bg-indigo-500'}`} />
+                                            <div className={`w-2 h-2 rounded-full ${isUserAssignedShift ? 'bg-emerald-500 animate-pulse' : shift.is_active ? 'bg-indigo-500' : 'bg-slate-350 dark:bg-slate-600'}`} />
                                             <h4 className={`font-semibold text-sm ${selectedShift?.id === shift.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-github-dark-text'}`}>
                                                 {shift.name}
                                             </h4>
                                         </div>
-                                        {isUserAssignedShift && (
-                                            <span className="text-[9px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                                                Assigned
-                                            </span>
-                                        )}
+                                        <div className="flex gap-1.5 items-center">
+                                            {!shift.is_active && (
+                                                <span className="text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-full">
+                                                    Inactive
+                                                </span>
+                                            )}
+                                            {isUserAssignedShift && (
+                                                <span className="text-[9px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                                                    Assigned
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <p className="text-xs text-slate-500 dark:text-github-dark-muted font-mono mb-2">
                                         {shift.start} → {shift.end}
@@ -422,6 +463,22 @@ const ShiftManagement = () => {
                                     />
                                 </div>
 
+                                <div className="p-4 bg-slate-50 dark:bg-github-dark-subtle/50 rounded-xl border border-slate-200 dark:border-github-dark-border flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-800 dark:text-github-dark-text">Shift Status</p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">Toggle active/inactive status in directory</p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            className="sr-only peer" 
+                                            checked={shiftForm.is_active} 
+                                            onChange={e => setShiftForm(p => ({ ...p, is_active: e.target.checked }))} 
+                                        />
+                                        <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Start Time</label>
@@ -448,28 +505,64 @@ const ShiftManagement = () => {
                                             <div className="flex flex-wrap gap-2">
                                                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
                                                     const isSelected = shiftForm.workingDays.includes(day);
+                                                    const hasAlternateOff = shiftForm.weekOffRules.find(r => r.day === day)?.weeks.length > 0;
+                                                    const hasHalfDay = shiftForm.halfDayRules.find(r => r.day === day)?.weeks.length > 0;
+
+                                                    let buttonClass = "";
+                                                    if (isSelected) {
+                                                        if (hasHalfDay) {
+                                                            buttonClass = "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 scale-105 shadow-sm";
+                                                        } else {
+                                                            buttonClass = "bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 scale-105 shadow-sm";
+                                                        }
+                                                    } else {
+                                                        if (hasAlternateOff) {
+                                                            buttonClass = "bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-black dark:text-amber-400 scale-105 shadow-sm";
+                                                        } else {
+                                                            buttonClass = "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100";
+                                                        }
+                                                    }
+
                                                     return (
-                                                        <div key={day} className="flex rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 transition-colors">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setShiftForm(prev => {
-                                                                        const newDays = isSelected 
-                                                                            ? prev.workingDays.filter(d => d !== day)
-                                                                            : [...prev.workingDays, day];
-                                                                        // Clean up rules for this day if we disable it
-                                                                        const newWo = isSelected ? prev.weekOffRules.filter(r => r.day !== day) : prev.weekOffRules;
-                                                                        const newHd = isSelected ? prev.halfDayRules.filter(r => r.day !== day) : prev.halfDayRules;
-                                                                        return { ...prev, workingDays: newDays, weekOffRules: newWo, halfDayRules: newHd };
-                                                                    });
-                                                                }}
-                                                                className={`px-4 py-2 text-sm font-medium transition-colors ${isSelected ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                                                            >
-                                                                {day}
-                                                            </button>
-                                                        </div>
+                                                        <button
+                                                            key={day}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setShiftForm(prev => {
+                                                                    const newDays = isSelected 
+                                                                        ? prev.workingDays.filter(d => d !== day)
+                                                                        : [...prev.workingDays, day];
+                                                                    const newWo = isSelected ? prev.weekOffRules : prev.weekOffRules.filter(r => r.day !== day);
+                                                                    const newHd = isSelected ? prev.halfDayRules.filter(r => r.day !== day) : prev.halfDayRules;
+                                                                    return { ...prev, workingDays: newDays, weekOffRules: newWo, halfDayRules: newHd };
+                                                                });
+                                                            }}
+                                                            className={`px-4 py-2 text-sm font-bold rounded-xl transition-all ${buttonClass}`}
+                                                        >
+                                                            {day}
+                                                        </button>
                                                     );
                                                 })}
+                                            </div>
+
+                                            {/* Color Legends */}
+                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-3 border-t border-slate-150 dark:border-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 select-none">
+                                                <span className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400" />
+                                                    <span>Full Workday</span>
+                                                </span>
+                                                <span className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400" />
+                                                    <span>Half Day</span>
+                                                </span>
+                                                <span className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-amber-500 dark:bg-amber-400" />
+                                                    <span>Alternate Off</span>
+                                                </span>
+                                                <span className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                                    <span>Weekly Off</span>
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -501,7 +594,7 @@ const ShiftManagement = () => {
                                                     <p className="text-[10px] text-slate-400 mt-1">Allowed lateness buffer.</p>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Corr. Deadline</label>
+                                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Correction Deadline</label>
                                                     <div className="relative">
                                                         <input type="number" required min="1" value={shiftForm.correctionDeadline}
                                                             onChange={e => setShiftForm({ ...shiftForm, correctionDeadline: e.target.value })}
@@ -522,22 +615,40 @@ const ShiftManagement = () => {
                                                     <div className="pt-3 grid grid-cols-2 gap-4">
                                                         <div>
                                                             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">OT Threshold</label>
-                                                            <div className="relative">
-                                                                <input type="number" step="0.1" value={shiftForm.otThreshold}
-                                                                    onChange={e => setShiftForm({ ...shiftForm, otThreshold: e.target.value })}
-                                                                    className="w-full pl-3 pr-8 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                />
-                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">hr</span>
+                                                            <div className="flex gap-2">
+                                                                <div className="relative flex-1">
+                                                                    <input type="number" min="0" placeholder="0" value={otThresholdHr || ''}
+                                                                        onChange={e => handleOtThresholdChange(e.target.value, otThresholdMin)}
+                                                                        className="w-full pl-3 pr-8 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">hr</span>
+                                                                </div>
+                                                                <div className="relative flex-1">
+                                                                    <input type="number" min="0" max="59" placeholder="0" value={otThresholdMin || ''}
+                                                                        onChange={e => handleOtThresholdChange(otThresholdHr, e.target.value)}
+                                                                        className="w-full pl-3 pr-9 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">min</span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <div>
                                                             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Buffer Time</label>
-                                                            <div className="relative">
-                                                                <input type="number" step="0.1" value={shiftForm.otBuffer}
-                                                                    onChange={e => setShiftForm({ ...shiftForm, otBuffer: e.target.value })}
-                                                                    className="w-full pl-3 pr-10 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                />
-                                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">hr</span>
+                                                            <div className="flex gap-2">
+                                                                <div className="relative flex-1">
+                                                                    <input type="number" min="0" placeholder="0" value={otBufferHr || ''}
+                                                                        onChange={e => handleOtBufferChange(e.target.value, otBufferMin)}
+                                                                        className="w-full pl-3 pr-8 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">hr</span>
+                                                                </div>
+                                                                <div className="relative flex-1">
+                                                                    <input type="number" min="0" max="59" placeholder="0" value={otBufferMin || ''}
+                                                                        onChange={e => handleOtBufferChange(otBufferHr, e.target.value)}
+                                                                        className="w-full pl-3 pr-9 py-2 bg-white dark:bg-github-dark-subtle border border-slate-200 dark:border-github-dark-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-github-dark-text [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                    />
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">min</span>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -634,12 +745,10 @@ const ShiftManagement = () => {
                                                 <div className="grid grid-cols-2 gap-x-6">
                                                     <div>
                                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-In</p>
-                                                        <Checkbox label="GPS Required" checked={shiftForm.reqEntryGeofence} onChange={() => setShiftForm(p => ({ ...p, reqEntryGeofence: !p.reqEntryGeofence }))} />
                                                         <Checkbox label="Selfie Required" checked={shiftForm.reqEntrySelfie} onChange={() => setShiftForm(p => ({ ...p, reqEntrySelfie: !p.reqEntrySelfie }))} />
                                                     </div>
                                                     <div>
                                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</p>
-                                                        <Checkbox label="GPS Required" checked={shiftForm.reqExitGeofence} onChange={() => setShiftForm(p => ({ ...p, reqExitGeofence: !p.reqExitGeofence }))} />
                                                         <Checkbox label="Selfie Required" checked={shiftForm.reqExitSelfie} onChange={() => setShiftForm(p => ({ ...p, reqExitSelfie: !p.reqExitSelfie }))} />
                                                     </div>
                                                 </div>
@@ -672,35 +781,94 @@ const ShiftManagement = () => {
                                         <p className="text-xs text-slate-500 font-mono">{selectedShift.start} → {selectedShift.end} • {calculateDuration(selectedShift.start, selectedShift.end)}</p>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex items-center gap-3">
+                                    {/* Inline Status Toggle */}
+                                    <div className="flex items-center gap-2 border border-slate-200 dark:border-github-dark-border rounded-xl px-3 py-1.5 bg-slate-50 dark:bg-slate-800/30 text-xs font-bold select-none">
+                                        <span className="text-slate-600 dark:text-slate-350">Active</span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                className="sr-only peer" 
+                                                checked={!!selectedShift.is_active} 
+                                                onChange={async (e) => {
+                                                    const newActive = e.target.checked;
+                                                    try {
+                                                        const updatedPolicy = {
+                                                            ...selectedShift.policy_rules,
+                                                            is_active: newActive
+                                                        };
+                                                        await adminService.updateShift(selectedShift.id, { 
+                                                            shift_name: selectedShift.name, 
+                                                            is_active: newActive,
+                                                            policy_rules: updatedPolicy 
+                                                        });
+                                                        toast.success(newActive ? 'Shift activated successfully' : 'Shift deactivated successfully');
+                                                        loadShifts();
+                                                    } catch (err) {
+                                                        toast.error(err.message || 'Failed to toggle status');
+                                                    }
+                                                }} 
+                                            />
+                                            <div className="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                                        </label>
+                                    </div>
                                     <button
                                         onClick={() => { setEditingShift(selectedShift); setShowShiftForm(true); }}
                                         className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 dark:border-github-dark-border text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors"
                                     ><Edit2 size={15} /> Edit</button>
-                                    <button
-                                        onClick={() => handleDeleteShiftClick(selectedShift)}
-                                        className="flex items-center gap-1.5 px-3 py-2 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
-                                    ><Trash2 size={15} /> Delete</button>
                                 </div>
                             </div>
 
                                 <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6">
                                     {/* Summary Cards */}
-                                    <div className="grid grid-cols-4 gap-4">
-                                        {[
-                                            { label: 'Start Time', value: selectedShift.start, icon: <ArrowRight size={14} className="text-indigo-500" />, bg: 'indigo' },
-                                            { label: 'Grace Period', value: `${selectedShift.grace || 0} min`, icon: <AlertTriangle size={14} className="text-amber-500" />, bg: 'amber' },
-                                            { label: 'Corr. Window', value: `${selectedShift.correctionDeadline || 2}d`, icon: <FileClock size={14} className="text-rose-500" />, bg: 'rose' },
-                                            { label: 'Duration', value: calculateDuration(selectedShift.start, selectedShift.end), icon: <Clock size={14} className="text-teal-500" />, bg: 'teal' },
-                                        ].map(card => (
-                                            <div
-                                                key={card.label}
-                                                className="bg-slate-50 dark:bg-github-dark-subtle/50 border border-slate-100 dark:border-github-dark-border/50 rounded-xl p-4"
-                                            >
-                                                <div className="flex items-center gap-1.5 mb-1">{card.icon}<p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">{card.label}</p></div>
-                                                <p className="text-base font-bold text-slate-800 dark:text-github-dark-text font-mono">{card.value}</p>
-                                            </div>
-                                        ))}
+                                    <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
+                                        {(() => {
+                                            const cardStyles = {
+                                                indigo: {
+                                                    bg: 'from-indigo-50/40 to-white dark:from-indigo-950/15 dark:to-github-dark-card border-indigo-100/80 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-800 hover:shadow-indigo-500/5',
+                                                    iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-100/50 dark:border-indigo-900/20',
+                                                    label: 'text-indigo-600 dark:text-indigo-400 font-extrabold',
+                                                },
+                                                amber: {
+                                                    bg: 'from-amber-50/40 to-white dark:from-amber-950/15 dark:to-github-dark-card border-amber-100/80 dark:border-amber-900/30 hover:border-amber-300 dark:hover:border-amber-800 hover:shadow-amber-500/5',
+                                                    iconBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-100/50 dark:border-amber-900/20',
+                                                    label: 'text-amber-700 dark:text-amber-400 font-extrabold',
+                                                },
+                                                rose: {
+                                                    bg: 'from-rose-50/40 to-white dark:from-rose-950/15 dark:to-github-dark-card border-rose-100/80 dark:border-rose-900/30 hover:border-rose-300 dark:hover:border-rose-800 hover:shadow-rose-500/5',
+                                                    iconBg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-100/50 dark:border-rose-900/20',
+                                                    label: 'text-rose-600 dark:text-rose-400 font-extrabold',
+                                                },
+                                                teal: {
+                                                    bg: 'from-teal-50/40 to-white dark:from-teal-950/15 dark:to-github-dark-card border-teal-100/80 dark:border-teal-900/30 hover:border-teal-300 dark:hover:border-teal-800 hover:shadow-teal-500/5',
+                                                    iconBg: 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 border-teal-100/50 dark:border-teal-900/20',
+                                                    label: 'text-teal-600 dark:text-teal-400 font-extrabold',
+                                                }
+                                            };
+
+                                            return [
+                                                { label: 'Start Time', value: selectedShift.start, icon: <ArrowRight size={16} />, bg: 'indigo' },
+                                                { label: 'Grace Period', value: `${selectedShift.grace || 0} min`, icon: <AlertTriangle size={16} />, bg: 'amber' },
+                                                { label: 'Correction Window', value: `${selectedShift.correctionDeadline || 2}d`, icon: <FileClock size={16} />, bg: 'rose' },
+                                                { label: 'Duration', value: calculateDuration(selectedShift.start, selectedShift.end), icon: <Clock size={16} />, bg: 'teal' },
+                                            ].map(card => {
+                                                const styles = cardStyles[card.bg];
+                                                return (
+                                                    <div
+                                                        key={card.label}
+                                                        className={`bg-gradient-to-br ${styles.bg} border rounded-2xl p-4 flex items-center gap-3.5 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg`}
+                                                    >
+                                                        <div className={`p-2.5 rounded-xl border flex items-center justify-center ${styles.iconBg}`}>
+                                                            {card.icon}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className={`text-[10px] uppercase tracking-wider ${styles.label} break-words`}>{card.label}</p>
+                                                            <p className="text-base font-black text-slate-800 dark:text-github-dark-text font-mono mt-0.5 leading-tight truncate">{card.value}</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
                                     </div>
 
                                     {/* Work Days Display */}
@@ -735,15 +903,48 @@ const ShiftManagement = () => {
                                                         })}
                                                     </div>
 
-                                                    {/* Alternate Weekoffs Info */}
-                                                    {parsedRules.weekOffRules.length > 0 && (
-                                                        <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-xl p-3 flex gap-2 items-center">
-                                                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                                                            <p className="text-xs text-slate-600 dark:text-github-dark-muted font-medium">
-                                                                Custom Week Offs: {parsedRules.weekOffRules.map(r => `${r.weeks.map(w => w === 1 ? '1st' : w === 2 ? '2nd' : w === 3 ? '3rd' : '4th').join('/')} ${r.day}s`).join(', ')}
-                                                            </p>
-                                                        </div>
-                                                    )}
+                                                    {/* Alternate Weekoffs & Half Days Info */}
+                                                    <div className="space-y-2 mt-3">
+                                                        {parsedRules.weekOffRules.length > 0 && (
+                                                            <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-xl p-3 flex gap-2 items-center">
+                                                                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                                                <p className="text-xs text-slate-600 dark:text-github-dark-muted font-medium">
+                                                                    Custom Week Offs: {parsedRules.weekOffRules.map(r => `${r.weeks.map(w => w === 1 ? '1st' : w === 2 ? '2nd' : w === 3 ? '3rd' : w === 4 ? '4th' : '5th').join('/')} ${r.day}s`).join(', ')}
+                                                                </p>
+                                                            </div>
+                                                        )}
+
+                                                        {parsedRules.halfDayRules.length > 0 && (
+                                                            <div className="bg-white dark:bg-dark-card border border-slate-100 dark:border-github-dark-border rounded-xl p-3 flex flex-col gap-2">
+                                                                <div className="flex gap-2 items-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                                                    <p className="text-xs font-bold text-slate-600 dark:text-github-dark-muted">
+                                                                        Half Day Schedules & Timings:
+                                                                    </p>
+                                                                </div>
+                                                                <div className="flex flex-col gap-1.5 mt-1">
+                                                                    {parsedRules.halfDayRules.map((rule, idx) => {
+                                                                        const weeksStr = rule.weeks.map(w => w === 1 ? '1st' : w === 2 ? '2nd' : w === 3 ? '3rd' : w === 4 ? '4th' : '5th').join('/');
+                                                                        const start = rule.timing?.start_time ? rule.timing.start_time.substring(0, 5) : (selectedShift.start ? selectedShift.start.substring(0, 5) : '09:00');
+                                                                        const end = rule.timing?.end_time ? rule.timing.end_time.substring(0, 5) : (selectedShift.end ? selectedShift.end.substring(0, 5) : '13:00');
+                                                                        return (
+                                                                            <div key={idx} className="flex items-center justify-between text-xs text-slate-600 dark:text-github-dark-muted">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className="w-2 flex justify-center">
+                                                                                        <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                                                                                    </div>
+                                                                                    <span>{rule.day} ({weeksStr} Week)</span>
+                                                                                </div>
+                                                                                <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                                                                    {start} → {end}
+                                                                                </span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                 </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })()}
@@ -758,7 +959,6 @@ const ShiftManagement = () => {
                                             </div>
                                             <div className="space-y-2">
                                                 {[
-                                                    { label: 'GPS Required', val: selectedShift.policy_rules?.entry_requirements?.geofence },
                                                     { label: 'Selfie Required', val: selectedShift.policy_rules?.entry_requirements?.selfie },
                                                 ].map(r => (
                                                     <div key={r.label} className="flex items-center gap-2 py-1">
@@ -778,7 +978,6 @@ const ShiftManagement = () => {
                                             </div>
                                             <div className="space-y-2">
                                                 {[
-                                                    { label: 'GPS Required', val: selectedShift.policy_rules?.exit_requirements?.geofence },
                                                     { label: 'Selfie Required', val: selectedShift.policy_rules?.exit_requirements?.selfie },
                                                 ].map(r => (
                                                     <div key={r.label} className="flex items-center gap-2 py-1">
@@ -796,9 +995,9 @@ const ShiftManagement = () => {
                                         <div className="p-4 border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl flex items-center gap-3">
                                             <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-indigo-600 dark:text-indigo-400"><Zap size={16} /></div>
                                             <div className="flex flex-col">
-                                                <span className="text-sm text-slate-700 dark:text-slate-300 font-bold">Overtime enabled after {selectedShift.otThreshold}h</span>
+                                                <span className="text-sm text-slate-700 dark:text-slate-300 font-bold">Overtime enabled after {formatDecimalHours(selectedShift.otThreshold)}</span>
                                                 {selectedShift.otBuffer > 0 && (
-                                                    <span className="text-[10px] text-slate-500">Buffer grace period: {selectedShift.otBuffer}h ({selectedShift.otBuffer * 60}m)</span>
+                                                    <span className="text-[10px] text-slate-500">Buffer grace period: {formatDecimalHours(selectedShift.otBuffer)}</span>
                                                 )}
                                             </div>
                                         </div>
@@ -951,6 +1150,13 @@ const ShiftManagement = () => {
                     </div>
                 </div>
             )}
+        </>
+    );
+
+    if (embedded) return content;
+    return (
+        <DashboardLayout title="Shift Management" noPadding={true} tourPageKey={PAGE_KEY} tourSteps={TOUR_STEPS}>
+            {content}
         </DashboardLayout>
     );
 };

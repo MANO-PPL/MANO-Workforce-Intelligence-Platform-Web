@@ -30,6 +30,7 @@ export async function getShiftsForOrg(org_id) {
             is_overtime_enabled: rules.overtime?.enabled ? 1 : 0,
             overtime_threshold_hours: rules.overtime?.threshold || 8.0,
             overtime_buffer_hours: rules.overtime?.buffer ?? 0.5,
+            is_active: s.is_active !== undefined && s.is_active !== null ? (s.is_active === 1 || s.is_active === true || s.is_active === '1' ? 1 : 0) : (rules.is_active !== undefined ? (rules.is_active ? 1 : 0) : 1),
             policy_rules: rules
         };
     });
@@ -43,11 +44,7 @@ export async function getShiftsForOrg(org_id) {
 /**
  * Create a new shift
  */
-export async function createShift({ org_id, shift_name, start_time, end_time, grace_period_mins, is_overtime_enabled, overtime_threshold_hours, policy_rules }) {
-    // Bundle columns into JSON logic structure.
-    // Important: new frontend sends timing/grace/overtime inside policy_rules.
-    // Older clients may send legacy top-level fields. We should NOT overwrite
-    // policy_rules with undefined legacy values.
+export async function createShift({ org_id, shift_name, start_time, end_time, grace_period_mins, is_overtime_enabled, overtime_threshold_hours, is_active, policy_rules }) {
     const rules = policy_rules || {};
 
     const resolvedStart = start_time ?? rules.shift_timing?.start_time ?? null;
@@ -58,8 +55,11 @@ export async function createShift({ org_id, shift_name, start_time, end_time, gr
     const resolvedOtThreshold = Number(overtime_threshold_hours ?? rules.overtime?.threshold ?? 8);
     const resolvedOtBuffer = rules.overtime?.buffer ?? 0.5;
 
+    const isActiveVal = is_active !== undefined ? (is_active ? 1 : 0) : (rules.is_active !== undefined ? (rules.is_active ? 1 : 0) : 1);
+
     const finalRules = {
         ...rules,
+        is_active: isActiveVal === 1,
         shift_timing: {
             ...(rules.shift_timing || {}),
             start_time: resolvedStart,
@@ -81,6 +81,7 @@ export async function createShift({ org_id, shift_name, start_time, end_time, gr
     const [id] = await attendanceDB('shifts').insert({
         org_id,
         shift_name,
+        is_active: isActiveVal,
         policy_rules: JSON.stringify(finalRules)
     });
 
@@ -93,10 +94,19 @@ export async function createShift({ org_id, shift_name, start_time, end_time, gr
 /**
  * Update an existing shift
  */
-export async function updateShift({ shift_id, org_id, shift_name, policy_rules }) {
+export async function updateShift({ shift_id, org_id, shift_name, is_active, policy_rules }) {
+    const rules = policy_rules || {};
+    const isActiveVal = is_active !== undefined ? (is_active ? 1 : 0) : (rules.is_active !== undefined ? (rules.is_active ? 1 : 0) : 1);
+
+    const finalRules = {
+        ...rules,
+        is_active: isActiveVal === 1
+    };
+
     const updates = {
         shift_name,
-        policy_rules: JSON.stringify(policy_rules)
+        is_active: isActiveVal,
+        policy_rules: JSON.stringify(finalRules)
     };
 
     const affected = await attendanceDB('shifts')

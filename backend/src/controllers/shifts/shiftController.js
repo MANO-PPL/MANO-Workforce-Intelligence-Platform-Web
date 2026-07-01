@@ -13,7 +13,7 @@ export const createShift = catchAsync(async (req, res) => {
     const { org_id } = req.user;
     const {
         shift_name, start_time, end_time, grace_period_mins,
-        is_overtime_enabled, overtime_threshold_hours, policy_rules
+        is_overtime_enabled, overtime_threshold_hours, is_active, policy_rules
     } = req.body;
 
     const shift_id = await ShiftService.createShift({
@@ -24,6 +24,7 @@ export const createShift = catchAsync(async (req, res) => {
         grace_period_mins,
         is_overtime_enabled,
         overtime_threshold_hours,
+        is_active,
         policy_rules
     });
 
@@ -33,12 +34,13 @@ export const createShift = catchAsync(async (req, res) => {
 export const updateShift = catchAsync(async (req, res) => {
     const { org_id } = req.user;
     const { shift_id } = req.params;
-    const { shift_name, policy_rules = {} } = req.body;
+    const { shift_name, is_active, policy_rules = {} } = req.body;
 
     const affected = await ShiftService.updateShift({
         shift_id,
         org_id,
         shift_name,
+        is_active,
         policy_rules
     });
 
