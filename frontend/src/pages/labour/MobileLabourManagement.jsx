@@ -82,7 +82,8 @@ const MobileLabourManagement = () => {
     const [editingLabour, setEditingLabour] = useState(null);
     const [labourForm, setLabourForm] = useState({
         name: '', phone: '', sex: 'Male', role: '',
-        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+        overtime_pay_per_hour: '0'
     });
 
     const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -111,6 +112,13 @@ const MobileLabourManagement = () => {
         accrued_credit: 0, advances_taken: 0, net_payable: 0, paid_amount: '',
         status: 'Paid', payment_date: new Date().toISOString().split('T')[0], notes: ''
     });
+
+    // Daily Schedule Planner States
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedScheduleLabour, setSelectedScheduleLabour] = useState(null);
+    const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
+    const [scheduleSites, setScheduleSites] = useState([]);
+    const [scheduleLoading, setScheduleLoading] = useState(false);
 
     const [financeMonth, setFinanceMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
     const [financeRoleFilter, setFinanceRoleFilter] = useState('');
@@ -495,9 +503,11 @@ const MobileLabourManagement = () => {
             const payload = {
                 ...labourForm,
                 phone: cleanPhone || null,
+                wage_type: 'Daily Wage',
                 monthly_salary: Number(labourForm.monthly_salary),
                 allowed_leaves: 0,
-                site_id: labourForm.site_id ? Number(labourForm.site_id) : null
+                site_id: labourForm.site_id ? Number(labourForm.site_id) : null,
+                overtime_pay_per_hour: Number(labourForm.overtime_pay_per_hour || 0)
             };
 
             if (editingLabour) {
@@ -511,7 +521,8 @@ const MobileLabourManagement = () => {
             setEditingLabour(null);
             setLabourForm({
                 name: '', phone: '', sex: 'Male', role: '',
-                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+                overtime_pay_per_hour: '0'
             });
             fetchLabours();
         } catch (err) {
@@ -526,10 +537,11 @@ const MobileLabourManagement = () => {
             phone: lab.phone || '',
             sex: lab.sex || 'Male',
             role: lab.role,
-            wage_type: lab.wage_type,
+            wage_type: 'Daily Wage',
             monthly_salary: lab.monthly_salary,
-            allowed_leaves: lab.allowed_leaves?.toString() || '0',
-            site_id: lab.site_id?.toString() || ''
+            allowed_leaves: '0',
+            site_id: lab.site_id?.toString() || '',
+            overtime_pay_per_hour: lab.overtime_pay_per_hour?.toString() || '0'
         });
         setShowLabourModal(true);
     };
@@ -551,13 +563,70 @@ const MobileLabourManagement = () => {
         });
     };
 
+    const fetchScheduleForLabour = async (labourId, date) => {
+        setScheduleLoading(true);
+        try {
+            const res = await labourService.getLabourSchedule(labourId, date);
+            setScheduleSites(res.site_ids || []);
+        } catch (err) {
+            toast.error(err.message || 'Failed to fetch schedule');
+            setScheduleSites([]);
+        }
+        setScheduleLoading(false);
+    };
+
+    const handleOpenScheduleModal = async (labour) => {
+        setSelectedScheduleLabour(labour);
+        const todayStr = new Date().toISOString().split('T')[0];
+        setScheduleDate(todayStr);
+        setShowScheduleModal(true);
+        await fetchScheduleForLabour(labour.labour_id, todayStr);
+    };
+
+    const handleScheduleDateChange = async (date) => {
+        setScheduleDate(date);
+        if (selectedScheduleLabour) {
+            await fetchScheduleForLabour(selectedScheduleLabour.labour_id, date);
+        }
+    };
+
+    const handleToggleScheduleSite = (siteId) => {
+        setScheduleSites(prev =>
+            prev.includes(siteId)
+                ? prev.filter(id => id !== siteId)
+                : [...prev, siteId]
+        );
+    };
+
+    const handleSaveSchedule = async () => {
+        if (!selectedScheduleLabour) return;
+        try {
+            await labourService.saveLabourSchedule({
+                labour_id: selectedScheduleLabour.labour_id,
+                date: scheduleDate,
+                site_ids: scheduleSites
+            });
+            toast.success(`Schedule updated for ${selectedScheduleLabour.name}`);
+            setShowScheduleModal(false);
+            fetchLabours();
+        } catch (err) {
+            toast.error(err.message || 'Failed to save daily schedule');
+        }
+    };
+
     // ==========================================
     // ATTENDANCE HANDLERS
     // ==========================================
 
     const handleStatusChange = (labourId, newStatus) => {
         setAttendanceRoster(prev =>
-            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus } : item)
+            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus, overtime_hours: newStatus === 'Present' ? (item.overtime_hours || 0) : 0 } : item)
+        );
+    };
+
+    const handleOvertimeChange = (labourId, otHours) => {
+        setAttendanceRoster(prev =>
+            prev.map(item => item.labour_id === labourId ? { ...item, overtime_hours: otHours } : item)
         );
     };
 
@@ -923,6 +992,11 @@ const MobileLabourManagement = () => {
                                                                                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-extrabold text-[8px] uppercase tracking-wider">Added</span>
                                                                              )}
                                                                          </div>
+                                                                         {item.already_marked_at && (
+                                                                             <p className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+                                                                                 ⚠️ Marked {item.already_marked_at.status} at {item.already_marked_at.site_name}
+                                                                             </p>
+                                                                         )}
                                                                          <div className="flex items-center gap-1.5 mt-1 text-[9px] text-slate-400 dark:text-github-dark-muted font-mono uppercase">
                                                                              <span>{item.role}</span>
                                                                          </div>
@@ -936,18 +1010,53 @@ const MobileLabourManagement = () => {
                                                                          { id: 'Absent', label: 'Absent', activeColor: 'bg-rose-500 text-white dark:bg-rose-600', inactiveColor: 'bg-slate-50 dark:bg-[#161b22] text-slate-600 dark:text-[#c9d1d9] border border-slate-200 dark:border-github-dark-border/60 hover:bg-slate-100' }
                                                                      ].map(statusOpt => {
                                                                          const isSelected = item.status === statusOpt.id;
+                                                                         const isButtonDisabled = (statusOpt.id === 'Present' || statusOpt.id === 'Half Day' || statusOpt.id === 'Paid Leave') &&
+                                                                             item.already_marked_at && !item.is_scheduled_multi_site;
                                                                          return (
                                                                              <button
                                                                                  key={statusOpt.id}
                                                                                  onClick={() => handleStatusChange(item.labour_id, statusOpt.id)}
-                                                                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${isSelected ? statusOpt.activeColor + ' shadow-sm' : statusOpt.inactiveColor
-                                                                                     }`}
+                                                                                 disabled={isButtonDisabled}
+                                                                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all duration-150 whitespace-nowrap ${
+                                                                                     isButtonDisabled
+                                                                                         ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-850/40 dark:text-slate-600 border border-slate-200/50 dark:border-[#30363d]/50'
+                                                                                         : isSelected
+                                                                                             ? statusOpt.activeColor + ' shadow-sm cursor-pointer'
+                                                                                             : statusOpt.inactiveColor + ' cursor-pointer'
+                                                                                 }`}
                                                                              >
                                                                                  {statusOpt.label}
                                                                              </button>
                                                                          );
                                                                      })}
                                                                  </div>
+
+                                                                  {item.status === 'Present' && (
+                                                                      <div className="flex items-center justify-between mt-1 bg-slate-100/50 dark:bg-[#161b22]/40 rounded-xl p-2 px-3 border border-slate-200/30 dark:border-github-dark-border/20">
+                                                                          <span className="text-[10px] text-slate-500 dark:text-github-dark-muted font-bold uppercase">Overtime Hours:</span>
+                                                                          <div className="flex items-center gap-1.5">
+                                                                              <button
+                                                                                  type="button"
+                                                                                  disabled={(item.overtime_hours || 0) <= 0}
+                                                                                  onClick={() => handleOvertimeChange(item.labour_id, Math.max(0, (item.overtime_hours || 0) - 1))}
+                                                                                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-200 dark:bg-[#30363d] text-slate-700 dark:text-white disabled:opacity-40 text-xs font-bold cursor-pointer"
+                                                                              >
+                                                                                  -
+                                                                              </button>
+                                                                              <span className="w-8 text-center text-xs font-extrabold text-slate-800 dark:text-white font-mono">
+                                                                                  {item.overtime_hours || 0}
+                                                                              </span>
+                                                                              <button
+                                                                                  type="button"
+                                                                                  disabled={(item.overtime_hours || 0) >= 12}
+                                                                                  onClick={() => handleOvertimeChange(item.labour_id, Math.min(12, (item.overtime_hours || 0) + 1))}
+                                                                                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-200 dark:bg-[#30363d] text-slate-700 dark:text-white disabled:opacity-40 text-xs font-bold cursor-pointer"
+                                                                              >
+                                                                                  +
+                                                                              </button>
+                                                                          </div>
+                                                                      </div>
+                                                                  )}
                                                              </div>
                                                          ))}
                                                      </div>
@@ -1136,8 +1245,10 @@ const MobileLabourManagement = () => {
                                                                     </div>
 
                                                                     <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-github-dark-border/40 mt-1">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="text-[9px] text-slate-400 dark:text-github-dark-muted font-semibold">Base: ₹{row.monthly_salary}</span>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-[9px] text-slate-550 dark:text-github-dark-muted font-semibold">
+                                                                                ₹{row.monthly_salary}/day • ₹{Number(row.overtime_pay_per_hour || 0)}/hr OT
+                                                                            </span>
                                                                             {row.net_payable <= 0 ? (
                                                                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-200/50">
                                                                                     Settled
@@ -1271,13 +1382,14 @@ const MobileLabourManagement = () => {
                                                         <span>{lab.name}</span>
                                                         <span className="text-[8px] text-indigo-500 font-bold uppercase bg-indigo-50 dark:bg-indigo-950/20 px-1 rounded">History</span>
                                                     </h4>
-                                                    <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-0.5">{lab.role} | {lab.wage_type}</p>
+                                                    <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-0.5">{lab.role} | ₹{lab.monthly_salary}/day • ₹{Number(lab.overtime_pay_per_hour || 0)}/hr OT</p>
                                                     <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-0.5">{lab.phone || 'No phone'} | {lab.sex}</p>
                                                     <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-1 uppercase flex items-center gap-1 font-semibold">
                                                         <Building size={10} /> {lab.site_name || 'Unassigned'}
                                                     </p>
                                                 </div>
                                                 <div className="flex gap-2">
+                                                    <button onClick={() => handleOpenScheduleModal(lab)} className="p-2 text-indigo-500 rounded-xl border border-slate-200 dark:border-github-dark-border"><Calendar size={12} /></button>
                                                     <button onClick={() => handleEditLabour(lab)} className="p-2 text-slate-400 rounded-xl border border-slate-200 dark:border-github-dark-border"><Edit2 size={12} /></button>
                                                     <button onClick={() => handleDeleteLabour(lab.labour_id)} className="p-2 text-red-500 rounded-xl border border-slate-200 dark:border-github-dark-border"><Trash2 size={12} /></button>
                                                 </div>
@@ -1287,6 +1399,105 @@ const MobileLabourManagement = () => {
                             </div>
                         )}
                     </>
+                )}
+
+                {/* BOTTOM-SHEET: DAILY SCHEDULE PLANNER */}
+                {createPortal(
+                    <AnimatePresence>
+                        {showScheduleModal && selectedScheduleLabour && (
+                            <div className="fixed inset-0 z-[1000] flex items-end justify-center overflow-hidden">
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    onClick={() => setShowScheduleModal(false)}
+                                    className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                                />
+                                <motion.div
+                                    initial={{ y: '100%' }}
+                                    animate={{ y: 0 }}
+                                    exit={{ y: '100%' }}
+                                    transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                                    className="relative w-full max-h-[85vh] bg-white dark:bg-[#0d1117] rounded-t-3xl shadow-2xl flex flex-col border-t border-slate-200 dark:border-[#30363d] z-10"
+                                >
+                                    <div className="w-12 h-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto my-3 shrink-0" />
+                                    <div className="flex justify-between items-center px-5 pb-4 border-b border-slate-100 dark:border-[#30363d]">
+                                        <div>
+                                            <h4 className="font-bold text-slate-800 dark:text-[#f0f6fc] text-sm">
+                                                Daily Site Schedule
+                                            </h4>
+                                            <span className="text-[9px] text-indigo-500 font-bold uppercase tracking-wider">
+                                                Plan Shift for {selectedScheduleLabour.name}
+                                            </span>
+                                        </div>
+                                        <button onClick={() => setShowScheduleModal(false)} className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#30363d]"><X size={16} /></button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs custom-scrollbar">
+                                        <div>
+                                            <label className="block text-slate-500 dark:text-slate-300 font-semibold mb-1.5 uppercase tracking-wide text-[9px]">Select Target Date</label>
+                                            <DatePicker
+                                                value={scheduleDate}
+                                                onChange={handleScheduleDateChange}
+                                                className="w-full text-xs"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-slate-500 dark:text-slate-300 font-semibold mb-2 uppercase tracking-wide text-[9px]">
+                                                Assign Sites for this Day ({scheduleSites.length} selected)
+                                            </label>
+                                            {scheduleLoading ? (
+                                                <div className="flex justify-center py-6">
+                                                    <Clock className="animate-spin text-indigo-500" size={20} />
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2 border border-slate-100 dark:border-[#30363d] rounded-xl p-3 bg-slate-50/30 dark:bg-[#161b22]/30 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                                                    {sites.map(site => {
+                                                        const isChecked = scheduleSites.includes(site.site_id);
+                                                        const isPrimary = selectedScheduleLabour.site_id === site.site_id;
+                                                        return (
+                                                            <div
+                                                                key={site.site_id}
+                                                                onClick={() => handleToggleScheduleSite(site.site_id)}
+                                                                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer select-none ${
+                                                                    isChecked
+                                                                        ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-400 font-medium'
+                                                                        : 'border-slate-100 dark:border-[#30363d] text-slate-600 dark:text-github-dark-text hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={() => {}} // handled by div onClick
+                                                                        className="rounded text-indigo-650 focus:ring-indigo-500 pointer-events-none"
+                                                                    />
+                                                                    <span className="text-xs">{site.site_name}</span>
+                                                                </div>
+                                                                {isPrimary && (
+                                                                    <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-extrabold text-[8px] uppercase tracking-wider">
+                                                                        Primary
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[9px] text-slate-400 dark:text-github-dark-muted italic leading-relaxed">
+                                            Note: If no daily schedule is configured for a date, the worker will automatically default to their primary site checklist.
+                                        </p>
+                                        <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-[#30363d]">
+                                            <button type="button" onClick={() => setShowScheduleModal(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#21262d] dark:hover:bg-[#30363d] text-slate-500 dark:text-[#c9d1d9] rounded-xl font-bold transition-all">Cancel</button>
+                                            <button type="button" onClick={handleSaveSchedule} disabled={scheduleLoading} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold disabled:opacity-50">Save</button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>,
+                    document.body
                 )}
 
                 {/* BOTTOM-SHEET SLIDE-OVER DRAWERS (PORTALS) */}
@@ -1445,6 +1656,14 @@ const MobileLabourManagement = () => {
                                         className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border text-slate-900 dark:text-[#f0f6fc] rounded-xl text-xs"
                                         required
                                         placeholder="Daily Wage (INR)"
+                                    />
+                                    <input
+                                        type="number"
+                                        value={labourForm.overtime_pay_per_hour}
+                                        onChange={(e) => setLabourForm({ ...labourForm, overtime_pay_per_hour: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border text-slate-900 dark:text-[#f0f6fc] rounded-xl text-xs"
+                                        required
+                                        placeholder="Overtime Pay (per hour)"
                                     />
                                     {editingLabour && (
                                         <MinimalSelect
