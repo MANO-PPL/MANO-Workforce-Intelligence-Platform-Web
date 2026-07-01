@@ -82,7 +82,8 @@ const MobileLabourManagement = () => {
     const [editingLabour, setEditingLabour] = useState(null);
     const [labourForm, setLabourForm] = useState({
         name: '', phone: '', sex: 'Male', role: '',
-        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+        overtime_pay_per_hour: '0'
     });
 
     const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -502,9 +503,11 @@ const MobileLabourManagement = () => {
             const payload = {
                 ...labourForm,
                 phone: cleanPhone || null,
+                wage_type: 'Daily Wage',
                 monthly_salary: Number(labourForm.monthly_salary),
                 allowed_leaves: 0,
-                site_id: labourForm.site_id ? Number(labourForm.site_id) : null
+                site_id: labourForm.site_id ? Number(labourForm.site_id) : null,
+                overtime_pay_per_hour: Number(labourForm.overtime_pay_per_hour || 0)
             };
 
             if (editingLabour) {
@@ -518,7 +521,8 @@ const MobileLabourManagement = () => {
             setEditingLabour(null);
             setLabourForm({
                 name: '', phone: '', sex: 'Male', role: '',
-                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+                overtime_pay_per_hour: '0'
             });
             fetchLabours();
         } catch (err) {
@@ -533,10 +537,11 @@ const MobileLabourManagement = () => {
             phone: lab.phone || '',
             sex: lab.sex || 'Male',
             role: lab.role,
-            wage_type: lab.wage_type,
+            wage_type: 'Daily Wage',
             monthly_salary: lab.monthly_salary,
-            allowed_leaves: lab.allowed_leaves?.toString() || '0',
-            site_id: lab.site_id?.toString() || ''
+            allowed_leaves: '0',
+            site_id: lab.site_id?.toString() || '',
+            overtime_pay_per_hour: lab.overtime_pay_per_hour?.toString() || '0'
         });
         setShowLabourModal(true);
     };
@@ -615,7 +620,13 @@ const MobileLabourManagement = () => {
 
     const handleStatusChange = (labourId, newStatus) => {
         setAttendanceRoster(prev =>
-            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus } : item)
+            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus, overtime_hours: newStatus === 'Present' ? (item.overtime_hours || 0) : 0 } : item)
+        );
+    };
+
+    const handleOvertimeChange = (labourId, otHours) => {
+        setAttendanceRoster(prev =>
+            prev.map(item => item.labour_id === labourId ? { ...item, overtime_hours: otHours } : item)
         );
     };
 
@@ -1019,6 +1030,33 @@ const MobileLabourManagement = () => {
                                                                          );
                                                                      })}
                                                                  </div>
+
+                                                                  {item.status === 'Present' && (
+                                                                      <div className="flex items-center justify-between mt-1 bg-slate-100/50 dark:bg-[#161b22]/40 rounded-xl p-2 px-3 border border-slate-200/30 dark:border-github-dark-border/20">
+                                                                          <span className="text-[10px] text-slate-500 dark:text-github-dark-muted font-bold uppercase">Overtime Hours:</span>
+                                                                          <div className="flex items-center gap-1.5">
+                                                                              <button
+                                                                                  type="button"
+                                                                                  disabled={(item.overtime_hours || 0) <= 0}
+                                                                                  onClick={() => handleOvertimeChange(item.labour_id, Math.max(0, (item.overtime_hours || 0) - 1))}
+                                                                                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-200 dark:bg-[#30363d] text-slate-700 dark:text-white disabled:opacity-40 text-xs font-bold cursor-pointer"
+                                                                              >
+                                                                                  -
+                                                                              </button>
+                                                                              <span className="w-8 text-center text-xs font-extrabold text-slate-800 dark:text-white font-mono">
+                                                                                  {item.overtime_hours || 0}
+                                                                              </span>
+                                                                              <button
+                                                                                  type="button"
+                                                                                  disabled={(item.overtime_hours || 0) >= 12}
+                                                                                  onClick={() => handleOvertimeChange(item.labour_id, Math.min(12, (item.overtime_hours || 0) + 1))}
+                                                                                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-200 dark:bg-[#30363d] text-slate-700 dark:text-white disabled:opacity-40 text-xs font-bold cursor-pointer"
+                                                                              >
+                                                                                  +
+                                                                              </button>
+                                                                          </div>
+                                                                      </div>
+                                                                  )}
                                                              </div>
                                                          ))}
                                                      </div>
@@ -1207,8 +1245,10 @@ const MobileLabourManagement = () => {
                                                                     </div>
 
                                                                     <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-github-dark-border/40 mt-1">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="text-[9px] text-slate-400 dark:text-github-dark-muted font-semibold">Base: ₹{row.monthly_salary}</span>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-[9px] text-slate-550 dark:text-github-dark-muted font-semibold">
+                                                                                ₹{row.monthly_salary}/day • ₹{Number(row.overtime_pay_per_hour || 0)}/hr OT
+                                                                            </span>
                                                                             {row.net_payable <= 0 ? (
                                                                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-200/50">
                                                                                     Settled
@@ -1342,7 +1382,7 @@ const MobileLabourManagement = () => {
                                                         <span>{lab.name}</span>
                                                         <span className="text-[8px] text-indigo-500 font-bold uppercase bg-indigo-50 dark:bg-indigo-950/20 px-1 rounded">History</span>
                                                     </h4>
-                                                    <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-0.5">{lab.role} | {lab.wage_type}</p>
+                                                    <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-0.5">{lab.role} | ₹{lab.monthly_salary}/day • ₹{Number(lab.overtime_pay_per_hour || 0)}/hr OT</p>
                                                     <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-0.5">{lab.phone || 'No phone'} | {lab.sex}</p>
                                                     <p className="text-[9px] text-slate-500 dark:text-github-dark-muted mt-1 uppercase flex items-center gap-1 font-semibold">
                                                         <Building size={10} /> {lab.site_name || 'Unassigned'}
@@ -1616,6 +1656,14 @@ const MobileLabourManagement = () => {
                                         className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border text-slate-900 dark:text-[#f0f6fc] rounded-xl text-xs"
                                         required
                                         placeholder="Daily Wage (INR)"
+                                    />
+                                    <input
+                                        type="number"
+                                        value={labourForm.overtime_pay_per_hour}
+                                        onChange={(e) => setLabourForm({ ...labourForm, overtime_pay_per_hour: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border text-slate-900 dark:text-[#f0f6fc] rounded-xl text-xs"
+                                        required
+                                        placeholder="Overtime Pay (per hour)"
                                     />
                                     {editingLabour && (
                                         <MinimalSelect

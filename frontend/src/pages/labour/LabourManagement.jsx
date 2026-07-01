@@ -84,7 +84,8 @@ const LabourManagement = () => {
     const [editingLabour, setEditingLabour] = useState(null);
     const [labourForm, setLabourForm] = useState({
         name: '', phone: '', sex: 'Male', role: '',
-        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+        wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+        overtime_pay_per_hour: '0'
     });
 
     const [showAdvanceModal, setShowAdvanceModal] = useState(false);
@@ -475,9 +476,11 @@ const LabourManagement = () => {
             const payload = {
                 ...labourForm,
                 phone: cleanPhone || null,
+                wage_type: 'Daily Wage',
                 monthly_salary: Number(labourForm.monthly_salary),
                 allowed_leaves: 0,
-                site_id: labourForm.site_id ? Number(labourForm.site_id) : null
+                site_id: labourForm.site_id ? Number(labourForm.site_id) : null,
+                overtime_pay_per_hour: Number(labourForm.overtime_pay_per_hour || 0)
             };
 
             if (editingLabour) {
@@ -491,7 +494,8 @@ const LabourManagement = () => {
             setEditingLabour(null);
             setLabourForm({
                 name: '', phone: '', sex: 'Male', role: '',
-                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: ''
+                wage_type: 'Daily Wage', monthly_salary: '', allowed_leaves: '0', site_id: '',
+                overtime_pay_per_hour: '0'
             });
             fetchLabours();
         } catch (err) {
@@ -506,10 +510,11 @@ const LabourManagement = () => {
             phone: lab.phone || '',
             sex: lab.sex || 'Male',
             role: lab.role,
-            wage_type: lab.wage_type,
+            wage_type: 'Daily Wage',
             monthly_salary: lab.monthly_salary,
-            allowed_leaves: lab.allowed_leaves?.toString() || '0',
-            site_id: lab.site_id?.toString() || ''
+            allowed_leaves: '0',
+            site_id: lab.site_id?.toString() || '',
+            overtime_pay_per_hour: lab.overtime_pay_per_hour?.toString() || '0'
         });
         setShowLabourModal(true);
     };
@@ -588,7 +593,13 @@ const LabourManagement = () => {
 
     const handleStatusChange = (labourId, newStatus) => {
         setAttendanceRoster(prev =>
-            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus } : item)
+            prev.map(item => item.labour_id === labourId ? { ...item, status: newStatus, overtime_hours: newStatus === 'Present' ? (item.overtime_hours || 0) : 0 } : item)
+        );
+    };
+
+    const handleOvertimeChange = (labourId, otHours) => {
+        setAttendanceRoster(prev =>
+            prev.map(item => item.labour_id === labourId ? { ...item, overtime_hours: otHours } : item)
         );
     };
 
@@ -1139,17 +1150,18 @@ const LabourManagement = () => {
                                                     >
                                                         <table className="w-full text-left border-collapse text-xs">
                                                             <thead>
-                                                                <tr className="bg-slate-50/50 dark:bg-github-dark-border/20 text-slate-500 dark:text-github-dark-muted dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border">
+                                                                <tr className="bg-slate-50/50 dark:bg-github-dark-border/20 text-slate-500 dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border">
                                                                     <th className="p-3">Worker Name</th>
                                                                     <th className="p-3">Role</th>
                                                                     <th className="p-3">Wage Model</th>
                                                                     <th className="p-3 text-center">Status Assignment</th>
+                                                                    <th className="p-3 text-center w-[120px]">Overtime</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
                                                                 {attendanceRoster.filter(r => !attendanceRoleFilter || r.role.toLowerCase() === attendanceRoleFilter.toLowerCase()).length === 0 ? (
                                                                     <tr>
-                                                                        <td colSpan="4" className="p-10 text-center text-slate-400 italic">No labours assigned to this site or matching the role filter.</td>
+                                                                        <td colSpan="5" className="p-10 text-center text-slate-400 italic">No labours assigned to this site or matching the role filter.</td>
                                                                     </tr>
                                                                 ) : (
                                                                     attendanceRoster
@@ -1209,6 +1221,21 @@ const LabourManagement = () => {
                                                                                             );
                                                                                         })}
                                                                                     </div>
+                                                                                </td>
+                                                                                <td className="p-3 text-center">
+                                                                                    {item.status === 'Present' ? (
+                                                                                        <select
+                                                                                            value={item.overtime_hours || 0}
+                                                                                            onChange={(e) => handleOvertimeChange(item.labour_id, Number(e.target.value))}
+                                                                                            className="bg-slate-50 hover:bg-slate-100 dark:bg-[#161b22] dark:hover:bg-[#21262d] border border-slate-200 dark:border-[#30363d] text-slate-800 dark:text-[#c9d1d9] rounded-lg px-2 py-1 text-[10px] font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-sm min-w-[85px] text-center"
+                                                                                        >
+                                                                                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(hrs => (
+                                                                                                <option key={hrs} value={hrs}>{hrs} hr{hrs !== 1 ? 's' : ''}</option>
+                                                                                            ))}
+                                                                                        </select>
+                                                                                    ) : (
+                                                                                        <span className="text-slate-300 dark:text-[#21262d] font-bold font-mono">-</span>
+                                                                                    )}
                                                                                 </td>
                                                                             </tr>
                                                                         ))
@@ -1341,7 +1368,7 @@ const LabourManagement = () => {
                                                              <tr className="bg-slate-50/50 dark:bg-github-dark-border/20 text-slate-500 dark:text-github-dark-muted font-bold border-b border-slate-200 dark:border-github-dark-border text-[11px]">
                                                                  <th className="p-3 text-left">Worker Name</th>
                                                                  <th className="p-3 text-left">Role</th>
-                                                                 <th className="p-3 text-left">Wage Type</th>
+                                                                 <th className="p-3 text-left">Wage & OT Rates</th>
                                                                  <th className="p-3 text-right">Total Earned</th>
                                                                  <th className="p-3 text-right">Total Paid</th>
                                                                  <th className="p-3 text-right">Accrued to Pay</th>
@@ -1375,14 +1402,13 @@ const LabourManagement = () => {
                                                                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 whitespace-nowrap">{row.role}</span>
                                                                                  </td>
                                                                                  <td className="p-3">
-                                                                                     <div className="flex flex-col items-start gap-1">
-                                                                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${row.wage_type === 'Fixed Salary'
-                                                                                             ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400'
-                                                                                             : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400'
-                                                                                             }`}>
-                                                                                             {row.wage_type}
+                                                                                     <div className="flex flex-col items-start gap-0.5">
+                                                                                         <span className="text-slate-800 dark:text-[#f0f6fc] font-bold text-[11px] whitespace-nowrap">
+                                                                                             ₹{row.monthly_salary.toLocaleString()}/day
                                                                                          </span>
-                                                                                         <span className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap">Base: ₹{row.monthly_salary.toLocaleString()}</span>
+                                                                                         <span className="text-[10px] text-slate-500 dark:text-github-dark-muted font-semibold whitespace-nowrap">
+                                                                                             ₹{Number(row.overtime_pay_per_hour || 0).toLocaleString()}/hr OT
+                                                                                         </span>
                                                                                      </div>
                                                                                  </td>
                                                                                  <td className="p-3 font-semibold text-slate-700 dark:text-slate-300 text-right whitespace-nowrap">₹{row.accrued_credit.toLocaleString()}</td>
@@ -1495,8 +1521,9 @@ const LabourManagement = () => {
                                                 <th className="p-3">Phone Number</th>
                                                 <th className="p-3">Gender</th>
                                                 <th className="p-3">Role / Designation</th>
-                                                <th className="p-3">Assigned Site</th>
                                                 <th className="p-3">Daily Wage</th>
+                                                <th className="p-3">OT Pay / hr</th>
+                                                <th className="p-3">Assigned Site</th>
                                                 <th className="p-3 text-right">Actions</th>
                                             </tr>
                                         </thead>
@@ -1529,6 +1556,12 @@ const LabourManagement = () => {
                                                         <td className="p-3 text-slate-655 dark:text-slate-400 font-mono">{lab.phone || 'No phone'}</td>
                                                         <td className="p-3 text-slate-655 dark:text-slate-400">{lab.sex}</td>
                                                         <td className="p-3 text-slate-650 dark:text-slate-400">{lab.role}</td>
+                                                        <td className="p-3 font-medium text-slate-700 dark:text-github-dark-text dark:text-slate-300">
+                                                            ₹{Number(lab.monthly_salary).toLocaleString()}
+                                                        </td>
+                                                        <td className="p-3 font-medium text-slate-700 dark:text-github-dark-text dark:text-slate-300">
+                                                            ₹{Number(lab.overtime_pay_per_hour || 0).toLocaleString()}
+                                                        </td>
                                                         <td className="p-3 text-slate-650 dark:text-slate-400">
                                                             {(() => {
                                                                 // Build list of assigned site names
@@ -1553,9 +1586,6 @@ const LabourManagement = () => {
                                                                     </div>
                                                                 );
                                                             })()}
-                                                        </td>
-                                                        <td className="p-3 font-medium text-slate-700 dark:text-github-dark-text dark:text-slate-300">
-                                                            ₹{Number(lab.monthly_salary).toLocaleString()}
                                                         </td>
                                                         <td className="p-3 text-right">
                                                             <div className="flex justify-end gap-1.5">
@@ -1896,6 +1926,18 @@ const LabourManagement = () => {
                                                 required
                                                 min="0"
                                                 placeholder="e.g., 600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-500 dark:text-slate-300 font-semibold mb-1">Overtime Pay (per hour)</label>
+                                            <input
+                                                type="number"
+                                                value={labourForm.overtime_pay_per_hour}
+                                                onChange={(e) => setLabourForm({ ...labourForm, overtime_pay_per_hour: e.target.value })}
+                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#161b22] border border-slate-200 dark:border-github-dark-border text-slate-900 dark:text-[#f0f6fc] placeholder-slate-400 dark:placeholder-slate-500 rounded-lg focus:outline-none focus:border-indigo-500"
+                                                required
+                                                min="0"
+                                                placeholder="e.g., 100"
                                             />
                                         </div>
                                         {editingLabour && (
