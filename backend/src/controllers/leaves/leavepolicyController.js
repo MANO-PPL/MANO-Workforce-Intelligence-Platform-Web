@@ -16,8 +16,13 @@ export const createLeavePolicy = catchAsync(async (req, res) => {
 });
 
 export const getLeavePolicies = catchAsync(async (req, res) => {
-    const { org_id } = req.user;
-    const policies = await LeaveService.getLeavePolicies({ org_id });
+    const { org_id, user_type, user_id } = req.user;
+    let policies = [];
+    if (user_type === 'admin' || user_type === 'hr') {
+        policies = await LeaveService.getLeavePolicies({ org_id });
+    } else {
+        policies = await LeaveService.getMyLeavePolicies({ user_id, org_id });
+    }
     res.json({ ok: true, policies });
 });
 

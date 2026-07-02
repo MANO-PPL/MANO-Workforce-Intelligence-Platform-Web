@@ -7,7 +7,16 @@ import { PayrollCalculationService } from '../payroll/PayrollCalculationService.
 export async function getMyHistory({ user_id, org_id }) {
     const leaves = await attendanceDB('leave_request as lr')
         .join('users as u', 'lr.user_id', 'u.user_id')
-        .select('lr.*', 'u.user_name', 'u.profile_image_url')
+        .leftJoin('leave_policies_rules as lpr', 'lr.rule_id', 'lpr.rule_id')
+        .leftJoin('leave_policies as lp', 'lpr.lp_id', 'lp.lp_id')
+        .select(
+            'lr.*',
+            'u.user_name',
+            'u.profile_image_url',
+            'lpr.name as leave_type',
+            'lpr.code as leave_code',
+            'lp.name as policy_name'
+        )
         .where({ 'lr.user_id': user_id, 'lr.org_id': org_id })
         .orderBy('lr.applied_at', 'desc');
 
@@ -233,7 +242,15 @@ export async function withdrawLeaveRequest({ id, user_id, org_id }) {
 export async function getPendingRequests({ org_id }) {
     const requests = await attendanceDB('leave_request as lr')
         .join('users as u', 'lr.user_id', 'u.user_id')
-        .select('lr.*', 'u.user_name', 'u.email', 'u.phone_no', 'u.profile_image_url')
+        .leftJoin('leave_policies_rules as lpr', 'lr.rule_id', 'lpr.rule_id')
+        .leftJoin('leave_policies as lp', 'lpr.lp_id', 'lp.lp_id')
+        .select(
+            'lr.*',
+            'u.user_name', 'u.email', 'u.phone_no', 'u.profile_image_url',
+            'lpr.name as leave_type',
+            'lpr.code as leave_code',
+            'lp.name as policy_name'
+        )
         .where('lr.org_id', org_id)
         .where('lr.status', 'pending')
         .orderBy('lr.applied_at', 'asc');
@@ -264,7 +281,15 @@ export async function getPendingRequests({ org_id }) {
 export async function getAdminHistory({ org_id, user_id, status, start_date, end_date }) {
     let query = attendanceDB('leave_request as lr')
         .join('users as u', 'lr.user_id', 'u.user_id')
-        .select('lr.*', 'u.user_name', 'u.profile_image_url')
+        .leftJoin('leave_policies_rules as lpr', 'lr.rule_id', 'lpr.rule_id')
+        .leftJoin('leave_policies as lp', 'lpr.lp_id', 'lp.lp_id')
+        .select(
+            'lr.*',
+            'u.user_name', 'u.profile_image_url',
+            'lpr.name as leave_type',
+            'lpr.code as leave_code',
+            'lp.name as policy_name'
+        )
         .where('lr.org_id', org_id);
 
     if (user_id) query = query.where('lr.user_id', user_id);
@@ -331,31 +356,41 @@ export async function updateLeaveStatus({ id, org_id, status, pay_type, pay_perc
         .update(updateData);
 
     // ── Auto-update leave balance ──────────────────────────────────────
-    if (request.rule_id) {
-        const leaveDays = Number(request.total_days) || 0;
-        const leaveYear = new Date(request.start_date).getFullYear();
+    const leaveDays = Number(request.total_days) || 0;
+    const leaveYear = new Date(request.start_date).getFullYear();
 
-        if (leaveDays > 0) {
-            // Find existing balance row for this user + rule + year
+    if (leaveDays > 0) {
+        let resolvedRuleId = request.rule_id;
+
+        // If rule_id is 0/null, try to infer from the user's single balance row for that year
+        if (!resolvedRuleId) {
+            const userBalances = await attendanceDB('leave_balances')
+                .where({ user_id: request.user_id, org_id, year: leaveYear });
+            if (userBalances.length === 1) {
+                // Only one rule assigned — safe to assume this is the right one
+                resolvedRuleId = userBalances[0].rule_id;
+                // Backfill rule_id on the leave_request for future ops
+                await attendanceDB('leave_request')
+                    .where({ lr_id: id })
+                    .update({ rule_id: resolvedRuleId });
+            }
+        }
+
+        if (resolvedRuleId) {
             const balance = await attendanceDB('leave_balances')
-                .where({ user_id: request.user_id, org_id, rule_id: request.rule_id, year: leaveYear })
+                .where({ user_id: request.user_id, org_id, rule_id: resolvedRuleId, year: leaveYear })
                 .first();
 
             if (lowerStatus === 'approved' && previousStatus !== 'approved') {
-                // Deduct: increment "used" days
                 if (balance) {
                     await attendanceDB('leave_balances')
                         .where({ lb_id: balance.lb_id })
-                        .update({
-                            used: Number(balance.used) + leaveDays,
-                            updated_at: new Date()
-                        });
+                        .update({ used: Number(balance.used) + leaveDays, updated_at: new Date() });
                 } else {
-                    // Auto-create a balance row with the used days already set
                     await attendanceDB('leave_balances').insert({
                         user_id: request.user_id,
                         org_id,
-                        rule_id: request.rule_id,
+                        rule_id: resolvedRuleId,
                         year: leaveYear,
                         allocated: 0,
                         used: leaveDays,
@@ -364,15 +399,11 @@ export async function updateLeaveStatus({ id, org_id, status, pay_type, pay_perc
                     });
                 }
             } else if (lowerStatus === 'rejected' && previousStatus === 'approved') {
-                // Restore: decrement "used" days (admin changed from approved → rejected)
                 if (balance) {
                     const newUsed = Math.max(0, Number(balance.used) - leaveDays);
                     await attendanceDB('leave_balances')
                         .where({ lb_id: balance.lb_id })
-                        .update({
-                            used: newUsed,
-                            updated_at: new Date()
-                        });
+                        .update({ used: newUsed, updated_at: new Date() });
                 }
             }
         }
@@ -627,6 +658,45 @@ export async function getLeavePolicies({ org_id }) {
         rules: rulesMap.get(p.lp_id) || []
     }));
 }
+
+export async function getMyLeavePolicies({ user_id, org_id }) {
+    // Find all unique lp_ids assigned to this user through leave_balances
+    const assignedPolicies = await attendanceDB('leave_balances as lb')
+        .join('leave_policies_rules as lpr', 'lb.rule_id', 'lpr.rule_id')
+        .join('leave_policies as lp', 'lpr.lp_id', 'lp.lp_id')
+        .where({ 'lb.user_id': user_id, 'lb.org_id': org_id })
+        .select('lp.lp_id')
+        .distinct();
+
+    const lpIds = assignedPolicies.map(p => p.lp_id);
+    if (lpIds.length === 0) {
+        return [];
+    }
+
+    // Now fetch the details for these policies
+    const policies = await attendanceDB('leave_policies')
+        .whereIn('lp_id', lpIds)
+        .andWhere({ is_active: 1 });
+
+    const rules = await attendanceDB('leave_policies_rules')
+        .whereIn('lp_id', lpIds)
+        .andWhere({ is_active: 1 })
+        .orderBy('name', 'asc');
+
+    const rulesMap = new Map();
+    rules.forEach(rule => {
+        if (!rulesMap.has(rule.lp_id)) {
+            rulesMap.set(rule.lp_id, []);
+        }
+        rulesMap.get(rule.lp_id).push(rule);
+    });
+
+    return policies.map(p => ({
+        ...p,
+        rules: rulesMap.get(p.lp_id) || []
+    }));
+}
+
 
 export async function getLeavePolicyById({ org_id, lp_id }) {
     const policy = await attendanceDB('leave_policies')

@@ -37,7 +37,7 @@ router.get('/admin/history', ensureAdmin, LeaveController.getAdminHistory);
 router.put('/admin/status/:id', ensureAdmin, LeaveController.updateLeaveStatus);
 
 // Admin Leave Policy Routes
-router.get('/policies', ensureAdmin, LeavePolicyController.getLeavePolicies);
+router.get('/policies', LeavePolicyController.getLeavePolicies);
 router.post('/policies', ensureAdmin, LeavePolicyController.createLeavePolicy);
 router.get('/policies/:lp_id', ensureAdmin, LeavePolicyController.getLeavePolicyById);
 router.put('/policies/:lp_id', ensureAdmin, LeavePolicyController.updateLeavePolicy);
